@@ -17,5 +17,9 @@ class Settings(BaseSettings):
     jwt_algorithm: str = "HS256"
     jwt_expire_minutes: int = 60
 
+    amp_url: str = "http://localhost:8080"
+    amp_user: str = ""
+    amp_password: str = ""
+
 
 settings = Settings()
