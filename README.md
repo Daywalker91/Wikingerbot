@@ -34,45 +34,37 @@ Ablösung von GatekeeperV2, Red Discord Bot und Sinusbot durch einen einheitlich
 
 ## Architektur-Übersicht
 
-```
-┌─────────────────────────────────────────────────────┐
-│                   WikingerBot                       │
-│                                                     │
-│  ┌─────────────┐    ┌─────────────────────────┐    │
-│  │  Discord    │    │       FastAPI            │    │
-│  │  Bot Core   │    │       REST API           │    │
-│  │ (discord.py)│    │                          │    │
-│  └──────┬──────┘    └────────────┬────────────┘    │
-│         │                        │                  │
-│  ┌──────▼──────────────────────▼────────────┐      │
-│  │              Cog Manager                  │      │
-│  │  ┌──────────┐ ┌──────────┐ ┌──────────┐ │      │
-│  │  │ AMP Cog  │ │ Mod Cog  │ │Music Cog │ │      │
-│  │  └──────────┘ └──────────┘ └──────────┘ │      │
-│  │  ┌──────────┐ ┌──────────┐ ┌──────────┐ │      │
-│  │  │Whitelist │ │  Roles   │ │ Custom   │ │      │
-│  │  │   Cog    │ │   Cog    │ │   Cog    │ │      │
-│  │  └──────────┘ └──────────┘ └──────────┘ │      │
-│  └──────────────────────┬───────────────────┘      │
-│                         │                           │
-│  ┌──────────────────────▼───────────────────┐      │
-│  │           Datenbank Layer                 │      │
-│  │     SQLAlchemy (async)                    │      │
-│  │     MariaDB (Prod) / SQLite (Dev)         │      │
-│  └───────────────────────────────────────────┘     │
-│                                                     │
-└─────────────────────────────────────────────────────┘
-         │                          │
-    ┌────▼────┐              ┌──────▼──────┐
-    │Discord  │              │  React WebUI│
-    │ API     │              │  Dashboard  │
-    └─────────┘              └─────────────┘
-         │
-    ┌────▼────┐
-    │  AMP    │
-    │  REST   │
-    │  API    │
-    └─────────┘
+```mermaid
+flowchart TB
+    subgraph WikingerBot["WikingerBot"]
+        direction TB
+        Bot["Discord Bot Core<br/>(discord.py)"]
+        API["FastAPI<br/>REST API"]
+
+        subgraph CogManager["Cog Manager"]
+            direction LR
+            AMPCog["AMP Cog"]
+            ModCog["Mod Cog"]
+            MusicCog["Music Cog"]
+            WhitelistCog["Whitelist Cog"]
+            RolesCog["Roles Cog"]
+            CustomCog["Custom Cog"]
+        end
+
+        DB["Datenbank Layer<br/>SQLAlchemy (async)<br/>MariaDB (Prod) / SQLite (Dev)"]
+
+        Bot --> CogManager
+        API --> CogManager
+        CogManager --> DB
+    end
+
+    DiscordAPI["Discord API"]
+    WebUI["React WebUI<br/>Dashboard"]
+    AMPAPI["AMP REST API"]
+
+    Bot --> DiscordAPI
+    API --> WebUI
+    DiscordAPI --> AMPAPI
 ```
 
 ---
