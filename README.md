@@ -1,6 +1,8 @@
 # WikingerBot — Projektdokumentation
 *Eigener Discord Bot für den Wikinger Server*
 
+> Für die einmaligen Setup-Schritte (Discord-Bot anlegen, einladen, Rollen-Hierarchie) siehe [SETUP.md](SETUP.md).
+
 ---
 
 ## Projektziel
