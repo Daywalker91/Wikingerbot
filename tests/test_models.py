@@ -19,6 +19,7 @@ async def test_models_roundtrip(db_session):
     server = Server(
         guild_id=guild.id,
         instance_name="ark-01",
+        amp_instance_id="11111111-1111-1111-1111-111111111111",
         display_name="ARK Server 1",
         host="ark01.example.com",
     )

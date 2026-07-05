@@ -14,7 +14,10 @@ class Server(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     guild_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("guilds.id"))
     instance_name: Mapped[str] = mapped_column(String(100), unique=True)
+    amp_instance_id: Mapped[str] = mapped_column(String(100), unique=True)
     display_name: Mapped[str] = mapped_column(String(100))
+    # Reine Anzeige-Adresse (wohin sich Spieler verbinden) - NICHT der AMP-API-Endpoint.
+    # Die API wird ueber den globalen AMP_URL-Controller + amp_instance_id erreicht.
     host: Mapped[str] = mapped_column(String(255))
     console_channel: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
     chat_channel: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
