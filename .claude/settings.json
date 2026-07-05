@@ -1,0 +1,17 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(.venv/Scripts/python.exe -m pip install --quiet -r requirements.txt)",
+      "Bash(rm -f dev.db)",
+      "Bash(.venv/Scripts/python.exe -m alembic revision --autogenerate -m ' *)",
+      "Bash(.venv/Scripts/python.exe -m alembic upgrade head)",
+      "Bash(.venv/Scripts/python.exe -c ' *)",
+      "Bash(.venv/Scripts/python.exe -m pytest -v)",
+      "Bash(.venv/Scripts/python.exe -c \"import bot.main; print\\('bot.main importiert OK'\\)\")",
+      "Bash(git add *)",
+      "Bash(git commit -m ' *)",
+      "Bash(git push *)",
+      "Bash(git status *)"
+    ]
+  }
+}
