@@ -1,9 +1,26 @@
+import asyncio
 from dataclasses import dataclass
+from typing import Awaitable, TypeVar
 
 from ampapi.auth import RefreshingAuthProviderAsync
 from ampapi.modules import ADSAsync, CommonAPIAsync
 
 from bot.core.config import settings
+
+T = TypeVar("T")
+
+# ampapi nutzt aiohttp ohne eigenes Timeout (Standard waere 5 Minuten). Damit ein
+# langsamer/nicht erreichbarer AMP-Node den Bot nicht so lange blockiert, wird
+# hier ein eigenes, kurzes Timeout erzwungen.
+DEFAULT_TIMEOUT = 10.0
+START_STOP_TIMEOUT = 30.0  # Start/Stop kann laut AMP-Logs legitim >15s dauern
+
+
+async def _with_timeout(awaitable: Awaitable[T], timeout: float) -> T:
+    try:
+        return await asyncio.wait_for(awaitable, timeout=timeout)
+    except asyncio.TimeoutError:
+        raise TimeoutError(f"AMP hat nach {timeout:.0f}s nicht geantwortet") from None
 
 
 @dataclass
@@ -56,7 +73,9 @@ class AMPClient:
     async def list_instances(self) -> list[DiscoveredInstance]:
         """Listet alle am Controller bekannten Instanzen (fuer /server discover)."""
         controller = self._controller_client()
-        nodes = await controller.ADSModule.GetInstances(ForceIncludeSelf=False)
+        nodes = await _with_timeout(
+            controller.ADSModule.GetInstances(ForceIncludeSelf=False), DEFAULT_TIMEOUT
+        )
         discovered = []
         for node in nodes:
             for instance in node.AvailableInstances:
@@ -71,20 +90,38 @@ class AMPClient:
         return discovered
 
     async def get_status(self, instance_id: str):
-        return await self._instance_client(instance_id).Core.GetStatus()
+        return await _with_timeout(
+            self._instance_client(instance_id).Core.GetStatus(), DEFAULT_TIMEOUT
+        )
 
     async def start(self, instance_id: str) -> None:
-        await self._instance_client(instance_id).Core.Start()
+        """Startet eine Instanz ueber den Controller.
+
+        Waehrend eine Instanz komplett gestoppt ist, ist ihre eigene Mini-API
+        (fuer Core.Start ueber die Pro-Instanz-Session) nicht erreichbar - der
+        Start muss deshalb ueber ADSModule.StartInstance am Controller laufen.
+        """
+        await _with_timeout(
+            self._controller_client().ADSModule.StartInstance(InstanceName=instance_id),
+            START_STOP_TIMEOUT,
+        )
 
     async def stop(self, instance_id: str) -> None:
-        await self._instance_client(instance_id).Core.Stop()
+        await _with_timeout(
+            self._controller_client().ADSModule.StopInstance(InstanceName=instance_id),
+            START_STOP_TIMEOUT,
+        )
 
     async def send_console_message(self, instance_id: str, message: str) -> None:
-        await self._instance_client(instance_id).Core.SendConsoleMessage(message)
+        await _with_timeout(
+            self._instance_client(instance_id).Core.SendConsoleMessage(message), DEFAULT_TIMEOUT
+        )
 
     async def poll_console(self, instance_id: str) -> list[ConsoleLine]:
         """Neue Konsolenzeilen seit dem letzten Poll dieser Instanz-Session."""
-        updates = await self._instance_client(instance_id).Core.GetUpdates()
+        updates = await _with_timeout(
+            self._instance_client(instance_id).Core.GetUpdates(), DEFAULT_TIMEOUT
+        )
         return [
             ConsoleLine(contents=entry.Contents, source=entry.Source, type=entry.Type)
             for entry in updates.ConsoleEntries

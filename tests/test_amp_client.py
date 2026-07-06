@@ -22,16 +22,17 @@ async def test_poll_console_returns_entries():
     assert lines[0].source == "Server"
 
 
-async def test_start_stop_calls_core():
-    core = SimpleNamespace(Start=AsyncMock(), Stop=AsyncMock())
+async def test_start_stop_calls_controller_ads_module():
+    ads_module = SimpleNamespace(StartInstance=AsyncMock(), StopInstance=AsyncMock())
+    controller = SimpleNamespace(ADSModule=ads_module)
     client = AMPClient()
-    client._instance_client = lambda instance_id: _fake_client(core)
+    client._controller_client = lambda: controller
 
     await client.start("abc")
     await client.stop("abc")
 
-    core.Start.assert_awaited_once()
-    core.Stop.assert_awaited_once()
+    ads_module.StartInstance.assert_awaited_once_with(InstanceName="abc")
+    ads_module.StopInstance.assert_awaited_once_with(InstanceName="abc")
 
 
 async def test_send_console_message_forwards_to_core():
