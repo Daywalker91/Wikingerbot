@@ -24,7 +24,8 @@
       "Bash(cat /tmp/bot.log)",
       "Bash(ps aux *)",
       "Skill(update-config)",
-      "Skill(update-config:*)"
+      "Skill(update-config:*)",
+      "Bash(mkdir -p *)"
     ]
   }
 }
