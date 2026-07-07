@@ -1,3 +1,5 @@
+import asyncio
+
 import discord
 from discord import app_commands
 from discord.ext import commands, tasks
@@ -9,7 +11,15 @@ from bot.core.permissions import Level, require_role
 from db.models.server import Server
 from db.session import get_db_session
 
-server_group = app_commands.Group(name="server", description="AMP-Serververwaltung")
+
+MESSAGE_TIMEOUT = 20  # Sekunden, bis ephemere Bestaetigungen sich selbst loeschen
+
+
+async def _followup_temp(interaction: discord.Interaction, *args, **kwargs) -> None:
+    """Wie interaction.followup.send, loescht sich aber nach MESSAGE_TIMEOUT von selbst."""
+    msg = await interaction.followup.send(*args, **kwargs)
+    if msg is not None:
+        await msg.delete(delay=MESSAGE_TIMEOUT)
 
 
 async def _get_server(guild_id: int, name: str) -> Server | None:
@@ -20,6 +30,50 @@ async def _get_server(guild_id: int, name: str) -> Server | None:
         return result.scalar_one_or_none()
 
 
+async def _autocomplete_instance_name(
+    interaction: discord.Interaction, current: str
+) -> list[app_commands.Choice[str]]:
+    """Schlaegt bereits angelegte Server dieser Guild vor."""
+    async with get_db_session() as db:
+        result = await db.execute(
+            select(Server.instance_name, Server.display_name).where(
+                Server.guild_id == interaction.guild_id
+            )
+        )
+        rows = result.all()
+
+    current_lower = current.lower()
+    choices = [
+        app_commands.Choice(name=f"{display_name} ({instance_name})", value=instance_name)
+        for instance_name, display_name in rows
+        if current_lower in instance_name.lower() or current_lower in display_name.lower()
+    ]
+    return choices[:25]
+
+
+async def _autocomplete_amp_instance_id(
+    interaction: discord.Interaction, current: str
+) -> list[app_commands.Choice[str]]:
+    """Schlaegt am Controller bekannte, noch nicht angelegte AMP-Instanzen vor."""
+    try:
+        instances = await amp_client.list_instances()
+    except Exception:
+        return []
+
+    async with get_db_session() as db:
+        result = await db.execute(select(Server.amp_instance_id))
+        known_ids = {row[0] for row in result.all()}
+
+    current_lower = current.lower()
+    choices = [
+        app_commands.Choice(name=f"{i.friendly_name} ({i.module})", value=i.instance_id)
+        for i in instances
+        if i.instance_id not in known_ids
+        and (current_lower in i.friendly_name.lower() or current_lower in i.instance_id.lower())
+    ]
+    return choices[:25]
+
+
 class AMPCog(BaseCog):
     """Bindet AMP-Instanzen an Discord an: Start/Stop/Status, Konsolen- und Chat-Bridge."""
 
@@ -28,12 +82,14 @@ class AMPCog(BaseCog):
     __description__ = "AMP-Integration (Start/Stop/Status/Console/Chat-Bridge)"
     __author__ = "Daywalker91"
 
+    # Als Klassen-Attribut (nicht Modul-Level!), damit discord.py es beim
+    # Hinzufuegen des Cogs automatisch an die Instanz bindet (siehe Cog._inject).
+    server_group = app_commands.Group(name="server", description="AMP-Serververwaltung")
+
     async def cog_load(self) -> None:
-        self.bot.tree.add_command(server_group)
         self.console_bridge.start()
 
     async def cog_unload(self) -> None:
-        self.bot.tree.remove_command(server_group.name)
         self.console_bridge.cancel()
 
     @tasks.loop(seconds=2)
@@ -79,6 +135,8 @@ class AMPCog(BaseCog):
     @server_group.command(name="list", description="Listet alle konfigurierten Server")
     @require_role(Level.MEMBER)
     async def server_list(self, interaction: discord.Interaction) -> None:
+        await interaction.response.defer(ephemeral=True)
+
         async with get_db_session() as db:
             result = await db.execute(
                 select(Server).where(
@@ -88,76 +146,106 @@ class AMPCog(BaseCog):
             servers = result.scalars().all()
 
         if not servers:
-            await interaction.response.send_message("Keine Server konfiguriert.", ephemeral=True)
+            await _followup_temp(interaction, "Keine Server konfiguriert.")
             return
 
-        lines = []
-        for server in servers:
+        async def _state(server: Server) -> str:
             try:
                 status = await amp_client.get_status(server.amp_instance_id)
-                state = status.State.name
+                return status.State.name
             except Exception:
-                state = "Nicht erreichbar"
-            lines.append(f"**{server.display_name}** (`{server.instance_name}`) — {state}")
+                return "Nicht erreichbar (evtl. gestoppt)"
 
-        await interaction.response.send_message("\n".join(lines))
+        states = await asyncio.gather(*(_state(server) for server in servers))
+        lines = [
+            f"**{server.display_name}** (`{server.instance_name}`) — {state}"
+            for server, state in zip(servers, states)
+        ]
+
+        await _followup_temp(interaction, "\n".join(lines))
 
     @server_group.command(name="status", description="Detail-Status eines Servers")
     @app_commands.describe(name="Interner Servername (instance_name)")
+    @app_commands.autocomplete(name=_autocomplete_instance_name)
     @require_role(Level.MEMBER)
     async def server_status(self, interaction: discord.Interaction, name: str) -> None:
+        await interaction.response.defer(ephemeral=True)
+
         server = await _get_server(interaction.guild_id, name)
         if server is None:
-            await interaction.response.send_message(f"Server `{name}` nicht gefunden.", ephemeral=True)
+            await _followup_temp(interaction, f"Server `{name}` nicht gefunden.")
             return
 
         try:
             status = await amp_client.get_status(server.amp_instance_id)
-        except Exception as exc:
-            await interaction.response.send_message(f"AMP nicht erreichbar: {exc}", ephemeral=True)
+        except Exception:
+            await _followup_temp(
+                interaction, f"`{server.display_name}` ist nicht erreichbar (evtl. gestoppt)."
+            )
             return
 
         embed = discord.Embed(title=server.display_name)
         embed.add_field(name="Status", value=status.State.name)
         embed.add_field(name="Uptime", value=status.Uptime)
         embed.add_field(name="Verbinden unter", value=server.host, inline=False)
-        await interaction.response.send_message(embed=embed)
+        await _followup_temp(interaction, embed=embed)
 
     @server_group.command(name="start", description="Startet einen Server")
     @app_commands.describe(name="Interner Servername (instance_name)")
+    @app_commands.autocomplete(name=_autocomplete_instance_name)
     @require_role(Level.MOD)
     async def server_start(self, interaction: discord.Interaction, name: str) -> None:
+        await interaction.response.defer(ephemeral=True)
+
         server = await _get_server(interaction.guild_id, name)
         if server is None:
-            await interaction.response.send_message(f"Server `{name}` nicht gefunden.", ephemeral=True)
+            await _followup_temp(interaction, f"Server `{name}` nicht gefunden.")
             return
 
-        await amp_client.start(server.amp_instance_id)
-        await interaction.response.send_message(f"Starte `{server.display_name}` ...")
+        try:
+            await amp_client.start(server.amp_instance_id)
+        except Exception as exc:
+            await _followup_temp(interaction, f"Start fehlgeschlagen: {exc}")
+            return
+        await _followup_temp(interaction, f"Starte `{server.display_name}` ...")
 
     @server_group.command(name="stop", description="Stoppt einen Server")
     @app_commands.describe(name="Interner Servername (instance_name)")
+    @app_commands.autocomplete(name=_autocomplete_instance_name)
     @require_role(Level.MOD)
     async def server_stop(self, interaction: discord.Interaction, name: str) -> None:
+        await interaction.response.defer(ephemeral=True)
+
         server = await _get_server(interaction.guild_id, name)
         if server is None:
-            await interaction.response.send_message(f"Server `{name}` nicht gefunden.", ephemeral=True)
+            await _followup_temp(interaction, f"Server `{name}` nicht gefunden.")
             return
 
-        await amp_client.stop(server.amp_instance_id)
-        await interaction.response.send_message(f"Stoppe `{server.display_name}` ...")
+        try:
+            await amp_client.stop(server.amp_instance_id)
+        except Exception as exc:
+            await _followup_temp(interaction, f"Stop fehlgeschlagen: {exc}")
+            return
+        await _followup_temp(interaction, f"Stoppe `{server.display_name}` ...")
 
     @server_group.command(name="console", description="Sendet einen Konsolenbefehl")
     @app_commands.describe(name="Interner Servername (instance_name)", command="Konsolenbefehl")
+    @app_commands.autocomplete(name=_autocomplete_instance_name)
     @require_role(Level.MOD)
     async def server_console(self, interaction: discord.Interaction, name: str, command: str) -> None:
+        await interaction.response.defer(ephemeral=True)
+
         server = await _get_server(interaction.guild_id, name)
         if server is None:
-            await interaction.response.send_message(f"Server `{name}` nicht gefunden.", ephemeral=True)
+            await _followup_temp(interaction, f"Server `{name}` nicht gefunden.")
             return
 
-        await amp_client.send_console_message(server.amp_instance_id, command)
-        await interaction.response.send_message(f"Befehl an `{server.display_name}` gesendet.", ephemeral=True)
+        try:
+            await amp_client.send_console_message(server.amp_instance_id, command)
+        except Exception as exc:
+            await _followup_temp(interaction, f"Befehl fehlgeschlagen: {exc}")
+            return
+        await _followup_temp(interaction, f"Befehl an `{server.display_name}` gesendet.")
 
     @server_group.command(name="discover", description="Listet AMP-Instanzen, die noch nicht angelegt sind")
     @require_role(Level.OWNER)
@@ -172,14 +260,14 @@ class AMPCog(BaseCog):
 
         unknown = [i for i in instances if i.instance_id not in known_ids]
         if not unknown:
-            await interaction.followup.send("Alle bekannten AMP-Instanzen sind bereits angelegt.")
+            await _followup_temp(interaction, "Alle bekannten AMP-Instanzen sind bereits angelegt.")
             return
 
         lines = [
             f"`{i.instance_id}` — {i.friendly_name} ({i.module}, {'laeuft' if i.running else 'gestoppt'})"
             for i in unknown
         ]
-        await interaction.followup.send("\n".join(lines))
+        await _followup_temp(interaction, "\n".join(lines))
 
     @server_group.command(name="add", description="Legt einen neuen Server-Eintrag an")
     @app_commands.describe(
@@ -188,6 +276,7 @@ class AMPCog(BaseCog):
         display_name="Anzeigename",
         host="Verbindungs-Adresse fuer Spieler",
     )
+    @app_commands.autocomplete(amp_instance_id=_autocomplete_amp_instance_id)
     @require_role(Level.OWNER)
     async def server_add(
         self,
@@ -209,7 +298,61 @@ class AMPCog(BaseCog):
             )
             await db.commit()
 
-        await interaction.response.send_message(f"Server `{display_name}` angelegt.", ephemeral=True)
+        await interaction.response.send_message(
+            f"Server `{display_name}` angelegt.", ephemeral=True, delete_after=MESSAGE_TIMEOUT
+        )
+
+    async def _set_channel(
+        self,
+        interaction: discord.Interaction,
+        name: str,
+        field: str,
+        label: str,
+        channel: discord.TextChannel | None,
+    ) -> None:
+        await interaction.response.defer(ephemeral=True)
+
+        server = await _get_server(interaction.guild_id, name)
+        if server is None:
+            await _followup_temp(interaction, f"Server `{name}` nicht gefunden.")
+            return
+
+        async with get_db_session() as db:
+            db_server = await db.get(Server, server.id)
+            setattr(db_server, field, channel.id if channel is not None else None)
+            await db.commit()
+
+        mention = channel.mention if channel is not None else "kein Kanal"
+        await _followup_temp(
+            interaction, f"{label} fuer `{server.display_name}` gesetzt auf {mention}."
+        )
+
+    @server_group.command(name="console_channel", description="Setzt den Konsolen-Kanal eines Servers")
+    @app_commands.describe(name="Interner Servername (instance_name)", channel="Zielkanal (leer = deaktivieren)")
+    @app_commands.autocomplete(name=_autocomplete_instance_name)
+    @require_role(Level.OWNER)
+    async def server_console_channel(
+        self, interaction: discord.Interaction, name: str, channel: discord.TextChannel | None = None
+    ) -> None:
+        await self._set_channel(interaction, name, "console_channel", "Konsolen-Kanal", channel)
+
+    @server_group.command(name="chat_channel", description="Setzt den Chat-Bruecken-Kanal eines Servers")
+    @app_commands.describe(name="Interner Servername (instance_name)", channel="Zielkanal (leer = deaktivieren)")
+    @app_commands.autocomplete(name=_autocomplete_instance_name)
+    @require_role(Level.OWNER)
+    async def server_chat_channel(
+        self, interaction: discord.Interaction, name: str, channel: discord.TextChannel | None = None
+    ) -> None:
+        await self._set_channel(interaction, name, "chat_channel", "Chat-Kanal", channel)
+
+    @server_group.command(name="event_channel", description="Setzt den Event-Kanal eines Servers")
+    @app_commands.describe(name="Interner Servername (instance_name)", channel="Zielkanal (leer = deaktivieren)")
+    @app_commands.autocomplete(name=_autocomplete_instance_name)
+    @require_role(Level.OWNER)
+    async def server_event_channel(
+        self, interaction: discord.Interaction, name: str, channel: discord.TextChannel | None = None
+    ) -> None:
+        await self._set_channel(interaction, name, "event_channel", "Event-Kanal", channel)
 
 
 async def setup(bot: commands.Bot) -> None:
