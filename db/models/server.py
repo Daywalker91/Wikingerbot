@@ -22,5 +22,7 @@ class Server(Base):
     console_channel: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
     chat_channel: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
     event_channel: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
+    # Rolle, die bei Whitelist-Freigabe fuer diesen Server automatisch vergeben wird.
+    discord_role_id: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
     hidden: Mapped[bool] = mapped_column(Boolean, default=False)
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())

@@ -31,6 +31,10 @@ class ModLogEntry(Base):
     )
     reason: Mapped[str | None] = mapped_column(Text, nullable=True)
     duration: Mapped[int | None] = mapped_column(Integer, nullable=True)  # Sekunden, NULL = permanent
+    # Fuer automatische Warn-Eskalationen (Timeout/Ban): Nachricht mit
+    # Bestaetigen/Aufheben-Buttons, und ob ein Mod die Aktion bereits geprueft hat.
+    review_message_id: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
+    escalation_reviewed: Mapped[bool] = mapped_column(default=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
 
 

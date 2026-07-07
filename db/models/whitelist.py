@@ -27,4 +27,7 @@ class WhitelistRequest(Base):
         default=WhitelistStatus.PENDING,
     )
     handled_by: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
+    # Nachricht mit den Accept/Deny-Buttons - noetig fuer Neustart-sichere Views und
+    # zum Editieren der Nachricht nach der Entscheidung.
+    review_message_id: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
