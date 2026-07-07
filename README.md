@@ -2,6 +2,22 @@
 *Eigener Discord Bot für den Wikinger Server*
 
 > Für die einmaligen Setup-Schritte (Discord-Bot anlegen, einladen, Rollen-Hierarchie) siehe [SETUP.md](SETUP.md).
+> Für eine vollständige Liste aller Slash-Commands mit Beschreibung und benötigtem Berechtigungslevel siehe [COMMANDS.md](COMMANDS.md).
+
+---
+
+## Projektstatus
+
+| Phase | Inhalt | Status |
+|---|---|---|
+| Phase 1 | Bot Core, Cog-Manager, Datenbankmodelle, Berechtigungssystem, FastAPI-Grundstruktur | ✅ fertig |
+| Phase 2 | `amp`-Cog, `moderation`-Cog, `whitelist`-Cog | ✅ fertig |
+| — | Konsolen-Filter (Blacklist/Whitelist) + Event-Kanal für den `amp`-Cog | ✅ fertig |
+| — | Banner-Cog (visuelle Status-Anzeige) | 🔜 als eigener Cog geplant |
+| Phase 3 | React-WebUI | ⏳ offen |
+| Phase 4 | `roles`-, `welcome`-Cog, weitere Erweiterungen | ⏳ offen |
+
+Alle fertigen Teile sind gegen einen echten AMP-Server und einen Test-Discord-Server live verifiziert (nicht nur Unit-Tests).
 
 ---
 
@@ -71,121 +87,85 @@ flowchart TB
 
 ## Ordnerstruktur
 
+Tatsächlicher aktueller Stand (Phase 1+2). `web/`, `docker/`, `k8s/` aus der
+ursprünglichen Planung existieren noch nicht (Phase 3/4).
+
 ```
-wikingerbot/
-├── bot/                        # Discord Bot Core
-│   ├── __init__.py
+Wikingerbot/
+├── bot/
 │   ├── main.py                 # Einstiegspunkt
 │   ├── core/
 │   │   ├── bot.py              # Bot-Klasse, Cog-Manager
 │   │   ├── config.py           # Konfiguration (Env-Variablen)
-│   │   └── permissions.py      # Berechtigungssystem
-│   └── cogs/                   # Cog-Verzeichnis
-│       ├── amp/                # AMP-Integration
-│       │   ├── __init__.py
-│       │   ├── cog.py
-│       │   └── commands.py
-│       ├── moderation/         # Moderation
-│       │   ├── __init__.py
-│       │   ├── cog.py
-│       │   └── commands.py
-│       ├── whitelist/          # Whitelist-System
-│       │   ├── __init__.py
-│       │   └── cog.py
-│       ├── roles/              # Rollen-Management
-│       │   ├── __init__.py
-│       │   └── cog.py
-│       └── music/              # Musik (später)
-│           ├── __init__.py
-│           └── cog.py
+│   │   ├── base_cog.py         # BaseCog
+│   │   ├── permissions.py      # Berechtigungssystem (Level, require_role, ...)
+│   │   ├── amp_client.py       # AMP-Controller-/Pro-Instanz-Sessions
+│   │   ├── console_filters.py  # Eingebaute Konsolen-Filter-/Event-Muster
+│   │   ├── entities.py         # ensure_guild/ensure_user (FK-Sicherheit)
+│   │   ├── guild_config.py     # GuildConfig get/set
+│   │   └── discord_utils.py    # send_temp_followup (auto-loeschende Ephemeral-Replies)
+│   └── cogs/
+│       ├── admin/cog.py        # /bot cog ..., /bot sync
+│       ├── amp/cog.py          # /server ... (Start/Stop/Status/Console/Chat-Bridge/Filter)
+│       ├── moderation/cog.py   # /kick /ban /timeout /warn /modlog /modconfig
+│       └── whitelist/cog.py    # /whitelist ...
 │
-├── api/                        # FastAPI Backend
-│   ├── __init__.py
-│   ├── main.py                 # FastAPI App
+├── api/                         # FastAPI Backend (Grundstruktur, fuer Phase 3 WebUI)
+│   ├── main.py
 │   ├── routers/
-│   │   ├── servers.py          # AMP Server Endpoints
-│   │   ├── moderation.py       # Mod-Log Endpoints
-│   │   ├── whitelist.py        # Whitelist Endpoints
-│   │   └── users.py            # User-Management
-│   └── middleware/
-│       └── auth.py             # API Authentifizierung
+│   │   ├── health.py
+│   │   └── auth.py             # Discord-OAuth2-Login
+│   └── middleware/auth.py
 │
-├── db/                         # Datenbank
-│   ├── __init__.py
-│   ├── base.py                 # SQLAlchemy Base
-│   ├── session.py              # DB Session Management
-│   └── models/
-│       ├── user.py
-│       ├── server.py
-│       ├── modlog.py
-│       ├── whitelist.py
-│       └── config.py
+├── db/
+│   ├── base.py                  # SQLAlchemy Base
+│   ├── session.py                # DB Session Management
+│   ├── models/                   # siehe Datenbankschema oben
+│   └── migrations/               # Alembic
 │
-├── web/                        # React Frontend
-│   ├── public/
-│   ├── src/
-│   │   ├── components/
-│   │   │   ├── ServerStatus/
-│   │   │   ├── ModLog/
-│   │   │   ├── Whitelist/
-│   │   │   └── UserManagement/
-│   │   ├── pages/
-│   │   │   ├── Dashboard.jsx
-│   │   │   ├── Servers.jsx
-│   │   │   ├── Moderation.jsx
-│   │   │   └── Settings.jsx
-│   │   └── App.jsx
-│   └── package.json
-│
-├── docker/                     # Container-Konfiguration
-│   ├── Dockerfile.bot
-│   ├── Dockerfile.api
-│   └── Dockerfile.web
-├── k8s/                        # Kubernetes Manifeste
-│   ├── deployment.yaml
-│   ├── service.yaml
-│   └── configmap.yaml
+├── tests/
 ├── .env.example
-├── docker-compose.yml          # Für lokale Entwicklung
+├── SETUP.md
+├── COMMANDS.md
 └── requirements.txt
 ```
+
+**Noch nicht existent** (spätere Phasen): `web/` (React-Frontend), `docker/`,
+`k8s/` — sobald Phase 3/4 beginnt, werden sie analog zur ursprünglichen
+Planung ergänzt.
 
 ---
 
 ## Cog-Interface
 
-Jedes Cog muss folgendes Interface implementieren:
+Jedes Cog erbt von `BaseCog` (`bot/core/base_cog.py`):
 
 ```python
-# bot/core/base_cog.py
-from discord.ext import commands
-
 class BaseCog(commands.Cog):
-    """Basis-Klasse für alle WikingerBot Cogs"""
+    """Basis-Klasse fuer alle WikingerBot Cogs."""
 
-    # Pflichtattribute
-    __cog_name__: str       # Eindeutiger Name
-    __version__: str        # Semantic Versioning (z.B. "1.0.0")
-    __description__: str    # Kurzbeschreibung
-    __author__: str         # Autor
+    __cog_name__: str
+    __version__: str
+    __description__: str
+    __author__: str
 
-    def __init__(self, bot):
+    def __init__(self, bot: commands.Bot) -> None:
         self.bot = bot
-        self.db = bot.db        # DB-Session
-        self.config = bot.config # Konfiguration
+        self.config = settings  # bot/core/config.py, schreibgeschuetzt
 
-    async def cog_load(self):
-        """Wird beim Laden des Cogs aufgerufen"""
-        pass
-
-    async def cog_unload(self):
-        """Wird beim Entladen des Cogs aufgerufen"""
-        pass
-
-    async def cog_check(self, ctx):
-        """Globale Permission-Check für alle Commands in diesem Cog"""
-        return await self.bot.permissions.check(ctx)
+    async def cog_load(self) -> None: ...
+    async def cog_unload(self) -> None: ...
 ```
+
+Abweichung von der ursprünglichen Planung: kein `self.db` (eine langlebige
+DB-Session wäre ein Anti-Pattern für async SQLAlchemy) und kein `cog_check`
+(gilt für klassische Prefix-Commands; wir nutzen Slash-Commands, daher läuft
+die Berechtigungsprüfung über den `@require_role(...)`-Decorator direkt am
+Command, siehe `bot/core/permissions.py`).
+
+Groups (`app_commands.Group`, z.B. `/server`, `/bot`, `/whitelist`) müssen als
+**Klassen-Attribut** definiert werden, nicht als Modul-Level-Variable —
+sonst bindet discord.py sie nicht korrekt an die Cog-Instanz.
 
 **Cog laden/entladen per Discord-Command:**
 ```
@@ -193,89 +173,29 @@ class BaseCog(commands.Cog):
 /bot cog unload name:moderation
 /bot cog reload name:moderation
 /bot cog list
+/bot sync local:True
 ```
 
 ---
 
-## Datenbankschema (Grundgerüst)
+## Datenbankschema
 
-```sql
--- Benutzer
-CREATE TABLE users (
-    id          BIGINT PRIMARY KEY,      -- Discord User ID
-    username    VARCHAR(100),
-    steam_id    VARCHAR(50),
-    created_at  DATETIME DEFAULT NOW(),
-    updated_at  DATETIME DEFAULT NOW()
-);
+Das tatsächliche Schema lebt als SQLAlchemy-Modelle in `db/models/` (nicht
+hier als SQL dupliziert, damit diese Doku nicht bei jeder Migration
+veraltet). Migrationen liegen in `db/migrations/versions/`. Kurzüberblick
+der Tabellen:
 
--- Rollen-Hierarchie
-CREATE TABLE roles (
-    id          INT PRIMARY KEY AUTO_INCREMENT,
-    guild_id    BIGINT,
-    discord_role_id BIGINT,
-    level       ENUM('owner','admin','mod','member'),
-    created_at  DATETIME DEFAULT NOW()
-);
-
--- Server (AMP-Instanzen)
-CREATE TABLE servers (
-    id              INT PRIMARY KEY AUTO_INCREMENT,
-    instance_name   VARCHAR(100) UNIQUE,
-    display_name    VARCHAR(100),
-    host            VARCHAR(255),
-    console_channel BIGINT,
-    chat_channel    BIGINT,
-    event_channel   BIGINT,
-    hidden          BOOLEAN DEFAULT FALSE,
-    created_at      DATETIME DEFAULT NOW()
-);
-
--- Moderation Log
-CREATE TABLE modlog (
-    id          INT PRIMARY KEY AUTO_INCREMENT,
-    guild_id    BIGINT,
-    user_id     BIGINT,
-    mod_id      BIGINT,
-    action      ENUM('kick','ban','unban','warn','mute','unmute','timeout'),
-    reason      TEXT,
-    duration    INT,            -- Sekunden, NULL = permanent
-    created_at  DATETIME DEFAULT NOW(),
-    FOREIGN KEY (user_id) REFERENCES users(id)
-);
-
--- Verwarnungen
-CREATE TABLE warnings (
-    id          INT PRIMARY KEY AUTO_INCREMENT,
-    guild_id    BIGINT,
-    user_id     BIGINT,
-    mod_id      BIGINT,
-    reason      TEXT,
-    points      INT DEFAULT 1,
-    expired     BOOLEAN DEFAULT FALSE,
-    created_at  DATETIME DEFAULT NOW()
-);
-
--- Whitelist-Anfragen
-CREATE TABLE whitelist_requests (
-    id          INT PRIMARY KEY AUTO_INCREMENT,
-    user_id     BIGINT,
-    server_id   INT,
-    ign         VARCHAR(100),   -- In-Game Name
-    status      ENUM('pending','approved','denied') DEFAULT 'pending',
-    handled_by  BIGINT,
-    created_at  DATETIME DEFAULT NOW(),
-    FOREIGN KEY (user_id) REFERENCES users(id),
-    FOREIGN KEY (server_id) REFERENCES servers(id)
-);
-
--- Bot-Konfiguration
-CREATE TABLE config (
-    key         VARCHAR(100) PRIMARY KEY,
-    value       TEXT,
-    updated_at  DATETIME DEFAULT NOW()
-);
-```
+| Modell | Datei | Zweck |
+|---|---|---|
+| `Guild` | `guild.py` | Bekannte Discord-Server |
+| `User` | `user.py` | Discord-Nutzer, inkl. zuletzt genutztem IGN |
+| `GuildRole` | `role.py` | Discord-Rolle → Berechtigungslevel |
+| `Server` | `server.py` | AMP-Instanz, Kanäle, Konsolen-Filter-Modus |
+| `ConsolePattern` / `ConsolePatternOverride` | `console_pattern.py` | Eigene Regex-Muster / deaktivierte eingebaute Muster |
+| `ModLogEntry` / `Warning` | `modlog.py` | Moderationshistorie, Verwarnungen mit Punktesystem |
+| `WhitelistRequest` | `whitelist.py` | Whitelist-Anfragen inkl. Review-Nachricht |
+| `GuildConfig` | `config.py` | Key-Value-Konfiguration pro Guild |
+| `WebSession` | `web_session.py` | Refresh-Tokens für den WebUI-Login (Phase 3, noch ungenutzt) |
 
 ---
 
@@ -288,32 +208,37 @@ Mod     → Moderation, Server steuern, Whitelist verwalten
 Member  → Status sehen, Whitelist beantragen, Chat
 ```
 
-Implementierung als Decorator:
+Implementierung als Decorator (`bot/core/permissions.py`):
 
 ```python
-# Verwendung in Commands
-@discord.app_commands.command()
-@require_role("mod")        # Mindestens Mod
+from bot.core.permissions import Level, require_role
+
+@app_commands.command()
+@require_role(Level.MOD)        # Mindestens Mod
 async def kick(self, interaction, user: discord.Member, reason: str):
     ...
 
-@discord.app_commands.command()
-@require_role("admin")      # Mindestens Admin
-async def ban(self, interaction, user: discord.Member, reason: str):
+@app_commands.command()
+@require_role(Level.OWNER)      # Nur Owner (oder Discord-Administrator)
+async def server_add(self, interaction, ...):
     ...
 ```
 
+Für `discord.ui.View`-Button-Callbacks (z.B. Whitelist-Accept/Deny,
+Warn-Eskalations-Buttons) gibt es das Pendant `check_level_interaction(...)`,
+da `require_role` auf `app_commands.Command` zugeschnitten ist.
+
 ---
 
-## Geplante Cogs (v1)
+## Cogs (v1)
 
-| Cog | Ersetzt | Features |
-|---|---|---|
-| `amp` | GatekeeperV2 | Start/Stop/Status, Console, Chat-Bridge, Banner |
-| `moderation` | Red (teilweise) | Kick/Ban/Warn/Timeout, ModLog |
-| `whitelist` | GatekeeperV2 | Anfragen, Auto-Approve, Rollen-Vergabe |
-| `roles` | Red (teilweise) | Autorole, Rollen-Management |
-| `welcome` | Red (teilweise) | Willkommensnachrichten, Join-Events |
+| Cog | Ersetzt | Features | Status |
+|---|---|---|---|
+| `amp` | GatekeeperV2 | Start/Stop/Status, Console-/Chat-Bridge, Konsolen-Filter, Event-Kanal | ✅ fertig (Banner separat geplant) |
+| `moderation` | Red (teilweise) | Kick/Ban/Warn/Timeout, ModLog, automatische Warn-Eskalation | ✅ fertig |
+| `whitelist` | GatekeeperV2 | Anfragen über Accept/Deny-Buttons, AMP-Whitelist, Rollen-Vergabe | ✅ fertig (kein Auto-Approve, immer Mod-Freigabe) |
+| `roles` | Red (teilweise) | Autorole, Rollen-Management | ⏳ offen |
+| `welcome` | Red (teilweise) | Willkommensnachrichten, Join-Events | ⏳ offen |
 
 **Spätere Cogs (v2+):**
 
@@ -361,23 +286,24 @@ async def ban(self, interaction, user: discord.Member, reason: str):
 
 ## Entwicklungsplan
 
-**Phase 1 — Grundgerüst**
+**Phase 1 — Grundgerüst** ✅
 - Bot Core + Cog-Manager
 - Datenbankmodelle + Migrationen
 - Berechtigungssystem
 - FastAPI Grundstruktur
 
-**Phase 2 — Kern-Cogs**
-- AMP Cog (ersetzt GatekeeperV2)
+**Phase 2 — Kern-Cogs** ✅
+- AMP Cog (ersetzt GatekeeperV2) inkl. Konsolen-Filter + Event-Kanal
 - Moderation Cog
 - Whitelist Cog
 
-**Phase 3 — WebUI**
+**Phase 3 — WebUI** (offen)
 - React Dashboard
 - Server-Übersicht
 - ModLog + Whitelist Ansicht
 
-**Phase 4 — Erweiterungen**
+**Phase 4 — Erweiterungen** (offen)
+- Banner-Cog (visuelle Status-Anzeige, als eigener Cog)
 - Roles Cog
 - Welcome Cog
 - Weitere Cogs nach Bedarf
