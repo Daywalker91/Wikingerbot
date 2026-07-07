@@ -1,9 +1,16 @@
+import enum
 from datetime import datetime
 
-from sqlalchemy import BigInteger, Boolean, DateTime, ForeignKey, Integer, String, func
+from sqlalchemy import BigInteger, Boolean, DateTime, Enum, ForeignKey, Integer, String, func
 from sqlalchemy.orm import Mapped, mapped_column
 
 from db.base import Base
+
+
+class ConsoleFilterMode(str, enum.Enum):
+    OFF = "off"
+    BLACKLIST = "blacklist"
+    WHITELIST = "whitelist"
 
 
 class Server(Base):
@@ -22,6 +29,12 @@ class Server(Base):
     console_channel: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
     chat_channel: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
     event_channel: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
+    # Rauschunterdrueckung fuer die Konsolen-Bridge - Default blacklist, damit
+    # die eingebauten Standardmuster ohne Konfiguration greifen.
+    console_filter_mode: Mapped[ConsoleFilterMode] = mapped_column(
+        Enum(ConsoleFilterMode, values_callable=lambda cls: [item.value for item in cls]),
+        default=ConsoleFilterMode.BLACKLIST,
+    )
     # Rolle, die bei Whitelist-Freigabe fuer diesen Server automatisch vergeben wird.
     discord_role_id: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
     hidden: Mapped[bool] = mapped_column(Boolean, default=False)
