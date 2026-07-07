@@ -7,7 +7,13 @@ from sqlalchemy import select
 from db.models.role import GuildRole, Level, highest_level, level_at_least
 from db.session import get_db_session
 
-__all__ = ["Level", "resolve_level", "require_role", "InsufficientPermissions"]
+__all__ = [
+    "Level",
+    "resolve_level",
+    "require_role",
+    "check_level_interaction",
+    "InsufficientPermissions",
+]
 
 
 class InsufficientPermissions(app_commands.CheckFailure):
@@ -60,3 +66,21 @@ def require_role(minimum: Level):
         raise InsufficientPermissions(minimum, actual)
 
     return app_commands.check(predicate)
+
+
+async def check_level_interaction(interaction: Interaction, guild_id: int, minimum: Level) -> bool:
+    """Wie require_role, aber fuer discord.ui.View-Callbacks nutzbar (keine app_commands.Command).
+
+    Sendet bei fehlender Berechtigung selbst eine ephemere Fehlermeldung und
+    gibt False zurueck - der Callback muss in diesem Fall einfach return'en.
+    """
+    if isinstance(interaction.user, discord.Member) and interaction.user.guild_permissions.administrator:
+        return True
+
+    role_ids = [role.id for role in interaction.user.roles] if isinstance(interaction.user, discord.Member) else []
+    actual = await resolve_level(guild_id, role_ids)
+    if level_at_least(actual, minimum):
+        return True
+
+    await interaction.response.send_message("Dafuer fehlt dir die Berechtigung.", ephemeral=True)
+    return False
