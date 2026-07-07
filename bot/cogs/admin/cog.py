@@ -3,6 +3,7 @@ from discord import app_commands
 from discord.ext import commands
 
 from bot.core.base_cog import BaseCog
+from bot.core.discord_utils import send_temp_followup
 from bot.core.permissions import Level, require_role
 
 
@@ -75,15 +76,15 @@ class AdminCog(BaseCog):
         if reset:
             self.bot.tree.clear_commands(guild=guild)
             synced = await self.bot.tree.sync(guild=guild)
-            await interaction.followup.send(
-                f"Commands zurueckgesetzt und {scope} neu gesynct ({len(synced)})."
+            await send_temp_followup(
+                interaction, f"Commands zurueckgesetzt und {scope} neu gesynct ({len(synced)})."
             )
             return
 
         if local:
             self.bot.tree.copy_global_to(guild=guild)
         synced = await self.bot.tree.sync(guild=guild)
-        await interaction.followup.send(f"{len(synced)} Commands {scope} gesynct.")
+        await send_temp_followup(interaction, f"{len(synced)} Commands {scope} gesynct.")
 
 
 async def setup(bot: commands.Bot) -> None:

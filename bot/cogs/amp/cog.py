@@ -7,19 +7,11 @@ from sqlalchemy import select
 
 from bot.core.amp_client import amp_client
 from bot.core.base_cog import BaseCog
+from bot.core.discord_utils import MESSAGE_TIMEOUT, send_temp_followup as _followup_temp
+from bot.core.entities import ensure_guild
 from bot.core.permissions import Level, require_role
 from db.models.server import Server
 from db.session import get_db_session
-
-
-MESSAGE_TIMEOUT = 20  # Sekunden, bis ephemere Bestaetigungen sich selbst loeschen
-
-
-async def _followup_temp(interaction: discord.Interaction, *args, **kwargs) -> None:
-    """Wie interaction.followup.send, loescht sich aber nach MESSAGE_TIMEOUT von selbst."""
-    msg = await interaction.followup.send(*args, **kwargs)
-    if msg is not None:
-        await msg.delete(delay=MESSAGE_TIMEOUT)
 
 
 async def _get_server(guild_id: int, name: str) -> Server | None:
@@ -286,6 +278,8 @@ class AMPCog(BaseCog):
         display_name: str,
         host: str,
     ) -> None:
+        await ensure_guild(interaction.guild_id, interaction.guild.name)
+
         async with get_db_session() as db:
             db.add(
                 Server(
