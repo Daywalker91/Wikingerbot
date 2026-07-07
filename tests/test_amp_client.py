@@ -5,8 +5,8 @@ from bot.core.amp_client import AMPClient
 from bot.core.config import settings
 
 
-def _fake_client(core: SimpleNamespace) -> SimpleNamespace:
-    return SimpleNamespace(Core=core)
+def _fake_client(core: SimpleNamespace | None = None, minecraft_module: SimpleNamespace | None = None) -> SimpleNamespace:
+    return SimpleNamespace(Core=core, MinecraftModule=minecraft_module)
 
 
 async def test_poll_console_returns_entries():
@@ -43,6 +43,16 @@ async def test_send_console_message_forwards_to_core():
     await client.send_console_message("abc", "say hello")
 
     core.SendConsoleMessage.assert_awaited_once_with("say hello")
+
+
+async def test_add_whitelist_forwards_to_minecraft_module():
+    minecraft_module = SimpleNamespace(AddToWhitelist=AsyncMock())
+    client = AMPClient()
+    client._instance_client = lambda instance_id: _fake_client(minecraft_module=minecraft_module)
+
+    await client.add_whitelist("abc", "Steve123")
+
+    minecraft_module.AddToWhitelist.assert_awaited_once_with(UserOrUUID="Steve123")
 
 
 def test_instance_client_is_cached_per_instance_id(monkeypatch):

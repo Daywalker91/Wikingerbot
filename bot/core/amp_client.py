@@ -3,7 +3,7 @@ from dataclasses import dataclass
 from typing import Awaitable, TypeVar
 
 from ampapi.auth import RefreshingAuthProviderAsync
-from ampapi.modules import ADSAsync, CommonAPIAsync
+from ampapi.modules import ADSAsync, MinecraftAsync
 
 from bot.core.config import settings
 
@@ -50,7 +50,7 @@ class AMPClient:
 
     def __init__(self) -> None:
         self._controller: ADSAsync | None = None
-        self._instances: dict[str, CommonAPIAsync] = {}
+        self._instances: dict[str, MinecraftAsync] = {}
 
     def _auth(self, panel_url: str) -> RefreshingAuthProviderAsync:
         return RefreshingAuthProviderAsync(
@@ -64,10 +64,16 @@ class AMPClient:
             self._controller = ADSAsync(self._auth(settings.amp_url))
         return self._controller
 
-    def _instance_client(self, instance_id: str) -> CommonAPIAsync:
+    def _instance_client(self, instance_id: str) -> MinecraftAsync:
+        """Gibt einen Pro-Instanz-Client zurueck.
+
+        MinecraftAsync statt CommonAPIAsync, damit MinecraftModule (fuer
+        add_whitelist) verfuegbar ist. Core bleibt identisch nutzbar - fuer
+        Nicht-Minecraft-Instanzen bleibt MinecraftModule einfach ungenutzt.
+        """
         if instance_id not in self._instances:
             panel_url = f"{settings.amp_url}/API/ADSModule/Servers/{instance_id}"
-            self._instances[instance_id] = CommonAPIAsync(self._auth(panel_url))
+            self._instances[instance_id] = MinecraftAsync(self._auth(panel_url))
         return self._instances[instance_id]
 
     async def list_instances(self) -> list[DiscoveredInstance]:
@@ -115,6 +121,17 @@ class AMPClient:
     async def send_console_message(self, instance_id: str, message: str) -> None:
         await _with_timeout(
             self._instance_client(instance_id).Core.SendConsoleMessage(message), DEFAULT_TIMEOUT
+        )
+
+    async def add_whitelist(self, instance_id: str, ign: str) -> None:
+        """Fuegt einen Spieler zur AMP-Whitelist hinzu (nur Minecraft-Instanzen).
+
+        Best-effort: bei anderen Spiel-Modulen (GenericModule etc.) schlaegt
+        der Aufruf fehl, die Rufer-Seite (whitelist-Cog) faengt das ab.
+        """
+        await _with_timeout(
+            self._instance_client(instance_id).MinecraftModule.AddToWhitelist(UserOrUUID=ign),
+            DEFAULT_TIMEOUT,
         )
 
     async def poll_console(self, instance_id: str) -> list[ConsoleLine]:
