@@ -1,4 +1,5 @@
 discord.py>=2.4,<3.0
+Pillow>=10.3,<11
 ampapi>=2620.5,<2700
 # ampapi deklariert diese Laufzeit-Abhaengigkeiten nicht selbst als Requires
 dataclass-wizard>=1.0,<2.0
