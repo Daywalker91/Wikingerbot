@@ -313,6 +313,23 @@ class WhitelistCog(BaseCog):
         _, summary = await _resolve_request(request_id, False, interaction.user, reason)
         await send_temp_followup(interaction, summary)
 
+    @whitelist_group.command(name="donator", description="Setzt/entfernt den Donator-Status eines Nutzers")
+    @app_commands.describe(user="Nutzer", enabled="Donator-Status")
+    @require_role(Level.OWNER)
+    async def whitelist_donator_cmd(
+        self, interaction: discord.Interaction, user: discord.Member, enabled: bool
+    ) -> None:
+        await interaction.response.defer(ephemeral=True)
+        await ensure_user(user.id, str(user))
+
+        async with get_db_session() as db:
+            db_user = await db.get(User, user.id)
+            db_user.is_donator = enabled
+            await db.commit()
+
+        status_word = "gesetzt" if enabled else "entfernt"
+        await send_temp_followup(interaction, f"Donator-Status fuer {user.mention} {status_word}.")
+
 
 async def setup(bot: commands.Bot) -> None:
     await bot.add_cog(WhitelistCog(bot))
