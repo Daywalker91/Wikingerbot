@@ -13,6 +13,11 @@ class ConsoleFilterMode(str, enum.Enum):
     WHITELIST = "whitelist"
 
 
+class BannerType(str, enum.Enum):
+    EMBED = "embed"
+    IMAGE = "image"
+
+
 class Server(Base):
     """Eine AMP-Instanz (Spiele-Server), einer Guild zugeordnet."""
 
@@ -38,4 +43,28 @@ class Server(Base):
     # Rolle, die bei Whitelist-Freigabe fuer diesen Server automatisch vergeben wird.
     discord_role_id: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
     hidden: Mapped[bool] = mapped_column(Boolean, default=False)
+    banner_enabled: Mapped[bool] = mapped_column(Boolean, default=False)
+    banner_channel: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
+    # Bestehende Banner-Nachricht - wird editiert statt neu gepostet, solange sie existiert.
+    banner_message_id: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
+    banner_type: Mapped[BannerType] = mapped_column(
+        Enum(BannerType, values_callable=lambda cls: [item.value for item in cls]),
+        default=BannerType.EMBED,
+    )
+    banner_theme: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    banner_background_path: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    banner_color_start: Mapped[str | None] = mapped_column(String(7), nullable=True)
+    banner_color_end: Mapped[str | None] = mapped_column(String(7), nullable=True)
+    # Nur relevant, wenn ein eigenes Bild/Steam-Artwork aktiv ist (dort wirken
+    # banner_color_start/_end nicht, weil das Bild Vorrang vor einem Verlauf hat).
+    banner_text_color: Mapped[str | None] = mapped_column(String(7), nullable=True)
+    banner_blur: Mapped[int] = mapped_column(Integer, default=0)
+    # Aus AMPs DisplayImageSource ("steam:<appid>") automatisch erkannt, manuell
+    # per /server steam_appid ueberschreibbar - treibt den Steam-Artwork-Abruf.
+    steam_app_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    # Gehoert dieser Server zu einer Banner-Gruppe, hat die Gruppe Vorrang vor
+    # seinem eigenen banner_enabled (siehe banner-Cog).
+    banner_group_id: Mapped[int | None] = mapped_column(
+        ForeignKey("banner_groups.id"), nullable=True
+    )
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())

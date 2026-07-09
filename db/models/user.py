@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from sqlalchemy import BigInteger, DateTime, String, func
+from sqlalchemy import BigInteger, Boolean, DateTime, String, func
 from sqlalchemy.orm import Mapped, mapped_column
 
 from db.base import Base
@@ -16,6 +16,7 @@ class User(Base):
     steam_id: Mapped[str | None] = mapped_column(String(50), nullable=True)
     # Zuletzt verwendeter In-Game-Name, wird bei /whitelist request vorausgefuellt/aktualisiert.
     ign: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    is_donator: Mapped[bool] = mapped_column(Boolean, default=False)
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(
         DateTime, server_default=func.now(), onupdate=func.now()
