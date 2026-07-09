@@ -29,6 +29,10 @@ class DiscoveredInstance:
     friendly_name: str
     module: str
     running: bool
+    # AMPs Klassifikator fuer das Instanz-Artwork, z.B. "steam:1326470" fuer
+    # Steam-basierte Spiele-Server - treibt den automatischen Steam-Artwork-Abruf
+    # im banner-Cog (siehe bot/core/steam_art.py).
+    display_image_source: str
 
 
 @dataclass
@@ -91,6 +95,7 @@ class AMPClient:
                         friendly_name=instance.FriendlyName,
                         module=instance.Module,
                         running=instance.Running,
+                        display_image_source=instance.DisplayImageSource,
                     )
                 )
         return discovered
