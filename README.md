@@ -13,7 +13,7 @@
 | Phase 1 | Bot Core, Cog-Manager, Datenbankmodelle, Berechtigungssystem, FastAPI-Grundstruktur | ✅ fertig |
 | Phase 2 | `amp`-Cog, `moderation`-Cog, `whitelist`-Cog | ✅ fertig |
 | — | Konsolen-Filter (Blacklist/Whitelist) + Event-Kanal für den `amp`-Cog | ✅ fertig |
-| — | Banner-Cog (visuelle Status-Anzeige) | 🔜 als eigener Cog geplant |
+| — | `banner`-Cog (Embed/Bild-Banner, Steam-Artwork, Banner-Gruppen, Editor-UI) | ✅ fertig |
 | Phase 3 | React-WebUI | ⏳ offen |
 | Phase 4 | `roles`-, `welcome`-Cog, weitere Erweiterungen | ⏳ offen |
 
@@ -103,12 +103,19 @@ Wikingerbot/
 │   │   ├── console_filters.py  # Eingebaute Konsolen-Filter-/Event-Muster
 │   │   ├── entities.py         # ensure_guild/ensure_user (FK-Sicherheit)
 │   │   ├── guild_config.py     # GuildConfig get/set
+│   │   ├── bot_settings.py     # BotSetting get/set (globale, nicht guild-gebundene Schalter)
+│   │   ├── steam_art.py        # Steam-Store-Artwork ueber die App-ID (aus AMPs DisplayImageSource) - von amp+banner-Cog genutzt
 │   │   └── discord_utils.py    # send_temp_followup (auto-loeschende Ephemeral-Replies)
 │   └── cogs/
-│       ├── admin/cog.py        # /bot cog ..., /bot sync
-│       ├── amp/cog.py          # /server ... (Start/Stop/Status/Console/Chat-Bridge/Filter)
+│       ├── admin/cog.py        # /bot cog ..., /bot sync, /bot sync_on_startup
+│       ├── amp/cog.py          # /server ... (Start/Stop/Status/Console/Chat-Bridge/Filter/Steam-AppID)
 │       ├── moderation/cog.py   # /kick /ban /timeout /warn /modlog /modconfig
-│       └── whitelist/cog.py    # /whitelist ...
+│       ├── whitelist/cog.py    # /whitelist ...
+│       └── banner/              # /banner ... /bannergroup ... (Status-Banner, Editor-UI)
+│           ├── cog.py           # Commands, Views, Posting-/Update-Loop
+│           ├── themes.py        # Eingebaute Verlaufs-Themes, Presets, Blur-Level
+│           ├── image.py         # Pillow-Rendering der Bild-Banner-Variante
+│           └── embed.py         # Embed-Rendering der Embed-Banner-Variante
 │
 ├── api/                         # FastAPI Backend (Grundstruktur, fuer Phase 3 WebUI)
 │   ├── main.py
@@ -188,13 +195,15 @@ der Tabellen:
 | Modell | Datei | Zweck |
 |---|---|---|
 | `Guild` | `guild.py` | Bekannte Discord-Server |
-| `User` | `user.py` | Discord-Nutzer, inkl. zuletzt genutztem IGN |
+| `User` | `user.py` | Discord-Nutzer, inkl. zuletzt genutztem IGN, Donator-Status |
 | `GuildRole` | `role.py` | Discord-Rolle → Berechtigungslevel |
-| `Server` | `server.py` | AMP-Instanz, Kanäle, Konsolen-Filter-Modus |
+| `Server` | `server.py` | AMP-Instanz, Kanäle, Konsolen-Filter-Modus, Banner-Konfiguration, Steam-App-ID |
+| `BannerGroup` | `banner_group.py` | Mehrere Server in einem gemeinsamen Banner (kombiniert oder je Mitglied einzeln) |
 | `ConsolePattern` / `ConsolePatternOverride` | `console_pattern.py` | Eigene Regex-Muster / deaktivierte eingebaute Muster |
 | `ModLogEntry` / `Warning` | `modlog.py` | Moderationshistorie, Verwarnungen mit Punktesystem |
 | `WhitelistRequest` | `whitelist.py` | Whitelist-Anfragen inkl. Review-Nachricht |
 | `GuildConfig` | `config.py` | Key-Value-Konfiguration pro Guild |
+| `BotSetting` | `bot_setting.py` | Key-Value-Konfiguration global (nicht guild-gebunden), z.B. `sync_globally_on_startup` |
 | `WebSession` | `web_session.py` | Refresh-Tokens für den WebUI-Login (Phase 3, noch ungenutzt) |
 
 ---
@@ -234,9 +243,10 @@ da `require_role` auf `app_commands.Command` zugeschnitten ist.
 
 | Cog | Ersetzt | Features | Status |
 |---|---|---|---|
-| `amp` | GatekeeperV2 | Start/Stop/Status, Console-/Chat-Bridge, Konsolen-Filter, Event-Kanal | ✅ fertig (Banner separat geplant) |
+| `amp` | GatekeeperV2 | Start/Stop/Status, Console-/Chat-Bridge, Konsolen-Filter, Event-Kanal | ✅ fertig |
 | `moderation` | Red (teilweise) | Kick/Ban/Warn/Timeout, ModLog, automatische Warn-Eskalation | ✅ fertig |
 | `whitelist` | GatekeeperV2 | Anfragen über Accept/Deny-Buttons, AMP-Whitelist, Rollen-Vergabe | ✅ fertig (kein Auto-Approve, immer Mod-Freigabe) |
+| `banner` | GatekeeperV2 | Embed-/Bild-Status-Banner, Steam-Artwork, Banner-Gruppen (kombiniert/einzeln), Editor-UI | ✅ fertig |
 | `roles` | Red (teilweise) | Autorole, Rollen-Management | ⏳ offen |
 | `welcome` | Red (teilweise) | Willkommensnachrichten, Join-Events | ⏳ offen |
 
@@ -296,6 +306,7 @@ da `require_role` auf `app_commands.Command` zugeschnitten ist.
 - AMP Cog (ersetzt GatekeeperV2) inkl. Konsolen-Filter + Event-Kanal
 - Moderation Cog
 - Whitelist Cog
+- Banner Cog (Embed/Bild, Steam-Artwork, Banner-Gruppen, Editor-UI)
 
 **Phase 3 — WebUI** (offen)
 - React Dashboard
@@ -303,7 +314,6 @@ da `require_role` auf `app_commands.Command` zugeschnitten ist.
 - ModLog + Whitelist Ansicht
 
 **Phase 4 — Erweiterungen** (offen)
-- Banner-Cog (visuelle Status-Anzeige, als eigener Cog)
 - Roles Cog
 - Welcome Cog
 - Weitere Cogs nach Bedarf
