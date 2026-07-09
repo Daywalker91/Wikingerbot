@@ -18,6 +18,7 @@ from bot.core.console_filters import (
 from bot.core.discord_utils import MESSAGE_TIMEOUT, send_temp_followup as _followup_temp
 from bot.core.entities import ensure_guild
 from bot.core.permissions import Level, require_role
+from bot.core.steam_art import parse_steam_appid
 from db.models.console_pattern import ConsolePattern, ConsolePatternKind, ConsolePatternOverride
 from db.models.server import ConsoleFilterMode, Server
 from db.session import get_db_session
@@ -72,6 +73,22 @@ async def _autocomplete_amp_instance_id(
         if i.instance_id not in known_ids
         and (current_lower in i.friendly_name.lower() or current_lower in i.instance_id.lower())
     ]
+    return choices[:25]
+
+
+async def _autocomplete_host(
+    interaction: discord.Interaction, current: str
+) -> list[app_commands.Choice[str]]:
+    """Schlaegt bereits verwendete Verbindungs-Adressen dieser Guild vor (z.B. wenn mehrere
+    Server auf demselben Host/derselben Domain laufen) - bleibt trotzdem freier Text."""
+    async with get_db_session() as db:
+        result = await db.execute(
+            select(Server.host).where(Server.guild_id == interaction.guild_id).distinct()
+        )
+        hosts = [row[0] for row in result.all()]
+
+    current_lower = current.lower()
+    choices = [app_commands.Choice(name=host, value=host) for host in hosts if current_lower in host.lower()]
     return choices[:25]
 
 
@@ -372,9 +389,9 @@ class AMPCog(BaseCog):
         name="Interner Servername (instance_name)",
         amp_instance_id="AMP-Instanz-ID (siehe /server discover)",
         display_name="Anzeigename",
-        host="Verbindungs-Adresse fuer Spieler",
+        host="Verbindungs-Adresse fuer Spieler (Autocomplete schlaegt bereits genutzte Adressen vor)",
     )
-    @app_commands.autocomplete(amp_instance_id=_autocomplete_amp_instance_id)
+    @app_commands.autocomplete(amp_instance_id=_autocomplete_amp_instance_id, host=_autocomplete_host)
     @require_role(Level.OWNER)
     async def server_add(
         self,
@@ -384,7 +401,17 @@ class AMPCog(BaseCog):
         display_name: str,
         host: str,
     ) -> None:
+        await interaction.response.defer(ephemeral=True)
         await ensure_guild(interaction.guild_id, interaction.guild.name)
+
+        # AMPs DisplayImageSource ("steam:<appid>" fuer Steam-basierte Spiele) automatisch
+        # als steam_app_id uebernehmen, falls vorhanden - treibt spaeter den Banner-Cog.
+        steam_app_id = None
+        instances = await amp_client.list_instances()
+        for instance in instances:
+            if instance.instance_id == amp_instance_id:
+                steam_app_id = parse_steam_appid(instance.display_image_source)
+                break
 
         async with get_db_session() as db:
             db.add(
@@ -394,13 +421,12 @@ class AMPCog(BaseCog):
                     amp_instance_id=amp_instance_id,
                     display_name=display_name,
                     host=host,
+                    steam_app_id=steam_app_id,
                 )
             )
             await db.commit()
 
-        await interaction.response.send_message(
-            f"Server `{display_name}` angelegt.", ephemeral=True, delete_after=MESSAGE_TIMEOUT
-        )
+        await _followup_temp(interaction, f"Server `{display_name}` angelegt.")
 
     async def _set_channel(
         self,
@@ -453,6 +479,36 @@ class AMPCog(BaseCog):
         self, interaction: discord.Interaction, name: str, channel: discord.TextChannel | None = None
     ) -> None:
         await self._set_channel(interaction, name, "event_channel", "Event-Kanal", channel)
+
+    @server_group.command(
+        name="steam_appid",
+        description="Ueberschreibt/loescht die automatisch erkannte Steam-App-ID eines Servers",
+    )
+    @app_commands.describe(
+        name="Interner Servername (instance_name)",
+        appid="Steam-App-ID (aus der Store-URL), 0 zum Loeschen",
+    )
+    @app_commands.autocomplete(name=_autocomplete_instance_name)
+    @require_role(Level.OWNER)
+    async def server_steam_appid(self, interaction: discord.Interaction, name: str, appid: int) -> None:
+        await interaction.response.defer(ephemeral=True)
+
+        server = await _get_server(interaction.guild_id, name)
+        if server is None:
+            await _followup_temp(interaction, f"Server `{name}` nicht gefunden.")
+            return
+
+        async with get_db_session() as db:
+            db_server = await db.get(Server, server.id)
+            db_server.steam_app_id = appid or None
+            await db.commit()
+
+        message = (
+            f"Steam-App-ID fuer `{server.display_name}` geloescht."
+            if not appid
+            else f"Steam-App-ID fuer `{server.display_name}` auf `{appid}` gesetzt."
+        )
+        await _followup_temp(interaction, message)
 
     @server_group.command(
         name="console_filter_mode", description="Setzt den Rauschfilter-Modus eines Servers"
