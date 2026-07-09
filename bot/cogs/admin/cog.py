@@ -3,6 +3,7 @@ from discord import app_commands
 from discord.ext import commands
 
 from bot.core.base_cog import BaseCog
+from bot.core.bot_settings import SYNC_ON_STARTUP_KEY, get_bot_setting, set_bot_setting
 from bot.core.discord_utils import send_temp_followup
 from bot.core.permissions import Level, require_role
 
@@ -85,6 +86,29 @@ class AdminCog(BaseCog):
             self.bot.tree.copy_global_to(guild=guild)
         synced = await self.bot.tree.sync(guild=guild)
         await send_temp_followup(interaction, f"{len(synced)} Commands {scope} gesynct.")
+
+    @management_group.command(
+        name="sync_on_startup",
+        description="Steuert, ob beim Bot-Start automatisch global gesynct wird",
+    )
+    @app_commands.describe(enabled="An (Standard, noetig fuer frische Installationen) oder aus")
+    @require_role(Level.OWNER)
+    async def sync_on_startup_cmd(self, interaction: discord.Interaction, enabled: bool | None = None) -> None:
+        await interaction.response.defer(ephemeral=True)
+
+        if enabled is None:
+            current = await get_bot_setting(SYNC_ON_STARTUP_KEY, default="true")
+            await send_temp_followup(
+                interaction, f"Automatischer globaler Sync beim Start ist aktuell **{current}**."
+            )
+            return
+
+        await set_bot_setting(SYNC_ON_STARTUP_KEY, "true" if enabled else "false")
+        state = "aktiviert" if enabled else "deaktiviert"
+        await send_temp_followup(
+            interaction,
+            f"Automatischer globaler Sync beim Start {state} (wirkt ab dem naechsten Bot-Start).",
+        )
 
 
 async def setup(bot: commands.Bot) -> None:
