@@ -2,13 +2,15 @@ from datetime import datetime, timedelta, timezone
 from urllib.parse import urlencode
 
 import httpx
-from fastapi import APIRouter, HTTPException, Query, Response
+from fastapi import APIRouter, Depends, HTTPException, Query, Response
 from fastapi.responses import RedirectResponse
 
 from api.middleware.auth import (
     SESSION_COOKIE,
+    CurrentUser,
     create_access_token,
     create_state_token,
+    get_current_user,
     hash_refresh_token,
     verify_state_token,
 )
@@ -37,7 +39,7 @@ async def login(guild_id: int = Query(...)) -> RedirectResponse:
 
 
 @router.get("/callback")
-async def callback(code: str, state: str, response: Response) -> dict:
+async def callback(code: str, state: str) -> RedirectResponse:
     guild_id = verify_state_token(state)
 
     async with httpx.AsyncClient() as client:
@@ -85,11 +87,18 @@ async def callback(code: str, state: str, response: Response) -> dict:
         await db.commit()
 
     access = create_access_token(user_id, guild_id, level)
-    response.set_cookie(SESSION_COOKIE, access, httponly=True, samesite="lax")
-    return {"user_id": user_id, "guild_id": guild_id, "level": level.value}
+    redirect = RedirectResponse(f"{settings.frontend_url}/dashboard")
+    redirect.set_cookie(SESSION_COOKIE, access, httponly=True, samesite="lax")
+    return redirect
 
 
 @router.post("/logout")
 async def logout(response: Response) -> dict:
     response.delete_cookie(SESSION_COOKIE)
     return {"ok": True}
+
+
+@router.get("/me")
+async def me(user: CurrentUser = Depends(get_current_user)) -> dict:
+    """Session-Introspektion fuers Frontend - wer ist gerade eingeloggt, ohne Reload."""
+    return {"user_id": user.user_id, "guild_id": user.guild_id, "level": user.level.value}

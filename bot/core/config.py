@@ -17,6 +17,11 @@ class Settings(BaseSettings):
     jwt_algorithm: str = "HS256"
     jwt_expire_minutes: int = 60
 
+    # WebUI (Phase 3): erlaubte Frontend-Origins fuer CORS, plus Ziel-URL fuer
+    # den Redirect nach erfolgreichem OAuth2-Login (siehe api/routers/auth.py).
+    cors_origins: list[str] = ["http://localhost:5173"]
+    frontend_url: str = "http://localhost:5173"
+
     amp_url: str = "http://localhost:8080"
     amp_user: str = ""
     amp_password: str = ""
