@@ -10,6 +10,10 @@ Commands mit `📍` posten öffentlich sichtbare Antworten (z.B. Kick/Ban-
 Bestätigungen), alle anderen antworten ephemer (nur der Ausführende sieht
 die Antwort), teils mit automatischer Selbstlöschung nach ~20s.
 
+Ausführlichere Erklärungen (nicht nur die Kurzbeschreibung hier):
+[BANNER.md](BANNER.md) für den Status-Banner, [CONSOLE_FILTERS.md](CONSOLE_FILTERS.md)
+für die Konsolen-Filter/Event-Muster inkl. Regex-Grundlagen.
+
 ---
 
 ## `/bot` — Bot-/Cog-Verwaltung (`admin`-Cog)
@@ -49,7 +53,8 @@ die Antwort), teils mit automatischer Selbstlöschung nach ~20s.
 **Konsolen-Bridge**: Neue AMP-Konsolenzeilen werden alle 2s abgefragt und je
 nach `classify()`-Ergebnis (`bot/core/console_filters.py`) an den Konsolen-
 oder Event-Kanal gesendet oder unterdrückt. Event-Erkennung hat immer
-Vorrang vor Filter-Unterdrückung.
+Vorrang vor Filter-Unterdrückung. Ausführliche Erklärung der Filter-Modi,
+eingebauten Muster und Regex-Grundlagen: [CONSOLE_FILTERS.md](CONSOLE_FILTERS.md).
 
 **Chat-Bridge**: Nachrichten im konfigurierten `chat_channel` werden als
 `say <Name>: <Text>`-Konsolenbefehl an die Instanz weitergeleitet — wirkt
@@ -103,6 +108,8 @@ Auto-Approve — jede Anfrage braucht eine explizite Mod-Entscheidung.
 ---
 
 ## `/banner` — Status-Banner pro Server (`banner`-Cog)
+
+Ausführliche Erklärung (Hintergrund-Priorität, Editor, Badges): [BANNER.md](BANNER.md).
 
 | Command | Beschreibung | Level |
 |---|---|---|
