@@ -4,6 +4,7 @@
 > Für die einmaligen Setup-Schritte (Discord-Bot anlegen, einladen, Rollen-Hierarchie) siehe [SETUP.md](SETUP.md).
 > Für eine vollständige Liste aller Slash-Commands mit Beschreibung und benötigtem Berechtigungslevel siehe [COMMANDS.md](COMMANDS.md).
 > Für die Nutzung des Status-Banners siehe [BANNER.md](BANNER.md), für die Konsolen-Filter/Event-Erkennung (inkl. Regex-Grundlagen) siehe [CONSOLE_FILTERS.md](CONSOLE_FILTERS.md).
+> Für die Anleitung, ein neues Cog (inkl. optionaler WebUI-Seite) zu erstellen, siehe [CREATING_A_COG.md](CREATING_A_COG.md).
 
 ---
 
@@ -15,7 +16,7 @@
 | Phase 2 | `amp`-Cog, `moderation`-Cog, `whitelist`-Cog | ✅ fertig |
 | — | Konsolen-Filter (Blacklist/Whitelist) + Event-Kanal für den `amp`-Cog | ✅ fertig |
 | — | `banner`-Cog (Embed/Bild-Banner, Steam-Artwork, Banner-Gruppen, Editor-UI) | ✅ fertig |
-| Phase 3 | React-WebUI | ⏳ offen |
+| Phase 3 | React-WebUI | 🔜 Kickoff-Slice fertig (Auth-Flow + Dashboard), 5 weitere Seiten offen |
 | Phase 4 | `roles`-, `welcome`-Cog, weitere Erweiterungen | ⏳ offen |
 
 Alle fertigen Teile sind gegen einen echten AMP-Server und einen Test-Discord-Server live verifiziert (nicht nur Unit-Tests).
@@ -88,8 +89,15 @@ flowchart TB
 
 ## Ordnerstruktur
 
-Tatsächlicher aktueller Stand (Phase 1+2). `web/`, `docker/`, `k8s/` aus der
-ursprünglichen Planung existieren noch nicht (Phase 3/4).
+Tatsächlicher aktueller Stand (Phase 1+2 fertig, Phase-3-Kickoff-Slice
+umgesetzt). `docker/`, `k8s/` aus der ursprünglichen Planung existieren
+noch nicht.
+
+Ein Cog kann optional `api.py` (FastAPI-Router) und/oder `web/` (React-
+Seite) mitbringen — beides wird automatisch eingesammelt, siehe
+[CREATING_A_COG.md](CREATING_A_COG.md). `package.json`/`node_modules`
+liegen bewusst im Repo-Root, nicht in `web/`, damit Node/TypeScript sie
+auch von `bot/cogs/*/web/*` aus findet (gemeinsamer Vorfahre).
 
 ```
 Wikingerbot/
@@ -109,7 +117,10 @@ Wikingerbot/
 │   │   └── discord_utils.py    # send_temp_followup (auto-loeschende Ephemeral-Replies)
 │   └── cogs/
 │       ├── admin/cog.py        # /bot cog ..., /bot sync, /bot sync_on_startup
-│       ├── amp/cog.py          # /server ... (Start/Stop/Status/Console/Chat-Bridge/Filter/Steam-AppID)
+│       ├── amp/
+│       │   ├── cog.py           # /server ... (Start/Stop/Status/Console/Chat-Bridge/Filter/Steam-AppID)
+│       │   ├── api.py           # FastAPI-Router: GET /servers (Dashboard-Daten)
+│       │   └── web/             # React-Seite: DashboardPage.tsx, api.ts, ServerCard.tsx, types.ts
 │       ├── moderation/cog.py   # /kick /ban /timeout /warn /modlog /modconfig
 │       ├── whitelist/cog.py    # /whitelist ...
 │       └── banner/              # /banner ... /bannergroup ... (Status-Banner, Editor-UI)
@@ -118,29 +129,43 @@ Wikingerbot/
 │           ├── image.py         # Pillow-Rendering der Bild-Banner-Variante
 │           └── embed.py         # Embed-Rendering der Embed-Banner-Variante
 │
-├── api/                         # FastAPI Backend (Grundstruktur, fuer Phase 3 WebUI)
-│   ├── main.py
+├── api/                         # FastAPI Backend
+│   ├── main.py                  # CORS, sammelt Cog-Router ein
+│   ├── cog_routers.py           # discover_cog_routers() - analog zu discover_cogs() fuer Discord-Cogs
 │   ├── routers/
 │   │   ├── health.py
-│   │   └── auth.py             # Discord-OAuth2-Login
+│   │   └── auth.py             # Discord-OAuth2-Login, /auth/me
 │   └── middleware/auth.py
+│
+├── web/                         # React-Frontend (Vite + TypeScript, SPA)
+│   ├── vite.config.ts           # root=web/, Alias "@"->src/, fs.allow fuer bot/cogs/*/web
+│   ├── index.html
+│   └── src/
+│       ├── main.tsx, App.tsx    # App.tsx sammelt Cog-Seiten per import.meta.glob() automatisch ein
+│       ├── api/                  # gemeinsamer fetch-Wrapper + Auth-API
+│       ├── auth/                 # AuthProvider/RequireAuth (Login-Status, Route-Guard)
+│       └── pages/Login.tsx       # einzige zentrale Seite (kein Cog-Bezug)
 │
 ├── db/
 │   ├── base.py                  # SQLAlchemy Base
-│   ├── session.py                # DB Session Management
+│   ├── session.py                # DB Session Management (get_db_session fuer Cogs, get_db fuer FastAPI)
 │   ├── models/                   # siehe Datenbankschema oben
 │   └── migrations/               # Alembic
 │
 ├── tests/
+├── package.json                 # Node-Root (siehe Hinweis oben zu node_modules)
 ├── .env.example
 ├── SETUP.md
 ├── COMMANDS.md
+├── BANNER.md
+├── CONSOLE_FILTERS.md
+├── CREATING_A_COG.md
 └── requirements.txt
 ```
 
-**Noch nicht existent** (spätere Phasen): `web/` (React-Frontend), `docker/`,
-`k8s/` — sobald Phase 3/4 beginnt, werden sie analog zur ursprünglichen
-Planung ergänzt.
+**Noch nicht existent** (Phase 4): `docker/`, `k8s/` — sobald die
+tatsächliche Hosting-Umsetzung beginnt, werden sie analog zur
+ursprünglichen Planung ergänzt.
 
 ---
 
@@ -272,6 +297,36 @@ da `require_role` auf `app_commands.Command` zugeschnitten ist.
 | Whitelist | Anfragen verwalten, genehmigen/ablehnen |
 | Benutzer | User-Datenbank, Rollen, Steam-IDs |
 | Einstellungen | Bot-Konfiguration, Cogs laden/entladen |
+
+Aktueller Stand: Auth-Flow (Login/Logout, Session-Cookie) und die
+Dashboard-Seite sind fertig und live verifiziert. Die übrigen fünf Seiten
+folgen als eigene Runden, jeweils mit eigenem `bot/cogs/<cog>/api.py` +
+`web/<Name>Page.tsx` (siehe [CREATING_A_COG.md](CREATING_A_COG.md)).
+
+### Lokal entwickeln
+
+Zwei Prozesse parallel, aus dem Repo-Root:
+
+```
+# Backend
+.venv/Scripts/python.exe -m uvicorn api.main:app --reload --port 8000
+
+# Frontend (erstmalig: npm install)
+npm run dev
+```
+
+Frontend läuft auf `http://localhost:5173`, Backend auf
+`http://localhost:8000`. `web/.env.development` braucht `VITE_DISCORD_GUILD_ID`
+(Guild, gegen die eingeloggt wird — ein Login ist wie beim Bot selbst
+aktuell auf eine Guild pro Session festgelegt). Discord-Developer-Portal
+braucht `http://localhost:8000/auth/callback` als eingetragene Redirect-URI
+(siehe [SETUP.md](SETUP.md)).
+
+Python- (`requirements.txt`/`.venv`) und Node-Tooling (`package.json`/
+`node_modules`, bewusst im Repo-Root statt in `web/` — siehe
+[CREATING_A_COG.md](CREATING_A_COG.md)) laufen unabhängig nebeneinander,
+einziger Berührungspunkt sind die beiden Ports plus `cors_origins`/
+`frontend_url` in `bot/core/config.py`.
 
 ---
 

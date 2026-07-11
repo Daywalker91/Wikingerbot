@@ -15,6 +15,11 @@ Für die lokale Entwicklungsumgebung siehe [README.md](README.md).
    `.env` als `DISCORD_CLIENT_ID` / `DISCORD_CLIENT_SECRET`. Diese Application-Daten
    werden doppelt gebraucht: einmal für den Bot-Invite (Schritt 3), einmal für den
    WebUI-Login (Discord-OAuth2, siehe `api/routers/auth.py`).
+4. Ebenfalls unter **OAuth2 → General**, im Abschnitt "Redirects": die exakte
+   `DISCORD_REDIRECT_URI` aus `.env` eintragen (Standard für lokale Entwicklung:
+   `http://localhost:8000/auth/callback`) und speichern. Ohne diesen Eintrag
+   lehnt Discord den Login mit "Ungültiges OAuth2 redirect_uri" ab — live
+   verifiziert beim ersten Test des WebUI-Login-Flows.
 
 ### Privileged Gateway Intents
 
