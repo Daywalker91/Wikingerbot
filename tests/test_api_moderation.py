@@ -30,9 +30,11 @@ class _FakeResponse:
 
 
 class _FakeAsyncClient:
-    def __init__(self, delete_status: int = 204) -> None:
+    def __init__(self, delete_status: int = 204, put_status: int = 204) -> None:
         self.delete_status = delete_status
+        self.put_status = put_status
         self.delete_calls: list[tuple[str, dict]] = []
+        self.put_calls: list[tuple[str, dict, dict]] = []
 
     async def __aenter__(self) -> "_FakeAsyncClient":
         return self
@@ -43,6 +45,10 @@ class _FakeAsyncClient:
     async def delete(self, url: str, headers: dict) -> _FakeResponse:
         self.delete_calls.append((url, headers))
         return _FakeResponse(self.delete_status)
+
+    async def put(self, url: str, headers: dict, json: dict) -> _FakeResponse:
+        self.put_calls.append((url, headers, json))
+        return _FakeResponse(self.put_status)
 
 
 async def test_list_modlog_without_cookie_is_unauthorized():
@@ -152,3 +158,160 @@ async def test_unban_fails_on_discord_error(db_session, monkeypatch):
         )
 
     assert response.status_code == 502
+
+
+async def test_ban_calls_discord_and_writes_modlog(db_session, monkeypatch):
+    await _seed_guild_and_user(db_session)
+    test_client = await _client()
+    fake_client = _FakeAsyncClient(put_status=204)
+    monkeypatch.setattr("bot.cogs.moderation.api.httpx.AsyncClient", lambda: fake_client)
+
+    async with test_client as client:
+        client.cookies.set("session", _cookie_for(100, 1, Level.MOD))
+        response = await client.post(
+            "/moderation/ban",
+            json={"user_id": 200, "reason": "Spam", "delete_message_days": 1},
+        )
+
+    assert response.status_code == 200
+    assert response.json()["ok"] is True
+    url, _headers, json_body = fake_client.put_calls[0]
+    assert url == "https://discord.com/api/guilds/1/bans/200"
+    assert json_body == {"delete_message_seconds": 86400}
+
+    result = await db_session.execute(select(ModLogEntry).where(ModLogEntry.action == ModAction.BAN))
+    [entry] = result.scalars().all()
+    assert entry.user_id == 200
+    assert entry.mod_id == 100
+    assert entry.reason == "Spam"
+
+
+async def test_ban_requires_at_least_mod(db_session):
+    await _seed_guild_and_user(db_session)
+
+    async with await _client() as client:
+        client.cookies.set("session", _cookie_for(100, 1, Level.MEMBER))
+        response = await client.post(
+            "/moderation/ban", json={"user_id": 200, "reason": "Spam", "delete_message_days": 0}
+        )
+
+    assert response.status_code == 403
+
+
+async def test_ban_fails_on_discord_error(db_session, monkeypatch):
+    await _seed_guild_and_user(db_session)
+    test_client = await _client()
+    fake_client = _FakeAsyncClient(put_status=500)
+    monkeypatch.setattr("bot.cogs.moderation.api.httpx.AsyncClient", lambda: fake_client)
+
+    async with test_client as client:
+        client.cookies.set("session", _cookie_for(100, 1, Level.MOD))
+        response = await client.post(
+            "/moderation/ban", json={"user_id": 200, "reason": "Spam", "delete_message_days": 0}
+        )
+
+    assert response.status_code == 502
+
+
+async def test_get_mod_config_returns_defaults(db_session):
+    await _seed_guild_and_user(db_session)
+
+    async with await _client() as client:
+        client.cookies.set("session", _cookie_for(100, 1, Level.OWNER))
+        response = await client.get("/moderation/mod-config")
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "warn_threshold": 3,
+        "warn_action": "timeout",
+        "warn_timeout_minutes": 60,
+    }
+
+
+async def test_get_mod_config_requires_owner(db_session):
+    await _seed_guild_and_user(db_session)
+
+    async with await _client() as client:
+        client.cookies.set("session", _cookie_for(100, 1, Level.MOD))
+        response = await client.get("/moderation/mod-config")
+
+    assert response.status_code == 403
+
+
+async def test_update_mod_config_persists_values(db_session):
+    await _seed_guild_and_user(db_session)
+
+    async with await _client() as client:
+        client.cookies.set("session", _cookie_for(100, 1, Level.OWNER))
+        put_response = await client.put(
+            "/moderation/mod-config",
+            json={"warn_threshold": 5, "warn_action": "ban", "warn_timeout_minutes": 30},
+        )
+        get_response = await client.get("/moderation/mod-config")
+
+    assert put_response.status_code == 200
+    assert get_response.json() == {
+        "warn_threshold": 5,
+        "warn_action": "ban",
+        "warn_timeout_minutes": 30,
+    }
+
+
+class _FakeMemberSearchClient:
+    def __init__(self, status_code: int = 200, members=None) -> None:
+        self.status_code = status_code
+        self.members = members if members is not None else []
+
+    async def __aenter__(self) -> "_FakeMemberSearchClient":
+        return self
+
+    async def __aexit__(self, *args) -> None:
+        return None
+
+    async def get(self, url: str, headers: dict, params: dict):
+        return httpx.Response(self.status_code, json=self.members, request=httpx.Request("GET", url))
+
+
+async def test_search_members_returns_mapped_results(db_session, monkeypatch):
+    await _seed_guild_and_user(db_session)
+    test_client = await _client()
+    members = [
+        {"nick": "Der Böse", "user": {"id": "999", "username": "baddude", "global_name": "Bad Dude"}},
+        {"nick": None, "user": {"id": "1000", "username": "goodie", "global_name": None}},
+    ]
+    fake = _FakeMemberSearchClient(members=members)
+    monkeypatch.setattr("bot.cogs.moderation.api.httpx.AsyncClient", lambda: fake)
+
+    async with test_client as client:
+        client.cookies.set("session", _cookie_for(100, 1, Level.MOD))
+        response = await client.get("/moderation/member-search", params={"query": "bad"})
+
+    assert response.status_code == 200
+    assert response.json() == [
+        {"id": 999, "username": "baddude", "display_name": "Der Böse"},
+        {"id": 1000, "username": "goodie", "display_name": "goodie"},
+    ]
+
+
+async def test_search_members_returns_empty_on_discord_error(db_session, monkeypatch):
+    await _seed_guild_and_user(db_session)
+    test_client = await _client()
+    fake = _FakeMemberSearchClient(status_code=500)
+    monkeypatch.setattr("bot.cogs.moderation.api.httpx.AsyncClient", lambda: fake)
+
+    async with test_client as client:
+        client.cookies.set("session", _cookie_for(100, 1, Level.MOD))
+        response = await client.get("/moderation/member-search", params={"query": "bad"})
+
+    assert response.status_code == 200
+    assert response.json() == []
+
+
+async def test_search_members_requires_at_least_mod(db_session):
+    await _seed_guild_and_user(db_session)
+
+    async with await _client() as client:
+        client.cookies.set("session", _cookie_for(100, 1, Level.MEMBER))
+        response = await client.get("/moderation/member-search", params={"query": "bad"})
+
+    assert response.status_code == 403

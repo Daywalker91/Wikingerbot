@@ -22,3 +22,15 @@ export interface ActionResult {
   ok: boolean;
   message: string;
 }
+
+export interface ModConfig {
+  warn_threshold: number;
+  warn_action: "timeout" | "ban" | "kick";
+  warn_timeout_minutes: number;
+}
+
+export interface MemberSearchResult {
+  id: number;
+  username: string;
+  display_name: string;
+}
