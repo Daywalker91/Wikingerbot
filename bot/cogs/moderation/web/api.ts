@@ -6,6 +6,7 @@ import type {
   MemberSearchResult,
   ModConfig,
   ModLogEntryItem,
+  TextChannelItem,
   WarningItem,
 } from "./types";
 
@@ -68,4 +69,8 @@ export async function resetEscalation(userId: string): Promise<ActionResult> {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ user_id: Number(userId) }),
   });
+}
+
+export async function getTextChannels(): Promise<TextChannelItem[]> {
+  return apiFetch<TextChannelItem[]>("/moderation/text-channels");
 }

@@ -5,13 +5,23 @@ import {
   getEscalations,
   getModConfig,
   getModLog,
+  getTextChannels,
   getWarnings,
   resetEscalation,
   searchMembers,
   unbanUser,
   updateModConfig,
 } from "./api";
-import type { EscalationState, LadderAction, MemberSearchResult, ModConfig, ModLogEntryItem, WarningItem } from "./types";
+import type {
+  AutoModPoints,
+  EscalationState,
+  LadderAction,
+  MemberSearchResult,
+  ModConfig,
+  ModLogEntryItem,
+  TextChannelItem,
+  WarningItem,
+} from "./types";
 
 export const route = { path: "/moderation", navLabel: "Moderation" };
 
@@ -27,6 +37,15 @@ const PRESET_REASONS = [
 const LADDER_ACTIONS: LadderAction[] = ["timeout", "kick", "ban"];
 const MEMBER_SEARCH_DEBOUNCE_MS = 300;
 
+const AUTOMOD_TRIGGER_LABELS: Record<keyof AutoModPoints, string> = {
+  spam: "Spam",
+  keyword: "Verbotene Wörter",
+  keyword_preset: "Wörter-Preset",
+  mention_spam: "Mention-Spam",
+  harmful_link: "Schädliche Links",
+  member_profile: "Profil-Filter",
+};
+
 export default function ModerationPage() {
   const [modlog, setModlog] = useState<ModLogEntryItem[] | null>(null);
   const [warnings, setWarnings] = useState<WarningItem[] | null>(null);
@@ -38,6 +57,7 @@ export default function ModerationPage() {
   const [banDeleteDays, setBanDeleteDays] = useState(0);
 
   const [modConfig, setModConfig] = useState<ModConfig | null>(null);
+  const [textChannels, setTextChannels] = useState<TextChannelItem[]>([]);
 
   const [escalations, setEscalations] = useState<EscalationState[] | null>(null);
   const [resetUserId, setResetUserId] = useState("");
@@ -48,16 +68,18 @@ export default function ModerationPage() {
   const [message, setMessage] = useState<string | null>(null);
 
   async function load() {
-    const [modlogResult, warningsResult, config, escalationsResult] = await Promise.all([
+    const [modlogResult, warningsResult, config, escalationsResult, channels] = await Promise.all([
       getModLog(),
       getWarnings(),
       getModConfig(),
       getEscalations(),
+      getTextChannels(),
     ]);
     setModlog(modlogResult);
     setWarnings(warningsResult);
     setModConfig(config);
     setEscalations(escalationsResult);
+    setTextChannels(channels);
   }
 
   useEffect(() => {
@@ -306,6 +328,79 @@ export default function ModerationPage() {
                 />{" "}
                 Tagen
               </label>
+            </div>
+            <button onClick={() => void handleSaveModConfig()}>Speichern</button>
+          </div>
+        )}
+      </section>
+
+      <section style={{ marginBottom: 32 }}>
+        <h2>AutoMod-Integration</h2>
+        <p style={{ color: "#999", fontSize: "0.9em", maxWidth: 640 }}>
+          Discords eigenes AutoMod (Server-Einstellungen → Sicherheit) erkennt Spam, verbotene Wörter,
+          schädliche Links usw. selbst - der Bot erkennt hier nichts von sich aus, sondern wandelt bereits
+          von Discord blockierte Nachrichten automatisch in Warn-Punkte um (inkl. Eskalations-Leiter). Nur
+          die "Nachricht blockieren"-Aktion einer Regel zählt, damit Regeln mit mehreren Aktionen (z.B.
+          Blockieren + Timeout) nicht doppelt zählen.
+        </p>
+        {modConfig === null && <p>Lädt…</p>}
+        {modConfig !== null && (
+          <div>
+            <div style={{ marginBottom: 8 }}>
+              <label>
+                <input
+                  type="checkbox"
+                  checked={modConfig.automod_warn_enabled}
+                  onChange={(e) => setModConfig({ ...modConfig, automod_warn_enabled: e.target.checked })}
+                />{" "}
+                Aktiviert
+              </label>
+            </div>
+            <div style={{ marginBottom: 8 }}>
+              <label>
+                Eskalations-Kanal:{" "}
+                <select
+                  value={modConfig.automod_alert_channel_id ?? ""}
+                  onChange={(e) =>
+                    setModConfig({
+                      ...modConfig,
+                      automod_alert_channel_id: e.target.value ? Number(e.target.value) : null,
+                    })
+                  }
+                >
+                  <option value="">Kein Kanal gewählt</option>
+                  {textChannels.map((channel) => (
+                    <option key={channel.id} value={channel.id}>
+                      #{channel.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            </div>
+            <div style={{ marginBottom: 8 }}>
+              <div>Punkte je AutoMod-Regeltyp:</div>
+              {(Object.keys(AUTOMOD_TRIGGER_LABELS) as (keyof AutoModPoints)[]).map((key) => (
+                <div key={key} style={{ marginBottom: 4 }}>
+                  <label>
+                    {AUTOMOD_TRIGGER_LABELS[key]}:{" "}
+                    <input
+                      type="number"
+                      min={0}
+                      value={modConfig.automod_warn_points[key]}
+                      onChange={(e) =>
+                        setModConfig({
+                          ...modConfig,
+                          automod_warn_points: {
+                            ...modConfig.automod_warn_points,
+                            [key]: Number(e.target.value),
+                          },
+                        })
+                      }
+                      style={{ width: 60 }}
+                    />
+                  </label>
+                </div>
+              ))}
             </div>
             <button onClick={() => void handleSaveModConfig()}>Speichern</button>
           </div>

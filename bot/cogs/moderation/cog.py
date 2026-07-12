@@ -3,6 +3,7 @@ from datetime import datetime, timedelta, timezone
 
 import discord
 from discord import app_commands
+from discord.app_commands import Choice
 from discord.ext import commands, tasks
 from sqlalchemy import func, select, update
 
@@ -74,6 +75,35 @@ async def _decay_warnings() -> None:
                 .values(expired=True)
             )
             await db.commit()
+
+
+DEFAULT_AUTOMOD_POINTS = {
+    "spam": 1,
+    "keyword": 2,
+    "keyword_preset": 2,
+    "mention_spam": 2,
+    "harmful_link": 3,
+    "member_profile": 1,
+}
+
+
+async def _automod_points_for(guild_id: int, trigger_type: str) -> int:
+    weights = json.loads(
+        await get_config(guild_id, "automod_warn_points", json.dumps(DEFAULT_AUTOMOD_POINTS))
+    )
+    return weights.get(trigger_type, 1)
+
+
+def _build_automod_reason(trigger_type: str, matched_keyword: str | None) -> str:
+    reason = f"AutoMod: {trigger_type}"
+    if matched_keyword:
+        reason += f" (Treffer: '{matched_keyword}')"
+    return reason
+
+
+async def _resolve_automod_channel(bot: discord.Client, guild_id: int, fallback_channel_id: int):
+    channel_id = await get_config(guild_id, "automod_alert_channel_id", None)
+    return bot.get_channel(int(channel_id)) if channel_id else bot.get_channel(fallback_channel_id)
 
 
 async def _dm(member: discord.Member, message: str) -> None:
@@ -193,6 +223,102 @@ class KickProposalView(discord.ui.View):
             item.disabled = True
         await interaction.response.edit_message(view=self)
         await interaction.followup.send(f"{member.mention} wurde gekickt.", ephemeral=True)
+
+
+async def _trigger_escalation(
+    bot_user_id: int,
+    channel: discord.abc.Messageable,
+    guild: discord.Guild,
+    user: discord.Member,
+    total_points: int,
+) -> None:
+    ladder = await _get_ladder(guild.id)
+    tier = await _consume_tier(guild.id, user.id)
+    action = ladder[min(tier, len(ladder) - 1)]
+    reason = f"Automatische Eskalation Stufe {tier + 1} ({total_points} Warn-Punkte)"
+
+    if action == "kick":
+        embed = discord.Embed(
+            title="Warn-Eskalation: Kick vorgeschlagen",
+            description=f"{user.mention} hat {total_points} Warn-Punkte erreicht.\nVorschlag: **Kick**",
+        )
+        view = KickProposalView(guild_id=guild.id, user_id=user.id, reason=reason)
+        await channel.send(embed=embed, view=view)
+        return
+
+    if action == "ban":
+        await user.ban(reason=reason)
+        duration = None
+        title = "Automatische Eskalation: Bann"
+        description = f"{user.mention} wurde automatisch gebannt ({total_points} Warn-Punkte)."
+    else:
+        timeout_minutes = int(await get_config(guild.id, "warn_timeout_minutes", "60"))
+        await user.timeout(timedelta(minutes=timeout_minutes), reason=reason)
+        duration = timeout_minutes * 60
+        action = "timeout"
+        title = "Automatische Eskalation: Timeout"
+        description = (
+            f"{user.mention} wurde automatisch fuer {timeout_minutes} Minuten getimeoutet "
+            f"({total_points} Warn-Punkte)."
+        )
+
+    entry = await _add_modlog(
+        guild.id,
+        user.id,
+        bot_user_id,
+        ModAction.BAN if action == "ban" else ModAction.TIMEOUT,
+        reason,
+        duration=duration,
+        escalation_reviewed=False,
+    )
+
+    view = EscalationReviewView(entry_id=entry.id, action=action, guild_id=guild.id, user_id=user.id)
+    message = await channel.send(embed=discord.Embed(title=title, description=description), view=view)
+
+    async with get_db_session() as db:
+        db_entry = await db.get(ModLogEntry, entry.id)
+        db_entry.review_message_id = message.id
+        await db.commit()
+
+
+async def _apply_warning(
+    bot_user_id: int,
+    guild: discord.Guild,
+    user_id: int,
+    mod_id: int,
+    reason: str,
+    points: int,
+    channel: discord.abc.Messageable,
+) -> tuple[int, int]:
+    """Traegt eine Verwarnung ein, prueft die Schwelle und eskaliert bei
+    Bedarf - gemeinsame Logik fuer /warn UND die AutoMod-Integration.
+    Gibt (total_points, threshold) zurueck."""
+    await ensure_guild(guild.id, guild.name)
+    await ensure_user(user_id)
+
+    async with get_db_session() as db:
+        db.add(Warning(guild_id=guild.id, user_id=user_id, mod_id=mod_id, reason=reason, points=points))
+        await db.commit()
+        result = await db.execute(
+            select(func.sum(Warning.points)).where(
+                Warning.guild_id == guild.id, Warning.user_id == user_id, Warning.expired.is_(False)
+            )
+        )
+        total_points = result.scalar_one() or 0
+
+    member = guild.get_member(user_id)
+    if member is not None:
+        await _dm(
+            member,
+            f"Du wurdest in **{guild.name}** verwarnt.\n"
+            f"Grund: {reason}\nPunkte: {points} (Gesamt: {total_points})",
+        )
+
+    threshold = int(await get_config(guild.id, "warn_threshold", "3"))
+    if total_points >= threshold and member is not None:
+        await _trigger_escalation(bot_user_id, channel, guild, member, total_points)
+
+    return total_points, threshold
 
 
 class ModerationCog(BaseCog):
@@ -330,31 +456,17 @@ class ModerationCog(BaseCog):
         points: app_commands.Range[int, 1, 100] = 1,
     ) -> None:
         await interaction.response.defer()
-        guild_id = interaction.guild_id
 
-        await ensure_guild(guild_id, interaction.guild.name)
-        await ensure_user(user.id, str(user))
-
-        async with get_db_session() as db:
-            db.add(
-                Warning(guild_id=guild_id, user_id=user.id, mod_id=interaction.user.id, reason=reason, points=points)
-            )
-            await db.commit()
-
-            result = await db.execute(
-                select(func.sum(Warning.points)).where(
-                    Warning.guild_id == guild_id, Warning.user_id == user.id, Warning.expired.is_(False)
-                )
-            )
-            total_points = result.scalar_one() or 0
-
-        await _dm(
-            user,
-            f"Du wurdest in **{interaction.guild.name}** verwarnt.\n"
-            f"Grund: {reason}\nPunkte: {points} (Gesamt: {total_points})",
+        total_points, threshold = await _apply_warning(
+            self.bot.user.id,
+            interaction.guild,
+            user.id,
+            interaction.user.id,
+            reason,
+            points,
+            interaction.channel,
         )
 
-        threshold = int(await get_config(guild_id, "warn_threshold", "3"))
         if total_points < threshold:
             await interaction.followup.send(
                 f"{user.mention} verwarnt ({total_points}/{threshold} Punkten). Grund: {reason}"
@@ -364,58 +476,28 @@ class ModerationCog(BaseCog):
         await interaction.followup.send(
             f"{user.mention} hat die Warn-Schwelle erreicht ({total_points}/{threshold})."
         )
-        await self._trigger_escalation(interaction.channel, interaction.guild, user, total_points)
 
-    async def _trigger_escalation(
-        self, channel: discord.abc.Messageable, guild: discord.Guild, user: discord.Member, total_points: int
-    ) -> None:
-        ladder = await _get_ladder(guild.id)
-        tier = await _consume_tier(guild.id, user.id)
-        action = ladder[min(tier, len(ladder) - 1)]
-        reason = f"Automatische Eskalation Stufe {tier + 1} ({total_points} Warn-Punkte)"
+    @commands.Cog.listener("on_automod_action")
+    async def on_automod_action(self, execution: discord.AutoModAction) -> None:
+        if execution.action.type != discord.AutoModRuleActionType.block_message:
+            return  # Vermeidet Doppelzaehlung bei Regeln mit mehreren Aktionen
 
-        if action == "kick":
-            embed = discord.Embed(
-                title="Warn-Eskalation: Kick vorgeschlagen",
-                description=f"{user.mention} hat {total_points} Warn-Punkte erreicht.\nVorschlag: **Kick**",
-            )
-            view = KickProposalView(guild_id=guild.id, user_id=user.id, reason=reason)
-            await channel.send(embed=embed, view=view)
+        if await get_config(execution.guild_id, "automod_warn_enabled", "false") != "true":
             return
 
-        if action == "ban":
-            await user.ban(reason=reason)
-            duration = None
-            title = "Automatische Eskalation: Bann"
-            description = f"{user.mention} wurde automatisch gebannt ({total_points} Warn-Punkte)."
-        else:
-            timeout_minutes = int(await get_config(guild.id, "warn_timeout_minutes", "60"))
-            await user.timeout(timedelta(minutes=timeout_minutes), reason=reason)
-            duration = timeout_minutes * 60
-            action = "timeout"
-            title = "Automatische Eskalation: Timeout"
-            description = (
-                f"{user.mention} wurde automatisch fuer {timeout_minutes} Minuten getimeoutet "
-                f"({total_points} Warn-Punkte)."
-            )
+        guild = self.bot.get_guild(execution.guild_id)
+        if guild is None:
+            return
 
-        entry = await _add_modlog(
-            guild.id,
-            user.id,
-            self.bot.user.id,
-            ModAction.BAN if action == "ban" else ModAction.TIMEOUT,
-            reason,
-            duration=duration,
-            escalation_reviewed=False,
+        points = await _automod_points_for(execution.guild_id, execution.rule_trigger_type.name)
+        reason = _build_automod_reason(execution.rule_trigger_type.name, execution.matched_keyword)
+        channel = await _resolve_automod_channel(self.bot, execution.guild_id, execution.channel_id)
+        if channel is None:
+            return
+
+        await _apply_warning(
+            self.bot.user.id, guild, execution.user_id, self.bot.user.id, reason, points, channel
         )
-
-        view = EscalationReviewView(entry_id=entry.id, action=action, guild_id=guild.id, user_id=user.id)
-        message = await channel.send(embed=discord.Embed(title=title, description=description), view=view)
-
-        async with get_db_session() as db:
-            db_entry = await db.get(ModLogEntry, entry.id)
-            db_entry.review_message_id = message.id
-            await db.commit()
 
     @app_commands.command(name="warnings", description="Zeigt aktive Verwarnungen eines Mitglieds")
     @app_commands.describe(user="Mitglied")
@@ -518,6 +600,60 @@ class ModerationCog(BaseCog):
         await set_config(interaction.guild_id, "warn_decay_days", str(days), interaction.guild.name)
         await interaction.response.send_message(
             f"Warn-Punkte verfallen jetzt nach {days} Tagen.", ephemeral=True, delete_after=20
+        )
+
+    @modconfig_group.command(
+        name="automod", description="Aktiviert/deaktiviert automatische Warnungen aus Discords AutoMod"
+    )
+    @app_commands.describe(enabled="An oder aus")
+    @require_role(Level.OWNER)
+    async def modconfig_automod(self, interaction: discord.Interaction, enabled: bool) -> None:
+        await set_config(
+            interaction.guild_id, "automod_warn_enabled", "true" if enabled else "false", interaction.guild.name
+        )
+        state = "aktiviert" if enabled else "deaktiviert"
+        await interaction.response.send_message(
+            f"AutoMod-Integration {state}.", ephemeral=True, delete_after=20
+        )
+
+    @modconfig_group.command(
+        name="automod_channel", description="Setzt den Kanal fuer AutoMod-Eskalations-Meldungen"
+    )
+    @app_commands.describe(channel="Zielkanal")
+    @require_role(Level.OWNER)
+    async def modconfig_automod_channel(
+        self, interaction: discord.Interaction, channel: discord.TextChannel
+    ) -> None:
+        await set_config(
+            interaction.guild_id, "automod_alert_channel_id", str(channel.id), interaction.guild.name
+        )
+        await interaction.response.send_message(
+            f"AutoMod-Eskalations-Kanal auf {channel.mention} gesetzt.", ephemeral=True, delete_after=20
+        )
+
+    @modconfig_group.command(
+        name="automod_points", description="Setzt die Warn-Punkte fuer einen AutoMod-Regeltyp"
+    )
+    @app_commands.describe(trigger_type="AutoMod-Regeltyp", points="Punkte")
+    @app_commands.choices(
+        trigger_type=[Choice(name=key, value=key) for key in DEFAULT_AUTOMOD_POINTS]
+    )
+    @require_role(Level.OWNER)
+    async def modconfig_automod_points(
+        self,
+        interaction: discord.Interaction,
+        trigger_type: Choice[str],
+        points: app_commands.Range[int, 0, 100],
+    ) -> None:
+        weights = json.loads(
+            await get_config(interaction.guild_id, "automod_warn_points", json.dumps(DEFAULT_AUTOMOD_POINTS))
+        )
+        weights[trigger_type.value] = points
+        await set_config(interaction.guild_id, "automod_warn_points", json.dumps(weights), interaction.guild.name)
+        await interaction.response.send_message(
+            f"AutoMod-Punkte fuer `{trigger_type.value}` auf {points} gesetzt.",
+            ephemeral=True,
+            delete_after=20,
         )
 
     @app_commands.command(

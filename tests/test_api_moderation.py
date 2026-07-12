@@ -226,6 +226,16 @@ async def test_get_mod_config_returns_defaults(db_session):
         "warn_ladder": ["timeout", "kick", "ban"],
         "warn_timeout_minutes": 60,
         "warn_decay_days": 30,
+        "automod_warn_enabled": False,
+        "automod_warn_points": {
+            "spam": 1,
+            "keyword": 2,
+            "keyword_preset": 2,
+            "mention_spam": 2,
+            "harmful_link": 3,
+            "member_profile": 1,
+        },
+        "automod_alert_channel_id": None,
     }
 
 
@@ -251,6 +261,16 @@ async def test_update_mod_config_persists_values(db_session):
                 "warn_ladder": ["ban", "kick"],
                 "warn_timeout_minutes": 30,
                 "warn_decay_days": 14,
+                "automod_warn_enabled": True,
+                "automod_warn_points": {
+                    "spam": 2,
+                    "keyword": 3,
+                    "keyword_preset": 3,
+                    "mention_spam": 3,
+                    "harmful_link": 5,
+                    "member_profile": 2,
+                },
+                "automod_alert_channel_id": 555,
             },
         )
         get_response = await client.get("/moderation/mod-config")
@@ -261,6 +281,16 @@ async def test_update_mod_config_persists_values(db_session):
         "warn_ladder": ["ban", "kick"],
         "warn_timeout_minutes": 30,
         "warn_decay_days": 14,
+        "automod_warn_enabled": True,
+        "automod_warn_points": {
+            "spam": 2,
+            "keyword": 3,
+            "keyword_preset": 3,
+            "mention_spam": 3,
+            "harmful_link": 5,
+            "member_profile": 2,
+        },
+        "automod_alert_channel_id": 555,
     }
 
 
@@ -373,3 +403,63 @@ async def test_reset_escalation_requires_at_least_mod(db_session):
         response = await client.post("/moderation/escalations/reset", json={"user_id": 200})
 
     assert response.status_code == 403
+
+
+class _FakeChannelsClient:
+    def __init__(self, status_code: int = 200, channels=None) -> None:
+        self.status_code = status_code
+        self.channels = channels if channels is not None else []
+
+    async def __aenter__(self) -> "_FakeChannelsClient":
+        return self
+
+    async def __aexit__(self, *args) -> None:
+        return None
+
+    async def get(self, url: str, headers: dict):
+        return httpx.Response(self.status_code, json=self.channels, request=httpx.Request("GET", url))
+
+
+async def test_list_text_channels_filters_to_text_type(db_session, monkeypatch):
+    await _seed_guild_and_user(db_session)
+    test_client = await _client()
+    channels = [
+        {"id": "10", "name": "allgemein", "type": 0},
+        {"id": "11", "name": "Sprachkanal", "type": 2},
+        {"id": "12", "name": "mod-log", "type": 0},
+    ]
+    fake = _FakeChannelsClient(channels=channels)
+    monkeypatch.setattr("bot.cogs.moderation.api.httpx.AsyncClient", lambda: fake)
+
+    async with test_client as client:
+        client.cookies.set("session", _cookie_for(100, 1, Level.OWNER))
+        response = await client.get("/moderation/text-channels")
+
+    assert response.status_code == 200
+    assert response.json() == [
+        {"id": 10, "name": "allgemein"},
+        {"id": 12, "name": "mod-log"},
+    ]
+
+
+async def test_list_text_channels_requires_owner(db_session):
+    await _seed_guild_and_user(db_session)
+
+    async with await _client() as client:
+        client.cookies.set("session", _cookie_for(100, 1, Level.MOD))
+        response = await client.get("/moderation/text-channels")
+
+    assert response.status_code == 403
+
+
+async def test_list_text_channels_fails_on_discord_error(db_session, monkeypatch):
+    await _seed_guild_and_user(db_session)
+    test_client = await _client()
+    fake = _FakeChannelsClient(status_code=500)
+    monkeypatch.setattr("bot.cogs.moderation.api.httpx.AsyncClient", lambda: fake)
+
+    async with test_client as client:
+        client.cookies.set("session", _cookie_for(100, 1, Level.OWNER))
+        response = await client.get("/moderation/text-channels")
+
+    assert response.status_code == 502
