@@ -26,20 +26,39 @@ def _node(instances: list[SimpleNamespace]) -> SimpleNamespace:
     return SimpleNamespace(AvailableInstances=instances)
 
 
-def _instance(instance_id: str, running: bool) -> SimpleNamespace:
+def _instance(instance_id: str, running: bool, module: str = "Minecraft") -> SimpleNamespace:
     return SimpleNamespace(
         InstanceID=instance_id,
         FriendlyName=instance_id,
-        Module="Minecraft",
+        Module=module,
         Running=running,
         DisplayImageSource="",
     )
 
 
-async def test_start_stop_calls_controller_ads_module():
+async def test_list_instances_excludes_ads_module_entries():
     ads_module = SimpleNamespace(
-        StartInstance=AsyncMock(),
-        StopInstance=AsyncMock(),
+        GetInstances=AsyncMock(
+            return_value=[
+                _node([_instance("game-1", True), _instance("ads-1", True, module="ADS")])
+            ]
+        )
+    )
+    controller = SimpleNamespace(ADSModule=ads_module)
+    client = AMPClient()
+    client._controller_client = lambda: controller
+
+    instances = await client.list_instances()
+
+    assert [i.instance_id for i in instances] == ["game-1"]
+
+
+async def test_start_stop_calls_controller_ads_module_via_raw_api_call():
+    # api_call() statt der generierten StartInstance/StopInstance-Wrapper, da
+    # diese ein bares ActionResult deserialisieren wollen und dabei an einem
+    # ampapi/dataclass_wizard-Bug scheitern (siehe _raw_call-Docstring).
+    ads_module = SimpleNamespace(
+        api_call=AsyncMock(return_value={}),
         GetInstances=AsyncMock(return_value=[_node([_instance("abc", False)])]),
     )
     controller = SimpleNamespace(ADSModule=ads_module)
@@ -49,8 +68,8 @@ async def test_start_stop_calls_controller_ads_module():
     await client.start("abc")
     await client.stop("abc")
 
-    ads_module.StartInstance.assert_awaited_once_with(InstanceName="abc")
-    ads_module.StopInstance.assert_awaited_once_with(InstanceName="abc")
+    ads_module.api_call.assert_any_call("ADSModule/StartInstance", {"InstanceName": "abc"})
+    ads_module.api_call.assert_any_call("ADSModule/StopInstance", {"InstanceName": "abc"})
 
 
 async def test_start_calls_core_start_directly_when_instance_already_running():
@@ -59,7 +78,7 @@ async def test_start_calls_core_start_directly_when_instance_already_running():
     # die Anwendung darin nicht mitstarten, Core.Start() auf der Instanz-
     # Session direkt ist dann der richtige Weg.
     ads_module = SimpleNamespace(
-        StartInstance=AsyncMock(),
+        api_call=AsyncMock(return_value={}),
         GetInstances=AsyncMock(return_value=[_node([_instance("abc", True)])]),
     )
     controller = SimpleNamespace(ADSModule=ads_module)
@@ -71,12 +90,12 @@ async def test_start_calls_core_start_directly_when_instance_already_running():
     await client.start("abc")
 
     core.api_call.assert_awaited_once_with("Core/Start", {})
-    ads_module.StartInstance.assert_not_awaited()
+    ads_module.api_call.assert_not_awaited()
 
 
 async def test_start_uses_start_instance_when_list_instances_fails():
     ads_module = SimpleNamespace(
-        StartInstance=AsyncMock(),
+        api_call=AsyncMock(return_value={}),
         GetInstances=AsyncMock(side_effect=Exception("kein Netz")),
     )
     controller = SimpleNamespace(ADSModule=ads_module)
@@ -85,7 +104,7 @@ async def test_start_uses_start_instance_when_list_instances_fails():
 
     await client.start("abc")  # darf nicht werfen
 
-    ads_module.StartInstance.assert_awaited_once_with(InstanceName="abc")
+    ads_module.api_call.assert_awaited_once_with("ADSModule/StartInstance", {"InstanceName": "abc"})
 
 
 async def test_send_console_message_forwards_to_core():

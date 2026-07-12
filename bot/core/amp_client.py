@@ -23,6 +23,20 @@ async def _with_timeout(awaitable: Awaitable[T], timeout: float) -> T:
         raise TimeoutError(f"AMP hat nach {timeout:.0f}s nicht geantwortet") from None
 
 
+async def _raw_call(module, endpoint: str, args: dict) -> None:
+    """Ruft einen AMP-Endpunkt direkt per api_call() auf, ohne die Antwort in ein
+    generisches ActionResult zu deserialisieren.
+
+    ampapi/dataclass_wizard kann Optional[T] ohne konkreten Typparameter nicht
+    auflösen und wirft dabei einen TypeError ("issubclass() arg 1 must be a
+    class"), obwohl der Aufruf serverseitig laengst durchgelaufen ist - live
+    beobachtet bei ADSModule.StartInstance/StopInstance und Core.Start, die
+    alle drei ein bares (nicht generisch parametrisiertes) ActionResult
+    zurueckgeben. Die Antwort wird hier nicht ausgewertet (keiner unserer
+    Aufrufer braucht sie), api_call() umgeht die kaputte Deserialisierung."""
+    await module.api_call(endpoint, args)
+
+
 @dataclass
 class DiscoveredInstance:
     instance_id: str
@@ -81,7 +95,13 @@ class AMPClient:
         return self._instances[instance_id]
 
     async def list_instances(self) -> list[DiscoveredInstance]:
-        """Listet alle am Controller bekannten Instanzen (fuer /server discover)."""
+        """Listet alle am Controller bekannten Spiele-Instanzen (fuer /server discover).
+
+        Instanzen mit Module "ADS" sind der Controller selbst bzw. dessen
+        verwaltete ADS-Knoten, keine Spiele-Server - die sollen sich nirgends
+        (weder Discord-Autocomplete/-discover noch WebUI) versehentlich
+        anlegen/starten/stoppen lassen, deshalb hier zentral herausgefiltert.
+        """
         controller = self._controller_client()
         nodes = await _with_timeout(
             controller.ADSModule.GetInstances(ForceIncludeSelf=False), DEFAULT_TIMEOUT
@@ -89,6 +109,8 @@ class AMPClient:
         discovered = []
         for node in nodes:
             for instance in node.AvailableInstances:
+                if instance.Module == "ADS":
+                    continue
                 discovered.append(
                     DiscoveredInstance(
                         instance_id=instance.InstanceID,
@@ -118,11 +140,17 @@ class AMPClient:
         es direkt Core.Start() auf der Instanz-Session.
         """
         if await self._is_instance_running(instance_id):
-            await self._core_start(instance_id)
+            await _with_timeout(
+                _raw_call(self._instance_client(instance_id).Core, "Core/Start", {}), DEFAULT_TIMEOUT
+            )
             return
 
         await _with_timeout(
-            self._controller_client().ADSModule.StartInstance(InstanceName=instance_id),
+            _raw_call(
+                self._controller_client().ADSModule,
+                "ADSModule/StartInstance",
+                {"InstanceName": instance_id},
+            ),
             START_STOP_TIMEOUT,
         )
 
@@ -140,19 +168,13 @@ class AMPClient:
             return False
         return any(i.instance_id == instance_id and i.running for i in instances)
 
-    async def _core_start(self, instance_id: str) -> None:
-        """Ruft Core.Start() auf der Instanz-Session auf - direkt per api_call statt
-        ueber den generierten Core.Start()-Wrapper, da dieser die Antwort in ein
-        generisches ActionResult zu deserialisieren versucht (ampapi/dataclass_wizard
-        kann Optional[T] ohne konkreten Typparameter nicht auflösen und wirft dabei
-        einen TypeError, obwohl der Aufruf serverseitig durchlaeuft). Die Antwort
-        wird hier nicht ausgewertet, api_call() umgeht die kaputte Deserialisierung."""
-        core = self._instance_client(instance_id).Core
-        await _with_timeout(core.api_call("Core/Start", {}), DEFAULT_TIMEOUT)
-
     async def stop(self, instance_id: str) -> None:
         await _with_timeout(
-            self._controller_client().ADSModule.StopInstance(InstanceName=instance_id),
+            _raw_call(
+                self._controller_client().ADSModule,
+                "ADSModule/StopInstance",
+                {"InstanceName": instance_id},
+            ),
             START_STOP_TIMEOUT,
         )
 
