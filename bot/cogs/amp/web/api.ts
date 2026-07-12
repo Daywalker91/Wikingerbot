@@ -1,9 +1,27 @@
 import { apiFetch } from "@/api/client";
 
-import type { ConsoleLineItem, ServerActionResult, ServerStatus } from "./types";
+import type {
+  ConsoleLineItem,
+  DiscoverableInstance,
+  ServerActionResult,
+  ServerCreateBody,
+  ServerStatus,
+} from "./types";
 
 export async function getServers(): Promise<ServerStatus[]> {
   return apiFetch<ServerStatus[]>("/servers");
+}
+
+export async function getDiscoverableInstances(): Promise<DiscoverableInstance[]> {
+  return apiFetch<DiscoverableInstance[]>("/servers/discoverable");
+}
+
+export async function createServer(body: ServerCreateBody): Promise<ServerStatus> {
+  return apiFetch<ServerStatus>("/servers", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
 }
 
 export async function startServer(id: number): Promise<ServerActionResult> {

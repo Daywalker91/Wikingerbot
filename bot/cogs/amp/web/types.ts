@@ -20,3 +20,17 @@ export interface ConsoleLineItem {
   source: string;
   type: string;
 }
+
+export interface DiscoverableInstance {
+  instance_id: string;
+  friendly_name: string;
+  module: string;
+  running: boolean;
+}
+
+export interface ServerCreateBody {
+  instance_name: string;
+  amp_instance_id: string;
+  display_name: string;
+  host: string;
+}

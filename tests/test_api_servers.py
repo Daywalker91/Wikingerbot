@@ -5,7 +5,7 @@ import httpx
 
 from api.main import app
 from api.middleware.auth import create_access_token
-from bot.core.amp_client import amp_client
+from bot.core.amp_client import DiscoveredInstance, amp_client
 from db.models.guild import Guild
 from db.models.role import Level
 from db.models.server import Server
@@ -275,3 +275,111 @@ async def test_send_console_command_calls_amp_client(db_session, monkeypatch):
 
     assert response.status_code == 200
     mock_send.assert_awaited_once_with("abc-123", "say hi")
+
+
+class _FakeGuildResponse:
+    def __init__(self, name: str) -> None:
+        self._name = name
+
+    def raise_for_status(self) -> None:
+        pass
+
+    def json(self) -> dict:
+        return {"name": self._name}
+
+
+class _FakeDiscordClient:
+    def __init__(self, guild_name: str = "Wikinger") -> None:
+        self.guild_name = guild_name
+
+    async def __aenter__(self) -> "_FakeDiscordClient":
+        return self
+
+    async def __aexit__(self, *args) -> None:
+        return None
+
+    async def get(self, url: str, headers: dict) -> _FakeGuildResponse:
+        return _FakeGuildResponse(self.guild_name)
+
+
+async def test_list_discoverable_requires_owner(db_session, monkeypatch):
+    db_session.add(Guild(id=1, name="Wikinger"))
+    await db_session.commit()
+    monkeypatch.setattr(amp_client, "list_instances", AsyncMock(return_value=[]))
+
+    async with await _client() as client:
+        client.cookies.set("session", _cookie_for(100, 1, Level.MOD))
+        response = await client.get("/servers/discoverable")
+
+    assert response.status_code == 403
+
+
+async def test_list_discoverable_excludes_already_added_instances(db_session, monkeypatch):
+    await _seed_server(db_session)
+    monkeypatch.setattr(
+        amp_client,
+        "list_instances",
+        AsyncMock(
+            return_value=[
+                DiscoveredInstance("abc-123", "Valheim", "GenericModule", True, ""),
+                DiscoveredInstance("new-id", "Factorio", "GenericModule", False, "steam:427520"),
+            ]
+        ),
+    )
+
+    async with await _client() as client:
+        client.cookies.set("session", _cookie_for(100, 1, Level.OWNER))
+        response = await client.get("/servers/discoverable")
+
+    assert response.status_code == 200
+    [instance] = response.json()
+    assert instance["instance_id"] == "new-id"
+
+
+async def test_create_server_requires_owner(db_session):
+    db_session.add(Guild(id=1, name="Wikinger"))
+    await db_session.commit()
+
+    async with await _client() as client:
+        client.cookies.set("session", _cookie_for(100, 1, Level.MOD))
+        response = await client.post(
+            "/servers",
+            json={
+                "instance_name": "factorio",
+                "amp_instance_id": "new-id",
+                "display_name": "Factorio",
+                "host": "play.example.com",
+            },
+        )
+
+    assert response.status_code == 403
+
+
+async def test_create_server_adds_row_with_steam_appid(db_session, monkeypatch):
+    test_client = await _client()
+    monkeypatch.setattr("bot.cogs.amp.api.httpx.AsyncClient", lambda: _FakeDiscordClient("Wikinger"))
+    monkeypatch.setattr(
+        amp_client,
+        "list_instances",
+        AsyncMock(
+            return_value=[DiscoveredInstance("new-id", "Factorio", "GenericModule", False, "steam:427520")]
+        ),
+    )
+    monkeypatch.setattr(amp_client, "get_status", AsyncMock(side_effect=TimeoutError("noch nicht bereit")))
+
+    async with test_client as client:
+        client.cookies.set("session", _cookie_for(100, 1, Level.OWNER))
+        response = await client.post(
+            "/servers",
+            json={
+                "instance_name": "factorio",
+                "amp_instance_id": "new-id",
+                "display_name": "Factorio",
+                "host": "play.example.com",
+            },
+        )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["display_name"] == "Factorio"
+    assert body["reachable"] is False
