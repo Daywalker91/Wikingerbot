@@ -22,8 +22,26 @@ async def test_poll_console_returns_entries():
     assert lines[0].source == "Server"
 
 
+def _node(instances: list[SimpleNamespace]) -> SimpleNamespace:
+    return SimpleNamespace(AvailableInstances=instances)
+
+
+def _instance(instance_id: str, running: bool) -> SimpleNamespace:
+    return SimpleNamespace(
+        InstanceID=instance_id,
+        FriendlyName=instance_id,
+        Module="Minecraft",
+        Running=running,
+        DisplayImageSource="",
+    )
+
+
 async def test_start_stop_calls_controller_ads_module():
-    ads_module = SimpleNamespace(StartInstance=AsyncMock(), StopInstance=AsyncMock())
+    ads_module = SimpleNamespace(
+        StartInstance=AsyncMock(),
+        StopInstance=AsyncMock(),
+        GetInstances=AsyncMock(return_value=[_node([_instance("abc", False)])]),
+    )
     controller = SimpleNamespace(ADSModule=ads_module)
     client = AMPClient()
     client._controller_client = lambda: controller
@@ -33,6 +51,41 @@ async def test_start_stop_calls_controller_ads_module():
 
     ads_module.StartInstance.assert_awaited_once_with(InstanceName="abc")
     ads_module.StopInstance.assert_awaited_once_with(InstanceName="abc")
+
+
+async def test_start_calls_core_start_directly_when_instance_already_running():
+    # Live beobachteter Randfall: ADS-Instanz lief schon (z.B. nach einem zuvor
+    # abgebrochenen Start) - ein erneuter ADSModule.StartInstance-Aufruf wuerde
+    # die Anwendung darin nicht mitstarten, Core.Start() auf der Instanz-
+    # Session direkt ist dann der richtige Weg.
+    ads_module = SimpleNamespace(
+        StartInstance=AsyncMock(),
+        GetInstances=AsyncMock(return_value=[_node([_instance("abc", True)])]),
+    )
+    controller = SimpleNamespace(ADSModule=ads_module)
+    core = SimpleNamespace(api_call=AsyncMock(return_value={}))
+    client = AMPClient()
+    client._controller_client = lambda: controller
+    client._instance_client = lambda instance_id: _fake_client(core)
+
+    await client.start("abc")
+
+    core.api_call.assert_awaited_once_with("Core/Start", {})
+    ads_module.StartInstance.assert_not_awaited()
+
+
+async def test_start_uses_start_instance_when_list_instances_fails():
+    ads_module = SimpleNamespace(
+        StartInstance=AsyncMock(),
+        GetInstances=AsyncMock(side_effect=Exception("kein Netz")),
+    )
+    controller = SimpleNamespace(ADSModule=ads_module)
+    client = AMPClient()
+    client._controller_client = lambda: controller
+
+    await client.start("abc")  # darf nicht werfen
+
+    ads_module.StartInstance.assert_awaited_once_with(InstanceName="abc")
 
 
 async def test_send_console_message_forwards_to_core():

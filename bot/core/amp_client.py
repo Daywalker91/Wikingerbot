@@ -106,16 +106,49 @@ class AMPClient:
         )
 
     async def start(self, instance_id: str) -> None:
-        """Startet eine Instanz ueber den Controller.
+        """Startet eine Instanz - welcher Weg noetig ist, haengt vom ADS-Status ab.
 
-        Waehrend eine Instanz komplett gestoppt ist, ist ihre eigene Mini-API
-        (fuer Core.Start ueber die Pro-Instanz-Session) nicht erreichbar - der
-        Start muss deshalb ueber ADSModule.StartInstance am Controller laufen.
+        Ist die Instanz komplett aus, ist ihre eigene Mini-API (fuer Core.Start
+        ueber die Pro-Instanz-Session) nicht erreichbar - der Start muss dann
+        ueber ADSModule.StartInstance am Controller laufen, was ueblicherweise
+        Huelle und Anwendung zusammen hochfaehrt. Laeuft die ADS-Instanz aber
+        schon (z.B. nach einem zuvor abgebrochenen Start), wuerde ein erneuter
+        ADSModule.StartInstance-Aufruf nur die bereits laufende Huelle nochmal
+        antriggern, ohne die Anwendung darin zu starten - dann reicht/braucht
+        es direkt Core.Start() auf der Instanz-Session.
         """
+        if await self._is_instance_running(instance_id):
+            await self._core_start(instance_id)
+            return
+
         await _with_timeout(
             self._controller_client().ADSModule.StartInstance(InstanceName=instance_id),
             START_STOP_TIMEOUT,
         )
+
+    async def _is_instance_running(self, instance_id: str) -> bool:
+        """Ob die ADS-Instanz selbst (nicht die Anwendung darin) laut Controller laeuft.
+
+        Nutzt list_instances() statt get_status(), da Letzteres genau dann nicht
+        erreichbar ist, wenn die Instanz komplett aus ist - der Fall, den wir
+        hier gerade unterscheiden muessen. Schlaegt die Abfrage fehl, gilt die
+        Instanz sicherheitshalber als nicht laufend (fuehrt zum bekannten,
+        langsameren aber verlaesslicheren ADSModule.StartInstance-Pfad)."""
+        try:
+            instances = await self.list_instances()
+        except Exception:
+            return False
+        return any(i.instance_id == instance_id and i.running for i in instances)
+
+    async def _core_start(self, instance_id: str) -> None:
+        """Ruft Core.Start() auf der Instanz-Session auf - direkt per api_call statt
+        ueber den generierten Core.Start()-Wrapper, da dieser die Antwort in ein
+        generisches ActionResult zu deserialisieren versucht (ampapi/dataclass_wizard
+        kann Optional[T] ohne konkreten Typparameter nicht auflösen und wirft dabei
+        einen TypeError, obwohl der Aufruf serverseitig durchlaeuft). Die Antwort
+        wird hier nicht ausgewertet, api_call() umgeht die kaputte Deserialisierung."""
+        core = self._instance_client(instance_id).Core
+        await _with_timeout(core.api_call("Core/Start", {}), DEFAULT_TIMEOUT)
 
     async def stop(self, instance_id: str) -> None:
         await _with_timeout(
