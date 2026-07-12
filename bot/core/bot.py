@@ -1,12 +1,35 @@
+import json
 from pathlib import Path
 
 import discord
 from discord.ext import commands
 
-from bot.core.bot_settings import SYNC_ON_STARTUP_KEY, get_bot_setting
+from bot.core.bot_settings import SYNC_ON_STARTUP_KEY, get_bot_setting, set_bot_setting
 
 COGS_PACKAGE = "bot.cogs"
 COGS_PATH = Path(__file__).resolve().parent.parent / "cogs"
+
+# Bot-Setting-Key, unter dem der Bot seine aktuell geladenen Cogs als JSON-Liste
+# ablegt - der API-Prozess hat keinen Zugriff auf self.extensions (anderer
+# Prozess, kein IPC), liest diese Liste stattdessen aus der DB (siehe
+# bot/cogs/admin/api.py:list_cogs).
+LOADED_COGS_KEY = "loaded_cogs"
+
+
+def discover_cog_names() -> list[str]:
+    """Listet alle verfuegbaren Cog-Namen (Verzeichnisse unter bot/cogs/) auf.
+
+    Modul-Level statt Methode, damit auch der API-Prozess (kein Zugriff auf
+    eine lebende WikingerBot-Instanz) dieselbe Verzeichnis-Scan-Logik nutzen
+    kann (siehe bot/cogs/admin/api.py:list_cogs).
+    """
+    if not COGS_PATH.exists():
+        return []
+    return sorted(
+        path.name
+        for path in COGS_PATH.iterdir()
+        if path.is_dir() and not path.name.startswith("_") and (path / "cog.py").exists()
+    )
 
 
 class WikingerBot(commands.Bot):
@@ -21,6 +44,7 @@ class WikingerBot(commands.Bot):
     async def setup_hook(self) -> None:
         for name in self.discover_cogs():
             await self.load_cog(name)
+        await self._sync_loaded_cogs_to_db()
 
         # Default "true": eine frische Installation kennt noch keine Commands, es gibt
         # also keinen Slash-Command, um den ersten Sync manuell anzustossen - das muss
@@ -32,23 +56,19 @@ class WikingerBot(commands.Bot):
             await self.tree.sync()
 
     def discover_cogs(self) -> list[str]:
-        """Listet alle verfuegbaren Cog-Namen (Verzeichnisse unter bot/cogs/) auf."""
-        if not COGS_PATH.exists():
-            return []
-        return sorted(
-            path.name
-            for path in COGS_PATH.iterdir()
-            if path.is_dir() and not path.name.startswith("_") and (path / "cog.py").exists()
-        )
+        return discover_cog_names()
 
     async def load_cog(self, name: str) -> None:
         await self.load_extension(f"{COGS_PACKAGE}.{name}.cog")
+        await self._sync_loaded_cogs_to_db()
 
     async def unload_cog(self, name: str) -> None:
         await self.unload_extension(f"{COGS_PACKAGE}.{name}.cog")
+        await self._sync_loaded_cogs_to_db()
 
     async def reload_cog(self, name: str) -> None:
         await self.reload_extension(f"{COGS_PACKAGE}.{name}.cog")
+        await self._sync_loaded_cogs_to_db()
 
     def loaded_cogs(self) -> list[str]:
         prefix = f"{COGS_PACKAGE}."
@@ -58,3 +78,6 @@ class WikingerBot(commands.Bot):
             for ext in self.extensions
             if ext.startswith(prefix) and ext.endswith(suffix)
         )
+
+    async def _sync_loaded_cogs_to_db(self) -> None:
+        await set_bot_setting(LOADED_COGS_KEY, json.dumps(self.loaded_cogs()))

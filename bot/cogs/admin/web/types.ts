@@ -11,3 +11,8 @@ export interface GuildRoleItem {
   discord_role_id: number;
   level: PermissionLevel;
 }
+
+export interface CogsStatus {
+  available: string[];
+  loaded: string[];
+}

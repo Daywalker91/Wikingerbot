@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 
-import { addGuildRole, getDiscordRoles, getGuildRoles, removeGuildRole } from "./api";
-import type { DiscordRoleItem, GuildRoleItem, PermissionLevel } from "./types";
+import { addGuildRole, getCogsStatus, getDiscordRoles, getGuildRoles, removeGuildRole } from "./api";
+import type { CogsStatus, DiscordRoleItem, GuildRoleItem, PermissionLevel } from "./types";
 
 export const route = { path: "/settings", navLabel: "Einstellungen" };
 
@@ -13,10 +13,17 @@ export default function SettingsPage() {
   const [newRoleId, setNewRoleId] = useState("");
   const [newLevel, setNewLevel] = useState<PermissionLevel>("mod");
 
+  const [cogsStatus, setCogsStatus] = useState<CogsStatus | null>(null);
+
   async function load() {
-    const [roles, guildRoleList] = await Promise.all([getDiscordRoles(), getGuildRoles()]);
+    const [roles, guildRoleList, cogs] = await Promise.all([
+      getDiscordRoles(),
+      getGuildRoles(),
+      getCogsStatus(),
+    ]);
     setDiscordRoles(roles);
     setGuildRoles(guildRoleList);
+    setCogsStatus(cogs);
     if (roles.length > 0 && !newRoleId) {
       setNewRoleId(String(roles[0].id));
     }
@@ -85,6 +92,38 @@ export default function SettingsPage() {
             </div>
           ))}
         </div>
+      </section>
+
+      <section style={{ marginTop: 32 }}>
+        <h2>Cogs</h2>
+        <p style={{ color: "#999", fontSize: "0.9em", maxWidth: 640 }}>
+          Nur eine Übersicht - Laden/Entladen/Neuladen läuft weiterhin über die
+          Discord-Befehle <code>/bot cog load|unload|reload</code>, da der Bot-Prozess
+          getrennt vom WebUI-Server läuft.
+        </p>
+        {cogsStatus === null && <p>Lädt…</p>}
+        {cogsStatus !== null && (
+          <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+            {cogsStatus.available.map((name) => {
+              const isLoaded = cogsStatus.loaded.includes(name);
+              return (
+                <div key={name}>
+                  <span
+                    style={{
+                      display: "inline-block",
+                      width: 10,
+                      height: 10,
+                      borderRadius: "50%",
+                      marginRight: 8,
+                      background: isLoaded ? "#4caf50" : "#777",
+                    }}
+                  />
+                  {name}
+                </div>
+              );
+            })}
+          </div>
+        )}
       </section>
     </main>
   );

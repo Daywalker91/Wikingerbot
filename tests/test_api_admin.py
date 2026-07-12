@@ -160,3 +160,44 @@ async def test_guild_roles_are_scoped_to_the_logged_in_guild(db_session):
 
     [role] = response.json()
     assert role["discord_role_id"] == 1
+
+
+async def test_list_cogs_requires_owner(db_session):
+    db_session.add(Guild(id=1, name="Wikinger"))
+    await db_session.commit()
+
+    async with await _client() as client:
+        client.cookies.set("session", _cookie_for(100, 1, Level.MOD))
+        response = await client.get("/admin/cogs")
+
+    assert response.status_code == 403
+
+
+async def test_list_cogs_returns_available_and_loaded(db_session):
+    from bot.core.bot import discover_cog_names
+    from bot.core.bot_settings import set_bot_setting
+
+    db_session.add(Guild(id=1, name="Wikinger"))
+    await db_session.commit()
+    await set_bot_setting("loaded_cogs", '["moderation", "amp"]')
+
+    async with await _client() as client:
+        client.cookies.set("session", _cookie_for(100, 1, Level.OWNER))
+        response = await client.get("/admin/cogs")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["available"] == discover_cog_names()
+    assert body["loaded"] == ["moderation", "amp"]
+
+
+async def test_list_cogs_defaults_to_empty_loaded_list(db_session):
+    db_session.add(Guild(id=1, name="Wikinger"))
+    await db_session.commit()
+
+    async with await _client() as client:
+        client.cookies.set("session", _cookie_for(100, 1, Level.OWNER))
+        response = await client.get("/admin/cogs")
+
+    assert response.status_code == 200
+    assert response.json()["loaded"] == []

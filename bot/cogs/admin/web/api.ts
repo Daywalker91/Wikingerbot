@@ -1,6 +1,6 @@
 import { apiFetch } from "@/api/client";
 
-import type { DiscordRoleItem, GuildRoleItem, PermissionLevel } from "./types";
+import type { CogsStatus, DiscordRoleItem, GuildRoleItem, PermissionLevel } from "./types";
 
 export async function getDiscordRoles(): Promise<DiscordRoleItem[]> {
   return apiFetch<DiscordRoleItem[]>("/admin/discord-roles");
@@ -20,4 +20,8 @@ export async function addGuildRole(discordRoleId: number, level: PermissionLevel
 
 export async function removeGuildRole(id: number): Promise<void> {
   await apiFetch<{ ok: boolean }>(`/admin/roles/${id}`, { method: "DELETE" });
+}
+
+export async function getCogsStatus(): Promise<CogsStatus> {
+  return apiFetch<CogsStatus>("/admin/cogs");
 }
