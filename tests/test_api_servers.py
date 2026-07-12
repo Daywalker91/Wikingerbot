@@ -162,3 +162,116 @@ async def test_me_returns_current_user_with_valid_cookie():
 
     assert response.status_code == 200
     assert response.json() == {"user_id": 100, "guild_id": 1, "level": "mod"}
+
+
+async def _seed_server(db_session, *, guild_id: int = 1) -> Server:
+    db_session.add(Guild(id=guild_id, name="Wikinger"))
+    server = Server(
+        guild_id=guild_id,
+        instance_name="valheim",
+        amp_instance_id="abc-123",
+        display_name="Valheim",
+        host="play.example.com",
+    )
+    db_session.add(server)
+    await db_session.commit()
+    await db_session.refresh(server)
+    return server
+
+
+async def test_start_server_requires_at_least_mod(db_session):
+    server = await _seed_server(db_session)
+
+    async with await _client() as client:
+        client.cookies.set("session", _cookie_for(100, 1, Level.MEMBER))
+        response = await client.post(f"/servers/{server.id}/start")
+
+    assert response.status_code == 403
+
+
+async def test_start_server_calls_amp_client(db_session, monkeypatch):
+    server = await _seed_server(db_session)
+    mock_start = AsyncMock()
+    monkeypatch.setattr(amp_client, "start", mock_start)
+
+    async with await _client() as client:
+        client.cookies.set("session", _cookie_for(100, 1, Level.MOD))
+        response = await client.post(f"/servers/{server.id}/start")
+
+    assert response.status_code == 200
+    assert response.json()["ok"] is True
+    mock_start.assert_awaited_once_with("abc-123")
+
+
+async def test_start_server_reports_failure_without_500(db_session, monkeypatch):
+    server = await _seed_server(db_session)
+    monkeypatch.setattr(amp_client, "start", AsyncMock(side_effect=TimeoutError("kein Netz")))
+
+    async with await _client() as client:
+        client.cookies.set("session", _cookie_for(100, 1, Level.MOD))
+        response = await client.post(f"/servers/{server.id}/start")
+
+    assert response.status_code == 200
+    assert response.json()["ok"] is False
+
+
+async def test_stop_server_calls_amp_client(db_session, monkeypatch):
+    server = await _seed_server(db_session)
+    mock_stop = AsyncMock()
+    monkeypatch.setattr(amp_client, "stop", mock_stop)
+
+    async with await _client() as client:
+        client.cookies.set("session", _cookie_for(100, 1, Level.MOD))
+        response = await client.post(f"/servers/{server.id}/stop")
+
+    assert response.status_code == 200
+    mock_stop.assert_awaited_once_with("abc-123")
+
+
+async def test_server_actions_are_scoped_to_the_logged_in_guild(db_session):
+    server = await _seed_server(db_session, guild_id=1)
+
+    async with await _client() as client:
+        client.cookies.set("session", _cookie_for(100, 2, Level.MOD))
+        response = await client.post(f"/servers/{server.id}/start")
+
+    assert response.status_code == 404
+
+
+async def test_get_console_returns_lines(db_session, monkeypatch):
+    server = await _seed_server(db_session)
+    fake_line = SimpleNamespace(contents="Server started", source="stdout", type="log")
+    monkeypatch.setattr(amp_client, "poll_console", AsyncMock(return_value=[fake_line]))
+
+    async with await _client() as client:
+        client.cookies.set("session", _cookie_for(100, 1, Level.MOD))
+        response = await client.get(f"/servers/{server.id}/console")
+
+    assert response.status_code == 200
+    [line] = response.json()
+    assert line["contents"] == "Server started"
+
+
+async def test_get_console_returns_empty_list_on_error(db_session, monkeypatch):
+    server = await _seed_server(db_session)
+    monkeypatch.setattr(amp_client, "poll_console", AsyncMock(side_effect=TimeoutError("kein Netz")))
+
+    async with await _client() as client:
+        client.cookies.set("session", _cookie_for(100, 1, Level.MOD))
+        response = await client.get(f"/servers/{server.id}/console")
+
+    assert response.status_code == 200
+    assert response.json() == []
+
+
+async def test_send_console_command_calls_amp_client(db_session, monkeypatch):
+    server = await _seed_server(db_session)
+    mock_send = AsyncMock()
+    monkeypatch.setattr(amp_client, "send_console_message", mock_send)
+
+    async with await _client() as client:
+        client.cookies.set("session", _cookie_for(100, 1, Level.MOD))
+        response = await client.post(f"/servers/{server.id}/console", json={"command": "say hi"})
+
+    assert response.status_code == 200
+    mock_send.assert_awaited_once_with("abc-123", "say hi")

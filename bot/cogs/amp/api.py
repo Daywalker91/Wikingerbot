@@ -1,4 +1,5 @@
-"""FastAPI-Router fuer die Dashboard-Seite (bot/cogs/amp/web/DashboardPage.tsx).
+"""FastAPI-Router fuer Dashboard- (bot/cogs/amp/web/DashboardPage.tsx) und
+Server-Seite (bot/cogs/amp/web/ServerPage.tsx).
 
 Wird von api/cog_routers.py's discover_cog_routers() automatisch eingesammelt
 und in api/main.py registriert - kein manuelles Eintragen noetig.
@@ -6,13 +7,14 @@ und in api/main.py registriert - kein manuelles Eintragen noetig.
 
 import asyncio
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from api.middleware.auth import CurrentUser, get_current_user
+from api.middleware.auth import CurrentUser, get_current_user, require_level
 from bot.core.amp_client import amp_client
+from db.models.role import Level
 from db.models.server import Server
 from db.session import get_db
 
@@ -71,3 +73,94 @@ async def list_servers(
     )
     servers = result.scalars().all()
     return list(await asyncio.gather(*(_status_for(s) for s in servers)))
+
+
+class ServerActionResult(BaseModel):
+    ok: bool
+    message: str
+
+
+class ConsoleCommandBody(BaseModel):
+    command: str
+
+
+class ConsoleLineOut(BaseModel):
+    contents: str
+    source: str
+    type: str
+
+
+async def _get_scoped_server(db: AsyncSession, server_id: int, guild_id: int) -> Server:
+    result = await db.execute(
+        select(Server).where(Server.id == server_id, Server.guild_id == guild_id)
+    )
+    server = result.scalar_one_or_none()
+    if server is None:
+        raise HTTPException(status_code=404, detail="Server nicht gefunden")
+    return server
+
+
+@router.post("/{server_id}/start", response_model=ServerActionResult)
+async def start_server(
+    server_id: int,
+    user: CurrentUser = Depends(require_level(Level.MOD)),
+    db: AsyncSession = Depends(get_db),
+) -> ServerActionResult:
+    server = await _get_scoped_server(db, server_id, user.guild_id)
+    try:
+        await amp_client.start(server.amp_instance_id)
+    except Exception as exc:
+        return ServerActionResult(ok=False, message=f"Start fehlgeschlagen: {exc}")
+    return ServerActionResult(ok=True, message=f"Starte {server.display_name} ...")
+
+
+@router.post("/{server_id}/stop", response_model=ServerActionResult)
+async def stop_server(
+    server_id: int,
+    user: CurrentUser = Depends(require_level(Level.MOD)),
+    db: AsyncSession = Depends(get_db),
+) -> ServerActionResult:
+    server = await _get_scoped_server(db, server_id, user.guild_id)
+    try:
+        await amp_client.stop(server.amp_instance_id)
+    except Exception as exc:
+        return ServerActionResult(ok=False, message=f"Stop fehlgeschlagen: {exc}")
+    return ServerActionResult(ok=True, message=f"Stoppe {server.display_name} ...")
+
+
+@router.get("/{server_id}/console", response_model=list[ConsoleLineOut])
+async def get_console(
+    server_id: int,
+    user: CurrentUser = Depends(require_level(Level.MOD)),
+    db: AsyncSession = Depends(get_db),
+) -> list[ConsoleLineOut]:
+    """Liefert neue Konsolenzeilen seit dem letzten Poll dieser AMP-Instanz-Session.
+
+    Achtung: dieselbe Pro-Instanz-Session wird auch vom Discord-seitigen
+    console_bridge-Task (bot/cogs/amp/cog.py) alle 2s abgefragt - beide
+    Verbraucher teilen sich denselben "seit dem letzten Aufruf"-Zustand bei
+    AMP, Zeilen werden also zwischen Discord-Kanal und dieser Seite aufgeteilt
+    statt dupliziert. Fuer den beabsichtigten Zweck (kurzer Blick/Befehle
+    schicken, ohne Discord zu oeffnen) akzeptabel.
+    """
+    server = await _get_scoped_server(db, server_id, user.guild_id)
+    try:
+        lines = await amp_client.poll_console(server.amp_instance_id)
+    except Exception:
+        return []
+    return [ConsoleLineOut(contents=line.contents, source=line.source, type=line.type) for line in lines]
+
+
+@router.post("/{server_id}/console", response_model=ServerActionResult)
+async def send_console_command(
+    server_id: int,
+    body: ConsoleCommandBody,
+    user: CurrentUser = Depends(require_level(Level.MOD)),
+    db: AsyncSession = Depends(get_db),
+) -> ServerActionResult:
+    server = await _get_scoped_server(db, server_id, user.guild_id)
+    try:
+        await amp_client.send_console_message(server.amp_instance_id, body.command)
+    except Exception as exc:
+        return ServerActionResult(ok=False, message=f"Befehl fehlgeschlagen: {exc}")
+    return ServerActionResult(ok=True, message="Befehl gesendet")

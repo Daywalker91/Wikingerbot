@@ -9,3 +9,14 @@ export interface ServerStatus {
   uptime: string | null;
   players: [number, number] | null;
 }
+
+export interface ServerActionResult {
+  ok: boolean;
+  message: string;
+}
+
+export interface ConsoleLineItem {
+  contents: string;
+  source: string;
+  type: string;
+}
