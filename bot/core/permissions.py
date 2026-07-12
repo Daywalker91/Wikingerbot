@@ -1,9 +1,11 @@
 from typing import Iterable
 
 import discord
+import httpx
 from discord import Interaction, app_commands
 from sqlalchemy import select
 
+from bot.core.config import settings
 from db.models.role import GuildRole, Level, highest_level, level_at_least
 from db.session import get_db_session
 
@@ -12,8 +14,12 @@ __all__ = [
     "resolve_level",
     "require_role",
     "check_level_interaction",
+    "has_owner_level_bypass",
     "InsufficientPermissions",
 ]
+
+DISCORD_API = "https://discord.com/api"
+ADMINISTRATOR_PERMISSION_BIT = 0x8
 
 
 class InsufficientPermissions(app_commands.CheckFailure):
@@ -84,3 +90,56 @@ async def check_level_interaction(interaction: Interaction, guild_id: int, minim
 
     await interaction.response.send_message("Dafuer fehlt dir die Berechtigung.", ephemeral=True)
     return False
+
+
+async def _is_guild_owner(client: httpx.AsyncClient, guild_id: int, user_id: int) -> bool:
+    """Discords Server-Owner hat immer volle Rechte, unabhaengig von Rollen -
+    discord.py's Member.guild_permissions beruecksichtigt das separat vom
+    Administrator-Rollenrecht, also muessen wir es hier auch separat pruefen."""
+    try:
+        guild_resp = await client.get(
+            f"{DISCORD_API}/guilds/{guild_id}",
+            headers={"Authorization": f"Bot {settings.discord_token}"},
+        )
+        guild_resp.raise_for_status()
+    except httpx.HTTPError:
+        return False
+    return int(guild_resp.json()["owner_id"]) == user_id
+
+
+async def _has_administrator_permission(
+    client: httpx.AsyncClient, guild_id: int, role_ids: list[int]
+) -> bool:
+    """Repliziert require_role()s guild_permissions.administrator-Bypass: dort
+    liefert discord.py das automatisch aus einem live verbundenen Member-Objekt,
+    hier (kein Gateway, nur REST + Bot-Token) muessen wir die Rollen-Permissions
+    selbst zusammenrechnen. @everyone (role id == guild_id) zaehlt wie bei
+    Discords eigener Permission-Berechnung immer mit."""
+    try:
+        roles_resp = await client.get(
+            f"{DISCORD_API}/guilds/{guild_id}/roles",
+            headers={"Authorization": f"Bot {settings.discord_token}"},
+        )
+        roles_resp.raise_for_status()
+    except httpx.HTTPError:
+        return False
+
+    role_id_set = set(role_ids) | {guild_id}
+    permissions = 0
+    for role in roles_resp.json():
+        if int(role["id"]) in role_id_set:
+            permissions |= int(role["permissions"])
+    return bool(permissions & ADMINISTRATOR_PERMISSION_BIT)
+
+
+async def has_owner_level_bypass(
+    client: httpx.AsyncClient, guild_id: int, user_id: int, role_ids: list[int]
+) -> bool:
+    """WebUI-Gegenstueck zum guild_permissions.administrator-Bypass der Discord-
+    Commands (require_role/check_level_interaction) - dort per live Member-Objekt
+    kostenlos verfuegbar, hier ueber REST-Calls mit dem Bot-Token nachgebaut.
+    Server-Owner UND Administrator-Rolle zaehlen beide als vollstaendiger
+    Bypass auf Level.OWNER, unabhaengig von GuildRole-Eintraegen."""
+    if await _is_guild_owner(client, guild_id, user_id):
+        return True
+    return await _has_administrator_permission(client, guild_id, role_ids)

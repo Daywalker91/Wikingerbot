@@ -15,7 +15,7 @@ from api.middleware.auth import (
     verify_state_token,
 )
 from bot.core.config import settings
-from bot.core.permissions import resolve_level
+from bot.core.permissions import has_owner_level_bypass, resolve_level
 from db.models.role import Level
 from db.models.web_session import WebSession
 from db.session import get_db_session
@@ -23,54 +23,6 @@ from db.session import get_db_session
 router = APIRouter(prefix="/auth", tags=["auth"])
 
 DISCORD_API = "https://discord.com/api"
-ADMINISTRATOR_PERMISSION_BIT = 0x8
-
-
-async def _is_guild_owner(client: httpx.AsyncClient, guild_id: int, user_id: int) -> bool:
-    """Discords Server-Owner hat immer volle Rechte, unabhaengig von Rollen -
-    discord.py's Member.guild_permissions beruecksichtigt das separat vom
-    Administrator-Rollenrecht, also muessen wir es hier auch separat pruefen."""
-    try:
-        guild_resp = await client.get(
-            f"{DISCORD_API}/guilds/{guild_id}",
-            headers={"Authorization": f"Bot {settings.discord_token}"},
-        )
-        guild_resp.raise_for_status()
-    except httpx.HTTPError:
-        return False
-    return int(guild_resp.json()["owner_id"]) == user_id
-
-
-async def _has_administrator_permission(
-    client: httpx.AsyncClient, guild_id: int, role_ids: list[int]
-) -> bool:
-    """Repliziert require_role()s guild_permissions.administrator-Bypass (Discord-
-    Commands bekommen den automatisch von discord.py, hier muessen wir ihn uns
-    selbst aus den Rollen-Permissions zusammenrechnen). @everyone (role id ==
-    guild_id) zaehlt wie bei Discords eigener Permission-Berechnung immer mit."""
-    try:
-        roles_resp = await client.get(
-            f"{DISCORD_API}/guilds/{guild_id}/roles",
-            headers={"Authorization": f"Bot {settings.discord_token}"},
-        )
-        roles_resp.raise_for_status()
-    except httpx.HTTPError:
-        return False
-
-    role_id_set = set(role_ids) | {guild_id}
-    permissions = 0
-    for role in roles_resp.json():
-        if int(role["id"]) in role_id_set:
-            permissions |= int(role["permissions"])
-    return bool(permissions & ADMINISTRATOR_PERMISSION_BIT)
-
-
-async def _has_owner_level_bypass(
-    client: httpx.AsyncClient, guild_id: int, user_id: int, role_ids: list[int]
-) -> bool:
-    if await _is_guild_owner(client, guild_id, user_id):
-        return True
-    return await _has_administrator_permission(client, guild_id, role_ids)
 
 
 @router.get("/login")
@@ -123,7 +75,7 @@ async def callback(code: str, state: str) -> RedirectResponse:
         member = member_resp.json()
 
         role_ids = [int(role_id) for role_id in member.get("roles", [])]
-        has_bypass = await _has_owner_level_bypass(client, guild_id, user_id, role_ids)
+        has_bypass = await has_owner_level_bypass(client, guild_id, user_id, role_ids)
 
     level = Level.OWNER if has_bypass else await resolve_level(guild_id, role_ids)
 

@@ -2,10 +2,10 @@ from unittest.mock import AsyncMock
 
 import httpx
 
-from api.routers.auth import (
+from bot.core.permissions import (
     _has_administrator_permission,
-    _has_owner_level_bypass,
     _is_guild_owner,
+    has_owner_level_bypass,
 )
 
 GUILD_ID = 1
@@ -83,7 +83,7 @@ async def test_owner_level_bypass_true_for_owner_without_administrator_role():
         }
     )
 
-    assert await _has_owner_level_bypass(client, GUILD_ID, 999, []) is True
+    assert await has_owner_level_bypass(client, GUILD_ID, 999, []) is True
 
 
 async def test_owner_level_bypass_false_for_regular_member():
@@ -94,4 +94,4 @@ async def test_owner_level_bypass_false_for_regular_member():
         }
     )
 
-    assert await _has_owner_level_bypass(client, GUILD_ID, 111, []) is False
+    assert await has_owner_level_bypass(client, GUILD_ID, 111, []) is False
