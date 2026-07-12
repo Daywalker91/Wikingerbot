@@ -4,7 +4,7 @@ from sqlalchemy import select
 from api.main import app
 from api.middleware.auth import create_access_token
 from db.models.guild import Guild
-from db.models.modlog import ModAction, ModLogEntry, Warning
+from db.models.modlog import ModAction, ModLogEntry, Warning, WarnEscalationState
 from db.models.role import Level
 from db.models.user import User
 
@@ -223,8 +223,9 @@ async def test_get_mod_config_returns_defaults(db_session):
     assert response.status_code == 200
     assert response.json() == {
         "warn_threshold": 3,
-        "warn_action": "timeout",
+        "warn_ladder": ["timeout", "kick", "ban"],
         "warn_timeout_minutes": 60,
+        "warn_decay_days": 30,
     }
 
 
@@ -245,15 +246,21 @@ async def test_update_mod_config_persists_values(db_session):
         client.cookies.set("session", _cookie_for(100, 1, Level.OWNER))
         put_response = await client.put(
             "/moderation/mod-config",
-            json={"warn_threshold": 5, "warn_action": "ban", "warn_timeout_minutes": 30},
+            json={
+                "warn_threshold": 5,
+                "warn_ladder": ["ban", "kick"],
+                "warn_timeout_minutes": 30,
+                "warn_decay_days": 14,
+            },
         )
         get_response = await client.get("/moderation/mod-config")
 
     assert put_response.status_code == 200
     assert get_response.json() == {
         "warn_threshold": 5,
-        "warn_action": "ban",
+        "warn_ladder": ["ban", "kick"],
         "warn_timeout_minutes": 30,
+        "warn_decay_days": 14,
     }
 
 
@@ -313,5 +320,56 @@ async def test_search_members_requires_at_least_mod(db_session):
     async with await _client() as client:
         client.cookies.set("session", _cookie_for(100, 1, Level.MEMBER))
         response = await client.get("/moderation/member-search", params={"query": "bad"})
+
+    assert response.status_code == 403
+
+
+async def test_list_escalations_returns_only_active_tiers(db_session):
+    await _seed_guild_and_user(db_session)
+    db_session.add(WarnEscalationState(guild_id=1, user_id=200, tier=2))
+    db_session.add(WarnEscalationState(guild_id=1, user_id=201, tier=0))
+    await db_session.commit()
+
+    async with await _client() as client:
+        client.cookies.set("session", _cookie_for(100, 1, Level.MOD))
+        response = await client.get("/moderation/escalations")
+
+    assert response.status_code == 200
+    assert response.json() == [{"user_id": 200, "tier": 2}]
+
+
+async def test_list_escalations_scoped_to_guild(db_session):
+    await _seed_guild_and_user(db_session)
+    db_session.add(Guild(id=2, name="Andere Guild"))
+    db_session.add(WarnEscalationState(guild_id=2, user_id=200, tier=1))
+    await db_session.commit()
+
+    async with await _client() as client:
+        client.cookies.set("session", _cookie_for(100, 1, Level.MOD))
+        response = await client.get("/moderation/escalations")
+
+    assert response.json() == []
+
+
+async def test_reset_escalation_sets_tier_to_zero(db_session):
+    await _seed_guild_and_user(db_session)
+    db_session.add(WarnEscalationState(guild_id=1, user_id=200, tier=2))
+    await db_session.commit()
+
+    async with await _client() as client:
+        client.cookies.set("session", _cookie_for(100, 1, Level.MOD))
+        response = await client.post("/moderation/escalations/reset", json={"user_id": 200})
+
+    assert response.status_code == 200
+    state = await db_session.get(WarnEscalationState, (1, 200))
+    assert state.tier == 0
+
+
+async def test_reset_escalation_requires_at_least_mod(db_session):
+    await _seed_guild_and_user(db_session)
+
+    async with await _client() as client:
+        client.cookies.set("session", _cookie_for(100, 1, Level.MEMBER))
+        response = await client.post("/moderation/escalations/reset", json={"user_id": 200})
 
     assert response.status_code == 403

@@ -23,14 +23,22 @@ export interface ActionResult {
   message: string;
 }
 
+export type LadderAction = "timeout" | "ban" | "kick";
+
 export interface ModConfig {
   warn_threshold: number;
-  warn_action: "timeout" | "ban" | "kick";
+  warn_ladder: LadderAction[];
   warn_timeout_minutes: number;
+  warn_decay_days: number;
 }
 
 export interface MemberSearchResult {
   id: number;
   username: string;
   display_name: string;
+}
+
+export interface EscalationState {
+  user_id: number;
+  tier: number;
 }

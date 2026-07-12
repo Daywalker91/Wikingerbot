@@ -15,6 +15,7 @@ admin-Cog - das ist Moderations-Fachlogik, die Discord-seitigen
 modconfig_group-Befehle leben ebenfalls in bot/cogs/moderation/cog.py.
 """
 
+import json
 from datetime import datetime
 from typing import Literal
 from urllib.parse import quote
@@ -26,9 +27,10 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.middleware.auth import CurrentUser, require_level
+from bot.cogs.moderation.cog import DEFAULT_LADDER, reset_escalation_tier
 from bot.core.config import settings
 from bot.core.guild_config import get_config, set_config
-from db.models.modlog import ModAction, ModLogEntry, Warning
+from db.models.modlog import ModAction, ModLogEntry, Warning, WarnEscalationState
 from db.models.role import Level
 from db.session import get_db
 
@@ -74,8 +76,9 @@ class ActionResult(BaseModel):
 
 class ModConfigOut(BaseModel):
     warn_threshold: int
-    warn_action: Literal["timeout", "ban", "kick"]
+    warn_ladder: list[Literal["timeout", "ban", "kick"]]
     warn_timeout_minutes: int
+    warn_decay_days: int
 
 
 class MemberSearchResult(BaseModel):
@@ -84,12 +87,22 @@ class MemberSearchResult(BaseModel):
     display_name: str
 
 
+class EscalationStateOut(BaseModel):
+    user_id: int
+    tier: int
+
+
+class EscalationResetBody(BaseModel):
+    user_id: int
+
+
 @router.get("/mod-config", response_model=ModConfigOut)
 async def get_mod_config(user: CurrentUser = Depends(require_level(Level.OWNER))) -> ModConfigOut:
     return ModConfigOut(
         warn_threshold=int(await get_config(user.guild_id, "warn_threshold", "3")),
-        warn_action=await get_config(user.guild_id, "warn_action", "timeout"),
+        warn_ladder=json.loads(await get_config(user.guild_id, "warn_ladder", json.dumps(DEFAULT_LADDER))),
         warn_timeout_minutes=int(await get_config(user.guild_id, "warn_timeout_minutes", "60")),
+        warn_decay_days=int(await get_config(user.guild_id, "warn_decay_days", "30")),
     )
 
 
@@ -98,9 +111,33 @@ async def update_mod_config(
     body: ModConfigOut, user: CurrentUser = Depends(require_level(Level.OWNER))
 ) -> ModConfigOut:
     await set_config(user.guild_id, "warn_threshold", str(body.warn_threshold))
-    await set_config(user.guild_id, "warn_action", body.warn_action)
+    await set_config(user.guild_id, "warn_ladder", json.dumps(body.warn_ladder))
     await set_config(user.guild_id, "warn_timeout_minutes", str(body.warn_timeout_minutes))
+    await set_config(user.guild_id, "warn_decay_days", str(body.warn_decay_days))
     return body
+
+
+@router.get("/escalations", response_model=list[EscalationStateOut])
+async def list_escalations(
+    user: CurrentUser = Depends(require_level(Level.MOD)),
+    db: AsyncSession = Depends(get_db),
+) -> list[EscalationStateOut]:
+    result = await db.execute(
+        select(WarnEscalationState).where(
+            WarnEscalationState.guild_id == user.guild_id, WarnEscalationState.tier > 0
+        )
+    )
+    return [
+        EscalationStateOut(user_id=state.user_id, tier=state.tier) for state in result.scalars().all()
+    ]
+
+
+@router.post("/escalations/reset", response_model=ActionResult)
+async def reset_escalation(
+    body: EscalationResetBody, user: CurrentUser = Depends(require_level(Level.MOD))
+) -> ActionResult:
+    await reset_escalation_tier(user.guild_id, body.user_id)
+    return ActionResult(ok=True, message="Eskalationsstufe zurueckgesetzt")
 
 
 @router.get("/member-search", response_model=list[MemberSearchResult])

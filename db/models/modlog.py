@@ -51,3 +51,17 @@ class Warning(Base):
     points: Mapped[int] = mapped_column(Integer, default=1)
     expired: Mapped[bool] = mapped_column(default=False)
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+
+
+class WarnEscalationState(Base):
+    """Aktuelle Eskalationsstufe eines Nutzers - Index in der konfigurierten
+    Leiter (GuildConfig-Key "warn_ladder"), unabhaengig von den Warn-Punkten
+    selbst, damit ein manueller Reset moeglich ist, ohne die Warn-Historie
+    zu loeschen (siehe bot/cogs/moderation/cog.py:_consume_tier)."""
+
+    __tablename__ = "warn_escalation_state"
+
+    guild_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("guilds.id"), primary_key=True)
+    user_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("users.id"), primary_key=True)
+    tier: Mapped[int] = mapped_column(Integer, default=0)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())

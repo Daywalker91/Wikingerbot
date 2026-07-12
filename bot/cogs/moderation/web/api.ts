@@ -1,6 +1,13 @@
 import { apiFetch } from "@/api/client";
 
-import type { ActionResult, MemberSearchResult, ModConfig, ModLogEntryItem, WarningItem } from "./types";
+import type {
+  ActionResult,
+  EscalationState,
+  MemberSearchResult,
+  ModConfig,
+  ModLogEntryItem,
+  WarningItem,
+} from "./types";
 
 export async function getModLog(): Promise<ModLogEntryItem[]> {
   return apiFetch<ModLogEntryItem[]>("/moderation/modlog");
@@ -49,4 +56,16 @@ export async function updateModConfig(config: ModConfig): Promise<ModConfig> {
 export async function searchMembers(query: string): Promise<MemberSearchResult[]> {
   if (!query) return [];
   return apiFetch<MemberSearchResult[]>(`/moderation/member-search?query=${encodeURIComponent(query)}`);
+}
+
+export async function getEscalations(): Promise<EscalationState[]> {
+  return apiFetch<EscalationState[]>("/moderation/escalations");
+}
+
+export async function resetEscalation(userId: string): Promise<ActionResult> {
+  return apiFetch<ActionResult>("/moderation/escalations/reset", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ user_id: Number(userId) }),
+  });
 }

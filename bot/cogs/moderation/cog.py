@@ -1,17 +1,79 @@
-from datetime import timedelta
+import json
+from datetime import datetime, timedelta, timezone
 
 import discord
 from discord import app_commands
-from discord.app_commands import Choice
-from discord.ext import commands
-from sqlalchemy import func, select
+from discord.ext import commands, tasks
+from sqlalchemy import func, select, update
 
 from bot.core.base_cog import BaseCog
 from bot.core.entities import ensure_guild, ensure_user
 from bot.core.guild_config import get_config, set_config
 from bot.core.permissions import Level, check_level_interaction, require_role
-from db.models.modlog import ModAction, ModLogEntry, Warning
+from db.models.modlog import ModAction, ModLogEntry, Warning, WarnEscalationState
 from db.session import get_db_session
+
+DEFAULT_LADDER = ["timeout", "kick", "ban"]
+ALLOWED_LADDER_ACTIONS = {"timeout", "kick", "ban"}
+
+
+async def _get_ladder(guild_id: int) -> list[str]:
+    raw = await get_config(guild_id, "warn_ladder", json.dumps(DEFAULT_LADDER))
+    return json.loads(raw)
+
+
+async def _consume_tier(guild_id: int, user_id: int) -> int:
+    """Gibt den jetzt zu verwendenden Stufen-Index zurueck und erhoeht ihn
+    fuer die naechste Eskalation. Getrennt von den Warn-Punkten (Warning),
+    damit ein manueller Reset (reset_escalation_tier) moeglich ist, ohne die
+    Warn-Historie zu loeschen."""
+    async with get_db_session() as db:
+        state = await db.get(WarnEscalationState, (guild_id, user_id))
+        if state is None:
+            state = WarnEscalationState(guild_id=guild_id, user_id=user_id, tier=0)
+            db.add(state)
+            await db.flush()
+        current = state.tier
+        state.tier += 1
+        await db.commit()
+        return current
+
+
+async def reset_escalation_tier(guild_id: int, user_id: int) -> None:
+    async with get_db_session() as db:
+        state = await db.get(WarnEscalationState, (guild_id, user_id))
+        if state is not None:
+            state.tier = 0
+            await db.commit()
+
+
+async def _decay_warnings() -> None:
+    """Laesst Warn-Punkte nach GuildConfig-Key "warn_decay_days" automatisch
+    verfallen (expired=True) - betrifft nur, ob NEUE Verwarnungen wieder ueber
+    die Schwelle fuehren. Ruehrt die Eskalationsstufe (WarnEscalationState)
+    bewusst nicht an, Reset bleibt eine separate, manuelle Aktion. Frei
+    stehende Funktion statt Cog-Methode, damit sie ohne lebende Cog-Instanz
+    direkt testbar ist (siehe tests/test_moderation_escalation.py)."""
+    async with get_db_session() as db:
+        guild_ids = (await db.execute(select(Warning.guild_id).distinct())).scalars().all()
+
+    for guild_id in guild_ids:
+        decay_days = int(await get_config(guild_id, "warn_decay_days", "30"))
+        # created_at ist naiv (SQLite/MariaDB DateTime ohne Zeitzone) - tz-aware
+        # Wert erzeugen und wieder abstreifen, um datetime.utcnow() (deprecated)
+        # zu vermeiden, aber vergleichbar mit der DB-Spalte zu bleiben.
+        cutoff = (datetime.now(timezone.utc) - timedelta(days=decay_days)).replace(tzinfo=None)
+        async with get_db_session() as db:
+            await db.execute(
+                update(Warning)
+                .where(
+                    Warning.guild_id == guild_id,
+                    Warning.expired.is_(False),
+                    Warning.created_at < cutoff,
+                )
+                .values(expired=True)
+            )
+            await db.commit()
 
 
 async def _dm(member: discord.Member, message: str) -> None:
@@ -160,6 +222,19 @@ class ModerationCog(BaseCog):
             )
             self.bot.add_view(view)
 
+        self.warn_decay.start()
+
+    async def cog_unload(self) -> None:
+        self.warn_decay.cancel()
+
+    @tasks.loop(hours=1)
+    async def warn_decay(self) -> None:
+        await _decay_warnings()
+
+    @warn_decay.before_loop
+    async def _before_warn_decay(self) -> None:
+        await self.bot.wait_until_ready()
+
     @app_commands.command(name="kick", description="Kickt ein Mitglied vom Server")
     @app_commands.describe(user="Mitglied", reason="Begruendung")
     @require_role(Level.MOD)
@@ -294,8 +369,10 @@ class ModerationCog(BaseCog):
     async def _trigger_escalation(
         self, channel: discord.abc.Messageable, guild: discord.Guild, user: discord.Member, total_points: int
     ) -> None:
-        action = await get_config(guild.id, "warn_action", "timeout")
-        reason = f"Automatische Eskalation ({total_points} Warn-Punkte)"
+        ladder = await _get_ladder(guild.id)
+        tier = await _consume_tier(guild.id, user.id)
+        action = ladder[min(tier, len(ladder) - 1)]
+        reason = f"Automatische Eskalation Stufe {tier + 1} ({total_points} Warn-Punkte)"
 
         if action == "kick":
             embed = discord.Embed(
@@ -399,19 +476,24 @@ class ModerationCog(BaseCog):
             f"Warn-Schwelle auf {value} gesetzt.", ephemeral=True, delete_after=20
         )
 
-    @modconfig_group.command(name="action", description="Setzt die automatische Eskalations-Aktion")
-    @app_commands.choices(
-        action=[
-            Choice(name="Timeout", value="timeout"),
-            Choice(name="Ban", value="ban"),
-            Choice(name="Kick (nur Vorschlag, keine Automatik)", value="kick"),
-        ]
+    @modconfig_group.command(
+        name="ladder", description="Setzt die Eskalations-Leiter (Reihenfolge der Aktionen)"
     )
+    @app_commands.describe(actions="Kommagetrennt, z.B. 'timeout,kick,ban' (erlaubt: timeout/kick/ban)")
     @require_role(Level.OWNER)
-    async def modconfig_action(self, interaction: discord.Interaction, action: Choice[str]) -> None:
-        await set_config(interaction.guild_id, "warn_action", action.value, interaction.guild.name)
+    async def modconfig_ladder(self, interaction: discord.Interaction, actions: str) -> None:
+        tokens = [token.strip().lower() for token in actions.split(",") if token.strip()]
+        invalid = [token for token in tokens if token not in ALLOWED_LADDER_ACTIONS]
+        if not tokens or invalid:
+            await interaction.response.send_message(
+                f"Ungueltig: `{', '.join(invalid) or actions}`. Erlaubt sind nur timeout/kick/ban.",
+                ephemeral=True,
+            )
+            return
+
+        await set_config(interaction.guild_id, "warn_ladder", json.dumps(tokens), interaction.guild.name)
         await interaction.response.send_message(
-            f"Eskalations-Aktion auf `{action.name}` gesetzt.", ephemeral=True, delete_after=20
+            f"Eskalations-Leiter auf `{' -> '.join(tokens)}` gesetzt.", ephemeral=True, delete_after=20
         )
 
     @modconfig_group.command(name="timeout", description="Setzt die Timeout-Dauer fuer Eskalationen")
@@ -423,6 +505,30 @@ class ModerationCog(BaseCog):
         await set_config(interaction.guild_id, "warn_timeout_minutes", str(minutes), interaction.guild.name)
         await interaction.response.send_message(
             f"Eskalations-Timeout auf {minutes} Minuten gesetzt.", ephemeral=True, delete_after=20
+        )
+
+    @modconfig_group.command(
+        name="decay_days", description="Setzt, nach wie vielen Tagen Warn-Punkte automatisch verfallen"
+    )
+    @app_commands.describe(days="Anzahl Tage")
+    @require_role(Level.OWNER)
+    async def modconfig_decay_days(
+        self, interaction: discord.Interaction, days: app_commands.Range[int, 1, 3650]
+    ) -> None:
+        await set_config(interaction.guild_id, "warn_decay_days", str(days), interaction.guild.name)
+        await interaction.response.send_message(
+            f"Warn-Punkte verfallen jetzt nach {days} Tagen.", ephemeral=True, delete_after=20
+        )
+
+    @app_commands.command(
+        name="reset_escalation", description="Setzt die Eskalationsstufe eines Mitglieds zurueck"
+    )
+    @app_commands.describe(user="Mitglied")
+    @require_role(Level.MOD)
+    async def reset_escalation_cmd(self, interaction: discord.Interaction, user: discord.Member) -> None:
+        await reset_escalation_tier(interaction.guild_id, user.id)
+        await interaction.response.send_message(
+            f"Eskalationsstufe von {user.mention} zurueckgesetzt.", ephemeral=True, delete_after=20
         )
 
 
