@@ -113,6 +113,82 @@ async def _dm(member: discord.Member, message: str) -> None:
         pass
 
 
+def target_block_reason(actor, target, me, owner_id: int) -> str | None:
+    """Discords eigene Rangregel, VOR jeder Moderationsaktion des Bots geprueft.
+
+    Der Bot handelt mit seinen eigenen Rechten - Discord vergleicht dabei nur
+    die Bot-Rolle mit dem Ziel. Ohne diese Pruefung koennte z.B. ein Mod ueber
+    den Bot einen anderen Mod bannen, was er direkt in Discord nicht duerfte.
+    Regel: das Ziel muss UNTER dem Ausfuehrenden und UNTER dem Bot stehen; der
+    Server-Owner darf alles und kann selbst nie Ziel sein.
+
+    `actor` ist None bei Aktionen, die der Bot selbst ausloest (Warn-Eskalation
+    nach AutoMod) - dann zaehlt nur der Bot-Rang. actor/target/me brauchen nur
+    `.id` und `.top_role` (vergleichbar wie discord.Role). Gibt eine
+    Fehlermeldung zurueck oder None, wenn die Aktion erlaubt ist."""
+    name = getattr(target, "mention", "Dieses Mitglied")
+    if target.id == owner_id:
+        return "Der Server-Owner kann nicht moderiert werden."
+    if target.id == me.id:
+        return "Der Bot kann sich nicht selbst moderieren."
+    if actor is not None:
+        if target.id == actor.id:
+            return "Du kannst dich nicht selbst moderieren."
+        if actor.id != owner_id and target.top_role >= actor.top_role:
+            return f"{name} hat eine gleich hohe oder hoehere Rolle als du - das darfst du nicht."
+    if target.top_role >= me.top_role:
+        return f"{name} steht gleich hoch oder ueber der Bot-Rolle - das darf der Bot nicht."
+    return None
+
+
+def _guild_block_reason(interaction: discord.Interaction, target: discord.Member) -> str | None:
+    guild = interaction.guild
+    return target_block_reason(interaction.user, target, guild.me, guild.owner_id)
+
+
+async def _modlog_channel(bot: discord.Client, guild_id: int):
+    """Kanal fuer Moderations-Meldungen; ohne eigenen Kanal der AutoMod-Kanal."""
+    channel_id = await get_config(guild_id, "modlog_channel_id", None) or await get_config(
+        guild_id, "automod_alert_channel_id", None
+    )
+    return bot.get_channel(int(channel_id)) if channel_id else None
+
+
+async def _post_modlog(
+    bot: discord.Client,
+    guild_id: int,
+    title: str,
+    target_id: int,
+    mod: discord.abc.User,
+    reason: str | None,
+    *,
+    duration: str | None = None,
+    footer: str | None = None,
+) -> None:
+    """Meldet eine manuelle Moderationsaktion im Mod-Log-Kanal, damit Admins
+    jede Aktion mitbekommen - nicht nur die automatischen Eskalationen."""
+    channel = await _modlog_channel(bot, guild_id)
+    if channel is None:
+        return
+    embed = discord.Embed(title=title, description=f"<@{target_id}> (`{target_id}`)")
+    embed.add_field(name="Moderator", value=mod.mention)
+    if duration:
+        embed.add_field(name="Dauer", value=duration)
+    embed.add_field(name="Grund", value=reason or "-", inline=False)
+    if footer:
+        embed.set_footer(text=footer)
+    try:
+        await channel.send(embed=embed, allowed_mentions=discord.AllowedMentions.none())
+    except discord.HTTPException:
+        pass
+
+
+def _discord_error(action: str, error: discord.HTTPException) -> str:
+    if isinstance(error, discord.Forbidden):
+        return f"Discord hat {action} abgelehnt: dem Bot fehlt das Recht dazu oder das Ziel steht ueber ihm."
+    return f"{action} ist fehlgeschlagen: {error.text or error}"
+
+
 async def _add_modlog(
     guild_id: int,
     user_id: int,
@@ -217,7 +293,14 @@ class KickProposalView(discord.ui.View):
             )
             return
 
-        await member.kick(reason=self.reason)
+        if blocked := _guild_block_reason(interaction, member):
+            await interaction.response.send_message(blocked, ephemeral=True)
+            return
+        try:
+            await member.kick(reason=self.reason)
+        except discord.HTTPException as error:
+            await interaction.response.send_message(_discord_error("den Kick", error), ephemeral=True)
+            return
         await _add_modlog(self.guild_id, self.user_id, interaction.user.id, ModAction.KICK, self.reason)
         for item in self.children:
             item.disabled = True
@@ -232,6 +315,12 @@ async def _trigger_escalation(
     user: discord.Member,
     total_points: int,
 ) -> None:
+    # Nur der Bot-Rang zaehlt (actor=None) - wer manuell verwarnt hat, wurde
+    # schon in /warn geprueft. Steht das Ziel ueber dem Bot, gibt es nichts zu tun.
+    if blocked := target_block_reason(None, user, guild.me, guild.owner_id):
+        await channel.send(f"Warn-Eskalation fuer {user.mention} nicht moeglich: {blocked}")
+        return
+
     ladder = await _get_ladder(guild.id)
     tier = await _consume_tier(guild.id, user.id)
     action = ladder[min(tier, len(ladder) - 1)]
@@ -247,13 +336,21 @@ async def _trigger_escalation(
         return
 
     if action == "ban":
-        await user.ban(reason=reason)
+        try:
+            await user.ban(reason=reason)
+        except discord.HTTPException as error:
+            await channel.send(f"Warn-Eskalation fuer {user.mention}: {_discord_error('den Bann', error)}")
+            return
         duration = None
         title = "Automatische Eskalation: Bann"
         description = f"{user.mention} wurde automatisch gebannt ({total_points} Warn-Punkte)."
     else:
         timeout_minutes = int(await get_config(guild.id, "warn_timeout_minutes", "60"))
-        await user.timeout(timedelta(minutes=timeout_minutes), reason=reason)
+        try:
+            await user.timeout(timedelta(minutes=timeout_minutes), reason=reason)
+        except discord.HTTPException as error:
+            await channel.send(f"Warn-Eskalation fuer {user.mention}: {_discord_error('den Timeout', error)}")
+            return
         duration = timeout_minutes * 60
         action = "timeout"
         title = "Automatische Eskalation: Timeout"
@@ -366,12 +463,22 @@ class ModerationCog(BaseCog):
     @require_role(Level.MOD)
     async def kick_cmd(self, interaction: discord.Interaction, user: discord.Member, reason: str) -> None:
         await interaction.response.defer(ephemeral=True)
+        if blocked := _guild_block_reason(interaction, user):
+            await interaction.followup.send(blocked)
+            return
         await ensure_guild(interaction.guild_id, interaction.guild.name)
         await ensure_user(user.id, str(user))
 
+        # DM VOR dem Kick: danach teilt der Bot keinen Server mehr mit dem Nutzer
         await _dm(user, f"Du wurdest von **{interaction.guild.name}** gekickt.\nGrund: {reason}")
-        await user.kick(reason=reason)
+        try:
+            await user.kick(reason=reason)
+        except discord.HTTPException as error:
+            await _dm(user, f"Korrektur: Der Kick aus **{interaction.guild.name}** wurde doch nicht ausgefuehrt.")
+            await interaction.followup.send(_discord_error("den Kick", error))
+            return
         await _add_modlog(interaction.guild_id, user.id, interaction.user.id, ModAction.KICK, reason)
+        await _post_modlog(self.bot, interaction.guild_id, "Kick", user.id, interaction.user, reason)
         await interaction.followup.send(f"{user.mention} wurde gekickt. Grund: {reason}")
 
     @app_commands.command(name="ban", description="Bannt ein Mitglied vom Server")
@@ -389,12 +496,30 @@ class ModerationCog(BaseCog):
         delete_message_days: app_commands.Range[int, 0, 7] = 0,
     ) -> None:
         await interaction.response.defer(ephemeral=True)
+        if blocked := _guild_block_reason(interaction, user):
+            await interaction.followup.send(blocked)
+            return
         await ensure_guild(interaction.guild_id, interaction.guild.name)
         await ensure_user(user.id, str(user))
 
+        # DM VOR dem Bann: danach teilt der Bot keinen Server mehr mit dem Nutzer
         await _dm(user, f"Du wurdest von **{interaction.guild.name}** gebannt.\nGrund: {reason}")
-        await user.ban(reason=reason, delete_message_seconds=delete_message_days * 86400)
+        try:
+            await user.ban(reason=reason, delete_message_seconds=delete_message_days * 86400)
+        except discord.HTTPException as error:
+            await _dm(user, f"Korrektur: Der Bann aus **{interaction.guild.name}** wurde doch nicht ausgefuehrt.")
+            await interaction.followup.send(_discord_error("den Bann", error))
+            return
         await _add_modlog(interaction.guild_id, user.id, interaction.user.id, ModAction.BAN, reason)
+        await _post_modlog(
+            self.bot,
+            interaction.guild_id,
+            "Bann",
+            user.id,
+            interaction.user,
+            reason,
+            footer=f"Aufheben: /unban user_id:{user.id}",
+        )
         await interaction.followup.send(f"{user.mention} wurde gebannt. Grund: {reason}")
 
     @app_commands.command(name="unban", description="Hebt einen Bann auf")
@@ -408,8 +533,16 @@ class ModerationCog(BaseCog):
             await interaction.followup.send("Ungueltige User-ID.")
             return
 
-        await interaction.guild.unban(discord.Object(id=uid), reason=reason)
+        try:
+            await interaction.guild.unban(discord.Object(id=uid), reason=reason)
+        except discord.NotFound:
+            await interaction.followup.send(f"<@{uid}> ist nicht gebannt (oder die ID gibt es nicht).")
+            return
+        except discord.HTTPException as error:
+            await interaction.followup.send(_discord_error("das Aufheben des Banns", error))
+            return
         await _add_modlog(interaction.guild_id, uid, interaction.user.id, ModAction.UNBAN, reason)
+        await _post_modlog(self.bot, interaction.guild_id, "Bann aufgehoben", uid, interaction.user, reason)
         await interaction.followup.send(f"Bann fuer <@{uid}> aufgehoben. Grund: {reason}")
 
     @app_commands.command(name="timeout", description="Timeoutet ein Mitglied")
@@ -425,10 +558,26 @@ class ModerationCog(BaseCog):
         reason: str,
     ) -> None:
         await interaction.response.defer(ephemeral=True)
+        if blocked := _guild_block_reason(interaction, user):
+            await interaction.followup.send(blocked)
+            return
         await ensure_guild(interaction.guild_id, interaction.guild.name)
         await ensure_user(user.id, str(user))
 
-        await user.timeout(timedelta(minutes=duration_minutes), reason=reason)
+        try:
+            await user.timeout(timedelta(minutes=duration_minutes), reason=reason)
+        except discord.HTTPException as error:
+            await interaction.followup.send(_discord_error("den Timeout", error))
+            return
+        await _post_modlog(
+            self.bot,
+            interaction.guild_id,
+            "Timeout",
+            user.id,
+            interaction.user,
+            reason,
+            duration=f"{duration_minutes} Minuten",
+        )
         await _add_modlog(
             interaction.guild_id,
             user.id,
@@ -455,6 +604,9 @@ class ModerationCog(BaseCog):
         reason: str,
         points: app_commands.Range[int, 1, 100] = 1,
     ) -> None:
+        if blocked := _guild_block_reason(interaction, user):
+            await interaction.response.send_message(blocked, ephemeral=True)
+            return
         await interaction.response.defer()
 
         total_points, threshold = await _apply_warning(
@@ -629,6 +781,19 @@ class ModerationCog(BaseCog):
         )
         await interaction.response.send_message(
             f"AutoMod-Eskalations-Kanal auf {channel.mention} gesetzt.", ephemeral=True, delete_after=20
+        )
+
+    @modconfig_group.command(
+        name="log_channel", description="Setzt den Kanal, in dem jeder Bann, Kick und Timeout gemeldet wird"
+    )
+    @app_commands.describe(channel="Zielkanal (z.B. ein Kanal nur fuer Admins/Mods)")
+    @require_role(Level.OWNER)
+    async def modconfig_log_channel(
+        self, interaction: discord.Interaction, channel: discord.TextChannel
+    ) -> None:
+        await set_config(interaction.guild_id, "modlog_channel_id", str(channel.id), interaction.guild.name)
+        await interaction.response.send_message(
+            f"Moderations-Meldungen gehen jetzt nach {channel.mention}.", ephemeral=True, delete_after=20
         )
 
     @modconfig_group.command(

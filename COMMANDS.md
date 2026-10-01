@@ -77,6 +77,15 @@ Minecraft; vanilla Valheim z.B. nicht).
 | `/modconfig threshold value:` | Setzt die Warn-Punkte-Schwelle für automatische Eskalation (Default 3) | Owner |
 | `/modconfig action action:` | Setzt die Eskalations-Aktion: `timeout` / `ban` / `kick` (Default `timeout`) | Owner |
 | `/modconfig timeout minutes:` | Setzt die Timeout-Dauer für Eskalationen in Minuten (Default 60) | Owner |
+| `/modconfig log_channel channel:` | Kanal, in dem jeder Bann, Kick und Timeout gemeldet wird (Mod, Grund, bei Bann der `/unban`-Befehl). Ohne eigenen Kanal wird der AutoMod-Kanal benutzt | Owner |
+
+**Rangregel**: Vor `/kick`, `/ban`, `/timeout`, `/warn` und jeder automatischen
+Eskalation prüft der Bot Discords eigene Regel – das Ziel muss **unter** dem
+Ausführenden **und** unter der Bot-Rolle stehen; den Server-Owner (und sich selbst)
+kann niemand moderieren. Sonst könnte z.B. ein Mod über den Bot einen anderen Mod
+bannen, was er direkt in Discord nicht dürfte. Lehnt Discord eine Aktion trotzdem
+ab, gibt es eine Fehlermeldung statt eines hängenden Befehls (bei Kick/Bann erhält
+der Betroffene dann eine Korrektur-DM).
 
 **Warn-Eskalation**: Erreicht ein Mitglied die konfigurierte Punkteschwelle,
 werden `timeout`/`ban` **sofort automatisch ausgeführt** und danach per
