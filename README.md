@@ -16,7 +16,8 @@
 | Phase 2 | `amp`-Cog, `moderation`-Cog, `whitelist`-Cog | ✅ fertig |
 | — | Konsolen-Filter (Blacklist/Whitelist) + Event-Kanal für den `amp`-Cog | ✅ fertig |
 | — | `banner`-Cog (Embed/Bild-Banner, Steam-Artwork, Banner-Gruppen, Editor-UI) | ✅ fertig |
-| Phase 3 | React-WebUI | 🔜 Kickoff-Slice fertig (Auth-Flow + Dashboard), 5 weitere Seiten offen |
+| Phase 3 | React-WebUI | 🔜 Dashboard, Server, Moderation, Whitelist, Einstellungen fertig; Benutzer-Seite und Produktiv-Bereitstellung offen |
+| — | Betrieb in AMP: eigene Vorlage, Migrationen beim Start, MariaDB getestet ([AMP.md](AMP.md)) | ✅ fertig |
 | Phase 4 | `roles`-, `welcome`-Cog, weitere Erweiterungen | ⏳ offen |
 
 Alle fertigen Teile sind gegen einen echten AMP-Server und einen Test-Discord-Server live verifiziert (nicht nur Unit-Tests).
@@ -341,12 +342,12 @@ einziger Berührungspunkt sind die beiden Ports plus `cors_origins`/
 # + MariaDB bereits vorhanden
 ```
 
-### Option B — AMP-Instanz
-```
-# Generic Module in AMP
-# Bot Core + FastAPI als ein Prozess
-# SQLite statt MariaDB
-```
+### Option B — AMP-Instanz (umgesetzt)
+Eigene AMP-Vorlage nach dem Vorbild von GatekeeperV2 im Repo
+[Daywalker91/AMPTemplates](https://github.com/Daywalker91/AMPTemplates): Code als ZIP von
+`main`, eigenes venv, Einstellungen als Eingabefelder in AMP (AMP schreibt daraus die
+`.env`), Datenbank-Migrationen beim Start. Anleitung: [AMP.md](AMP.md).
+Aktuell nur der Bot selbst – die WebUI (FastAPI + React) folgt später.
 
 ---
 

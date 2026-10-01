@@ -1,4 +1,5 @@
 import json
+import logging
 from pathlib import Path
 
 import discord
@@ -14,6 +15,8 @@ COGS_PATH = Path(__file__).resolve().parent.parent / "cogs"
 # Prozess, kein IPC), liest diese Liste stattdessen aus der DB (siehe
 # bot/cogs/admin/api.py:list_cogs).
 LOADED_COGS_KEY = "loaded_cogs"
+
+log = logging.getLogger("wikingerbot")
 
 
 def discover_cog_names() -> list[str]:
@@ -54,6 +57,11 @@ class WikingerBot(commands.Bot):
         sync_on_startup = await get_bot_setting(SYNC_ON_STARTUP_KEY, default="true")
         if sync_on_startup == "true":
             await self.tree.sync()
+
+    async def on_ready(self) -> None:
+        # Feste Log-Zeile: AMP erkennt daran, dass der Bot laeuft (Console.AppReadyRegex
+        # in der AMP-Vorlage). Wortlaut nur zusammen mit der Vorlage aendern!
+        log.info("WikingerBot bereit: angemeldet als %s (ID %s) auf %d Server(n)", self.user, self.user.id, len(self.guilds))
 
     def discover_cogs(self) -> list[str]:
         return discover_cog_names()

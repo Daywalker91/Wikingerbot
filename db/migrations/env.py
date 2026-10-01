@@ -12,11 +12,15 @@ from db.models import *  # noqa: F401,F403  (registriert alle Modelle bei Base.m
 config = context.config
 
 if config.config_file_name is not None:
-    fileConfig(config.config_file_name)
+    # disable_existing_loggers=False: Migrationen laufen auch beim Bot-Start
+    # (bot/main.py) - sonst waeren danach alle Logger des Bots stumm.
+    fileConfig(config.config_file_name, disable_existing_loggers=False)
 
 target_metadata = Base.metadata
 
-config.set_main_option("sqlalchemy.url", settings.database_url)
+# "%" verdoppeln: configparser wertet "%" als Platzhalter - URL-kodierte
+# Sonderzeichen im Passwort (z.B. "#" -> "%23") liessen Alembic sonst abstuerzen.
+config.set_main_option("sqlalchemy.url", settings.database_url.replace("%", "%%"))
 
 
 def run_migrations_offline() -> None:
