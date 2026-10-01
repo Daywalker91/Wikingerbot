@@ -1,5 +1,6 @@
 import asyncio
 import logging
+import sys
 from pathlib import Path
 
 import discord
@@ -28,10 +29,13 @@ def run_migrations() -> None:
 def setup_logging() -> None:
     # force=True: alembic.ini setzt per fileConfig eigene Handler/Level, die sonst
     # alle INFO-Ausgaben des Bots verschlucken wuerden.
+    # stdout statt stderr (Standard): AMP erkennt den Start an der Log-Zeile
+    # "WikingerBot bereit: ..." in der Konsole - die muss sicher auf stdout landen.
     logging.basicConfig(
         level=settings.log_level.upper(),
         format="%(asctime)s %(levelname)-7s [%(name)s] %(message)s",
         datefmt="%Y-%m-%d %H:%M:%S",
+        stream=sys.stdout,
         force=True,
     )
 

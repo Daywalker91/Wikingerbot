@@ -344,7 +344,7 @@ einziger Berührungspunkt sind die beiden Ports plus `cors_origins`/
 
 ### Option B — AMP-Instanz (umgesetzt)
 Eigene AMP-Vorlage nach dem Vorbild von GatekeeperV2 im Repo
-[Daywalker91/AMPTemplates](https://github.com/Daywalker91/AMPTemplates): Code als ZIP von
+[Daywalker91/AMPTemplate](https://github.com/Daywalker91/AMPTemplate): Code als ZIP von
 `main`, eigenes venv, Einstellungen als Eingabefelder in AMP (AMP schreibt daraus die
 `.env`), Datenbank-Migrationen beim Start. Anleitung: [AMP.md](AMP.md).
 Aktuell nur der Bot selbst – die WebUI (FastAPI + React) folgt später.

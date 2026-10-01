@@ -2,7 +2,7 @@
 
 Der Bot läuft als eigene AMP-Instanz – nach dem Vorbild der offiziellen
 GatekeeperV2-Vorlage. Die Vorlage liegt im Repo
-[Daywalker91/AMPTemplates](https://github.com/Daywalker91/AMPTemplates) und wird in AMP
+[Daywalker91/AMPTemplate](https://github.com/Daywalker91/AMPTemplate) und wird in AMP
 als *Configuration Repository* eingebunden.
 
 ## Was die Vorlage macht
@@ -30,7 +30,7 @@ Alle Einstellungen (Token, Datenbank, AMP-Zugang) sind Eingabefelder in AMP unte
 ## Einrichtung
 
 1. **Vorlagen-Repo einbinden:** *Configuration → Instance Deployment → Configuration Repository*
-   → `Daywalker91/AMPTemplates:main` hinzufügen → *Fetch latest*.
+   → `Daywalker91/AMPTemplate:main` hinzufügen → *Fetch latest*.
 2. **Instanz anlegen:** *Create Instance* → Anwendung **WikingerBot** wählen.
 3. **Einstellungen** in der neuen Instanz unter *Configuration → WikingerBot*:
    - *Discord Bot Token*
