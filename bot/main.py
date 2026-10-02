@@ -1,5 +1,6 @@
 import asyncio
 import logging
+import signal
 import sys
 from pathlib import Path
 
@@ -60,4 +61,12 @@ if __name__ == "__main__":
         run_migrations()
         setup_logging()
         log.info("Datenbank ist aktuell.")
-    asyncio.run(main())
+    # AMP stoppt den Bot mit Strg+C (App.ExitMethod=OS_CLOSE), Docker mit SIGTERM.
+    # Beides beendet main() sauber (async with bot schliesst die Verbindung) -
+    # nur der Traceback dazu wird hier unterdrueckt.
+    if hasattr(signal, "SIGTERM"):
+        signal.signal(signal.SIGTERM, signal.default_int_handler)
+    try:
+        asyncio.run(main())
+    except KeyboardInterrupt:
+        log.info("WikingerBot beendet.")
