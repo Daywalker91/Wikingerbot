@@ -33,8 +33,8 @@ class NewsCog(BaseCog):
         outbox.register("news.deleted", self._on_deleted)
 
     async def cog_unload(self) -> None:
-        outbox.unregister("news.saved")
-        outbox.unregister("news.deleted")
+        outbox.unregister("news.saved", self._on_saved)
+        outbox.unregister("news.deleted", self._on_deleted)
 
     async def _on_saved(self, payload: dict) -> None:
         done = await sync_news(self.bot, int(payload["news_id"]))

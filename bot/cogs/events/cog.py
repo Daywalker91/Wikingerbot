@@ -99,8 +99,9 @@ class EventsCog(BaseCog):
 
     async def cog_unload(self) -> None:
         self.bot.remove_dynamic_items(EventAnswerButton)
-        for kind in ("event.saved", "event.participants", "event.deleted"):
-            outbox.unregister(kind)
+        outbox.unregister("event.saved", self._on_saved)
+        outbox.unregister("event.participants", self._on_saved)
+        outbox.unregister("event.deleted", self._on_deleted)
 
     async def _on_saved(self, payload: dict) -> None:
         done = await sync_event(self.bot, int(payload["event_id"]), event_view)

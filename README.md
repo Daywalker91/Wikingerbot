@@ -19,7 +19,7 @@
 | Phase 3 | React-WebUI | ✅ läuft in AMP im Bot-Prozess (https über das Edge-Gateway): Dashboard, Server, Moderation, Whitelist, Einstellungen, Musik, Begrüßung; Benutzer-Seite offen |
 | — | Betrieb in AMP: eigene Vorlage, Migrationen beim Start, MariaDB getestet ([AMP.md](AMP.md)) | ✅ fertig |
 | Phase 4 | `welcome`, `roles`, `music`, `stats`, `automod` | ✅ fertig (Tests ohne Discord; live in Discord noch zu prüfen) |
-| Phase 5 | Kopplung mit der Community-Seite als eigene, abschaltbare Cogs | 🔜 `community` (Verknüpfen, Auftrags-Abholung), `news`, `events`, `tickets`, `rangsync` und `wiki` fertig; AMP-Konten offen |
+| Phase 5 | Kopplung mit der Community-Seite als eigene, abschaltbare Cogs | 🔜 `community` (Verknüpfen, Auftrags-Abholung), `news`, `events`, `tickets`, `rangsync`, `wiki` und `ampkonten` fertig |
 
 Phase 1–3 sind gegen einen echten AMP-Server und einen Test-Discord-Server live verifiziert (nicht nur Unit-Tests). Die Phase-4-Cogs sind mit Unit-Tests abgesichert (Befehle laden, Regeln, Datenbank, echter FFmpeg-Lauf), aber noch nicht in Discord ausprobiert.
 
@@ -136,6 +136,7 @@ Wikingerbot/
 │       ├── tickets/             # Tickets: Staff-Threads, DMs, /ticket (+ Web-Seite)
 │       ├── rangsync/            # Raenge der Seite <-> Discord-Rollen (+ Web-Seite)
 │       ├── wiki/cog.py          # /wiki (Suche im Wiki der Seite)
+│       ├── ampkonten/           # AMP-Konten fuer Mitglieder der Seite (+ Web-Seite)
 │       ├── whitelist/cog.py    # /whitelist ...
 │       └── banner/              # /banner ... /bannergroup ... (Status-Banner, Editor-UI)
 │           ├── cog.py           # Commands, Views, Posting-/Update-Loop
@@ -315,6 +316,7 @@ da `require_role` auf `app_commands.Command` zugeschnitten ist.
 | Events | Event-Kanal, Ping-Rolle, natives Discord-Event, nächste Events mit Discord-Stand (Admin) |
 | Tickets | Staff-Kanal, Ping-Rolle, DMs, offene Tickets mit Thread-Stand (Admin) |
 | Rang-Sync | Rang ↔ Discord-Rolle und Richtung, Ersteller für System-Tickets, alles abgleichen (Owner) |
+| AMP-Konten | Panel-Adresse, Rang → AMP-Rolle, angelegte Konten (Owner) |
 | Server | AMP-Instanzen verwalten, Start/Stop, Console-Log |
 | Moderation | ModLog ansehen, Verwarnungen, gebannte User |
 | Whitelist | Anfragen verwalten, genehmigen/ablehnen |

@@ -52,7 +52,7 @@ class RangsyncCog(BaseCog):
         outbox.register("user.role", self._on_site_role)
 
     async def cog_unload(self) -> None:
-        outbox.unregister("user.role")
+        outbox.unregister("user.role", self._on_site_role)
 
     async def _enabled(self, guild: discord.Guild) -> bool:
         return community_db.enabled() and await get_config(guild.id, "rangsync_enabled", "false") == "true"

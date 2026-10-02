@@ -77,6 +77,9 @@ class WikingerBot(commands.Bot):
                 amp_client.core_call, settings.amp_user, keep_super_admin=settings.amp_keep_super_admin
             )
             log_report(report, settings.amp_user)
+            if report.roles:
+                # fuer die AMP-Konten: Rollenliste merken, solange sie lesbar ist
+                await set_bot_setting("amp_roles_cache", json.dumps(report.roles))
         except Exception as error:
             first_line = str(error).strip().splitlines()[0] if str(error).strip() else type(error).__name__
             log.warning("AMP-Rolle konnte nicht geprueft werden (AMP nicht erreichbar?): %s", first_line)

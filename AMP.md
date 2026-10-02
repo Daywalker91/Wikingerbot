@@ -61,8 +61,15 @@ Nach dem Vorbild von GatekeeperV2 richtet sich der Bot seine Rechte selbst ein
    Braucht eine neue Bot-Version mehr Rechte, dem Benutzer einmal kurz wieder **Super Admins**
    geben: Der Bot ergänzt die Rolle beim nächsten Start und gibt Super Admin wieder ab.
 
-Ausdrücklich **nicht** enthalten: Benutzer- und Rollenverwaltung, Instanzen anlegen/löschen,
-Updates, Dateimanager, Einstellungen, Backups. Im Log stehen alle Schritte unter
+Enthalten ist außerdem die **Benutzerverwaltung** – für die AMP-Konten der Community
+(`ampkonten`-Cog: legt nur eigene Konten an, fasst nur diese an, vergibt nie Super Admins).
+Ausdrücklich **nicht** enthalten: Rollenverwaltung, Instanzen anlegen/löschen, Updates,
+Dateimanager, Einstellungen, Backups.
+
+Kommt ein Recht dazu (wie die Benutzerverwaltung), gilt dasselbe wie beim ersten Mal:
+dem Bot-Benutzer **einmal kurz Super Admins** geben, Bot neu starten – er ergänzt seine
+Rolle, merkt sich dabei die Liste der AMP-Rollen (für den Tab *AMP-Konten*) und gibt
+Super Admins wieder ab. Im Log stehen alle Schritte unter
 `[wikingerbot.amp_role]`.
 
 Die eigene Instanz blendet der Bot überall aus (`/server discover`, Auswahllisten), damit er

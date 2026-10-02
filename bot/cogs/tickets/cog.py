@@ -194,7 +194,7 @@ class TicketsCog(BaseCog):
     async def cog_unload(self) -> None:
         self.bot.remove_dynamic_items(TicketActionButton, TicketReplyButton)
         for kind in ("ticket.created", "ticket.message", "ticket.updated"):
-            outbox.unregister(kind)
+            outbox.unregister(kind, self._on_outbox)
 
     async def _on_outbox(self, payload: dict) -> None:
         await self.sync_ticket(int(payload["ticket_id"]))

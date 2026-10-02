@@ -409,3 +409,19 @@ Seite eine Discord-Rolle und eine Richtung (beide / nur Discord → Seite / nur 
 | Command | Beschreibung | Level |
 |---|---|---|
 | `/wiki suche: zeigen:` | Sucht in Titel und Text des Wikis, mit Vorschlägen beim Tippen; eine Seite aus der Liste zeigt ihren Anfang mit Link. Sichtbar ist nur, was man auf der Seite lesen dürfte (verknüpft: nach Rang, sonst nur öffentliche Seiten). `zeigen: True` = für alle im Kanal | Member |
+
+---
+
+## AMP-Konten (`ampkonten`-Cog, Tab *AMP-Konten*, nur Owner)
+
+Keine Befehle. Mitglieder beantragen auf der Community-Seite unter *Einstellungen →
+AMP-Zugang* ein Konto (nur verknüpft). Der Bot legt es an, gibt ihm die AMP-Rolle
+ihres Rangs und schickt das Startpasswort per Discord-DM – beim ersten Login muss es
+geändert werden. *Passwort vergessen* auf der Seite schickt ein neues. Ändert sich
+der Rang (auf der Seite oder über den Rang-Sync), passt der Bot die Rolle an; ein Rang
+ohne Zugang sperrt das Konto (nie löschen), ein gelöschtes Konto auf der Seite ebenso.
+
+Fest eingebaut: Der Bot fasst nur Konten an, die er selbst angelegt hat (ist der
+Name schon vergeben, hängt er `-<Nr>` an), vergibt nie *Super Admins* oder seine
+eigene Rolle, und das Passwort steht nur in der DM. Im Tab: Adresse des Panels für
+die DM und Rang → AMP-Rolle (Standard: kein Zugang).

@@ -1,7 +1,9 @@
 """Auftraege der Community-Seite (Tabelle bot_outbox) abholen und verteilen.
 
 Jeder Community-Cog meldet beim Laden an, welche Auftragsarten er erledigt
-(register), und beim Entladen wieder ab. Abgeholt werden nur Arten, fuer die
+(register), und beim Entladen wieder ab. Eine Art kann mehrere Zustaendige haben
+(z.B. user.role: Rang-Sync und AMP-Konten) - erledigt ist sie, wenn alle durch sind;
+bei einem Fehler laufen beim naechsten Versuch alle erneut (Handler muessen das vertragen). Abgeholt werden nur Arten, fuer die
 gerade jemand zustaendig ist - ist z.B. der tickets-Cog entladen, bleiben dessen
 Auftraege liegen statt verloren zu gehen, und blockieren die anderen nicht.
 
@@ -24,15 +26,25 @@ MAX_ATTEMPTS = 5
 BATCH = 50
 
 Handler = Callable[[dict], Awaitable[None]]
-_handlers: dict[str, Handler] = {}
+_handlers: dict[str, list[Handler]] = {}
 
 
 def register(kind: str, handler: Handler) -> None:
-    _handlers[kind] = handler
+    handlers = _handlers.setdefault(kind, [])
+    if handler not in handlers:
+        handlers.append(handler)
 
 
-def unregister(kind: str) -> None:
-    _handlers.pop(kind, None)
+def unregister(kind: str, handler: Handler | None = None) -> None:
+    """Meldet einen Zustaendigen ab (ohne handler: alle dieser Art)."""
+    if handler is None:
+        _handlers.pop(kind, None)
+        return
+    handlers = _handlers.get(kind, [])
+    if handler in handlers:
+        handlers.remove(handler)
+    if not handlers:
+        _handlers.pop(kind, None)
 
 
 def registered() -> list[str]:
@@ -59,11 +71,13 @@ async def process_pending() -> int:
 
     done = 0
     for row_id, kind, payload in rows:
-        handler = _handlers.get(kind)
-        if handler is None:  # zwischendurch entladen
+        handlers = list(_handlers.get(kind, []))
+        if not handlers:  # zwischendurch entladen
             continue
         try:
-            await handler(json.loads(payload or "{}"))
+            data = json.loads(payload or "{}")
+            for handler in handlers:
+                await handler(data)
         except Exception as error:
             log.warning("Auftrag %s (%s) fehlgeschlagen: %s", row_id, kind, error)
             async with session() as db:

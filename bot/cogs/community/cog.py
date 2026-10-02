@@ -54,7 +54,7 @@ class CommunityCog(BaseCog):
 
     async def cog_unload(self) -> None:
         self.poll.cancel()
-        outbox.unregister("user.unlinked")
+        outbox.unregister("user.unlinked", self._on_site_unlinked)
 
     # --- Auftraege der Seite --------------------------------------------------------
 

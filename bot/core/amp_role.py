@@ -23,8 +23,10 @@ ROLE_NAME = "WikingerBot"
 SUPER_ADMIN_ROLE = "Super Admins"
 
 # Was der Bot braucht: Instanzen auflisten/starten/stoppen (Controller), in den
-# Instanzen Status, Start/Stop der Anwendung und die Konsole. Alles Gefaehrliche
-# (Benutzer, Rollen, Instanzen anlegen/loeschen, Updates, Dateien, Einstellungen,
+# Instanzen Status, Start/Stop der Anwendung und die Konsole - und die
+# Benutzerverwaltung fuer die AMP-Konten der Community (bot/cogs/ampkonten: legt
+# nur eigene Konten an, fasst nur diese an, vergibt nie Super Admins). Alles andere
+# Gefaehrliche (Rollen, Instanzen anlegen/loeschen, Updates, Dateien, Einstellungen,
 # Backups) bleibt aus - "Settings.*", "FileManager.*" und "LocalFileBackup.*"
 # werden gar nicht erst erlaubt.
 DESIRED_PERMISSIONS: list[str] = [
@@ -46,10 +48,12 @@ DESIRED_PERMISSIONS: list[str] = [
     "-ADS.InstanceManagement.RefreshRemoteConfigStores",
     "-ADS.TemplateManagement.*",
     # In den Instanzen: Status, Anwendung starten/stoppen, Konsole - ohne
-    # Benutzer-/Rollenverwaltung, Zeitplaene, Audit-Log, Sonderrechte, Updates
+    # Rollenverwaltung, Zeitplaene, Audit-Log, Sonderrechte, Updates.
+    # Benutzerverwaltung ausdruecklich erlaubt (frueher verboten - der explizite
+    # Eintrag hebt ein altes Verbot in bestehenden Rollen auf).
     "Core.*",
     "-Core.RoleManagement.*",
-    "-Core.UserManagement.*",
+    "Core.UserManagement.*",
     "-Core.Scheduler.*",
     "-Core.AuditLog.*",
     "-Core.Special.*",
@@ -71,6 +75,8 @@ class RoleReport:
     # Normalfall nach der Einrichtung: ohne Super Admin darf der Bot Benutzer und
     # Rollen nicht einmal lesen - dann wird nicht geprueft, nur kurz gemeldet.
     no_admin_rights: bool = False
+    # Name -> ID aller AMP-Rollen, soweit lesbar (fuer die AMP-Konten zwischengespeichert)
+    roles: dict[str, str] = field(default_factory=dict)
 
 
 def parse_node(entry: str) -> tuple[str, bool]:
@@ -157,7 +163,14 @@ async def ensure_bot_role(core_call: CoreCall, amp_user: str, *, keep_super_admi
     user_id = str(user["ID"])
     user_roles = {str(r) for r in (user.get("Roles") or [])}
 
-    roles = role_name_to_id(await core_call("GetRoleIds", {}))
+    try:
+        roles = role_name_to_id(await core_call("GetRoleIds", {}))
+    except Exception as error:
+        if not is_permission_error(error):
+            raise
+        report.no_admin_rights = True
+        return report
+    report.roles = dict(roles)
     super_id = roles.get(SUPER_ADMIN_ROLE)
     is_super = super_id is not None and super_id in user_roles
     role_id = roles.get(ROLE_NAME)
@@ -170,7 +183,13 @@ async def ensure_bot_role(core_call: CoreCall, amp_user: str, *, keep_super_admi
                 f"'{SUPER_ADMIN_ROLE}' - der Bot legt sie beim naechsten Start selbst an."
             )
             return report
-        current = await core_call("GetAMPRolePermissions", {"RoleId": role_id}) or []
+        try:
+            current = await core_call("GetAMPRolePermissions", {"RoleId": role_id}) or []
+        except Exception as error:
+            if not is_permission_error(error):
+                raise
+            report.no_admin_rights = True
+            return report
         report.missing_without_super_admin = [
             ("" if enabled else "-") + node for node, enabled in plan_permission_changes(current, DESIRED_PERMISSIONS)
         ]
@@ -187,6 +206,7 @@ async def ensure_bot_role(core_call: CoreCall, amp_user: str, *, keep_super_admi
     if role_id is None:
         await core_call("CreateRole", {"Name": ROLE_NAME, "AsCommonRole": False})
         roles = role_name_to_id(await core_call("GetRoleIds", {}))
+        report.roles = dict(roles)
         role_id = roles.get(ROLE_NAME)
         if role_id is None:
             report.skipped_reason = f"AMP-Rolle '{ROLE_NAME}' konnte nicht angelegt werden"
