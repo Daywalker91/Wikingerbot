@@ -401,3 +401,11 @@ Seite eine Discord-Rolle und eine Richtung (beide / nur Discord → Seite / nur 
   Kontos, sonst des ersten Königs). Die Sperre auf der Seite bleibt getrennt.
 - Wer Discord verlässt, behält seinen Rang. Die Bot-Rolle muss über den zugeordneten
   Rollen stehen.
+
+---
+
+## Wiki der Community-Seite (`wiki`-Cog)
+
+| Command | Beschreibung | Level |
+|---|---|---|
+| `/wiki suche: zeigen:` | Sucht in Titel und Text des Wikis, mit Vorschlägen beim Tippen; eine Seite aus der Liste zeigt ihren Anfang mit Link. Sichtbar ist nur, was man auf der Seite lesen dürfte (verknüpft: nach Rang, sonst nur öffentliche Seiten). `zeigen: True` = für alle im Kanal | Member |

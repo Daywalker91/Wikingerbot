@@ -6,7 +6,7 @@ import discord
 import pytest
 from discord.ext import commands
 
-NEW_COGS = ["welcome", "roles", "stats", "automod", "music", "news", "events", "tickets"]
+NEW_COGS = ["welcome", "roles", "stats", "automod", "music", "news", "events", "tickets", "wiki"]
 
 
 def _existing(names):
