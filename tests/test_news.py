@@ -14,11 +14,11 @@ from tests.test_community import site  # noqa: F401  (Fixture: nachgebaute Seite
 
 
 class FakeMessage:
-    def __init__(self, channel, message_id, content, embed):
-        self.channel, self.id, self.content, self.embed = channel, message_id, content, embed
+    def __init__(self, channel, message_id, content, embed, view=None):
+        self.channel, self.id, self.content, self.embed, self.view = channel, message_id, content, embed, view
 
-    async def edit(self, embed):
-        self.embed = embed
+    async def edit(self, embed, view=None):
+        self.embed, self.view = embed, view
         self.channel.log.append(("edit", self.id))
 
     async def delete(self):
@@ -33,9 +33,9 @@ class FakeChannel:
         self.log = []
         self._next = 1000
 
-    async def send(self, content=None, embed=None, allowed_mentions=None):
+    async def send(self, content=None, embed=None, view=None, allowed_mentions=None):
         self._next += 1
-        message = FakeMessage(self, self._next, content, embed)
+        message = FakeMessage(self, self._next, content, embed, view)
         self.messages[message.id] = message
         self.log.append(("send", message.id))
         return message

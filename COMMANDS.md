@@ -332,3 +332,25 @@ angebundene Community-Seite.
 | Command | Beschreibung | Level |
 |---|---|---|
 | `/news` | Die fünf neuesten News mit Links | Member |
+
+---
+
+## Events der Community-Seite (`events`-Cog, Tab *Events*)
+
+Events mit Haken „In Discord ankündigen“ erscheinen im Event-Kanal: Termin (in
+der Zeitzone jedes Lesers), Ort, Beschreibung, Teilnehmerzahlen und die Namen der
+Zusagen – mit den Knöpfen **Dabei / Vielleicht / Nicht dabei**. Zusagen gelten auf
+der Seite, deshalb nur mit verknüpftem Konto (sonst kommt ein Hinweis) und mit
+denselben Regeln: Rang braucht das Recht zum Zusagen, das Limit zählt nur feste
+Zusagen, keine Zusagen für abgesagte oder vergangene Events. Dieselbe Antwort
+nochmal klicken nimmt sie zurück. Änderungen, Zusagen auf der Seite und Absagen
+werden nachgezogen.
+
+Optional legt der Bot zusätzlich ein **natives Discord-Event** an (Event-Bereich
+des Servers) und zieht Änderungen/Absagen nach – dafür braucht die Bot-Rolle das
+Recht **Events verwalten**. Kanal, Ping-Rolle und natives Event stellst du im Tab
+*Events* ein; bestehende Events lassen sich dort von Hand posten.
+
+| Command | Beschreibung | Level |
+|---|---|---|
+| `/events` | Die nächsten fünf Events mit Termin und Link | Member |

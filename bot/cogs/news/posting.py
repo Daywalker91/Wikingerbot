@@ -3,13 +3,13 @@ damit testbar. Die Nachricht gehoert zur News: Bearbeiten aktualisiert sie,
 Loeschen/Entwurf/Haken weg entfernt sie (Zuordnung in community_posts)."""
 
 import logging
-import re
 from dataclasses import dataclass
 
 import discord
 from sqlalchemy import select
 
 from bot.community import db as community_db
+from bot.community.text import plain_excerpt
 from bot.core.entities import ensure_guild
 from bot.core.guild_config import get_config
 from db.models.community_post import CommunityPost
@@ -61,14 +61,6 @@ async def recent_news(limit: int = 15) -> list[NewsItem]:
             )
         ).all()
     return [NewsItem(r[0], r[1], r[2] or "", r[3], bool(r[4]), bool(r[5]), bool(r[6]), r[7]) for r in rows]
-
-
-def plain_excerpt(text: str, length: int = EXCERPT_LENGTH) -> str:
-    """Wie excerpt() der Seite: [[Seite|Text]] -> Text, Formatierungszeichen weg."""
-    text = re.sub(r"\[\[(?:[^\]|]*\|)?([^\]]*)\]\]", r"\1", text)
-    text = re.sub(r"[*`~>#]+", "", text)
-    text = re.sub(r"\s+", " ", text).strip()
-    return text if len(text) <= length else text[: length - 1].rstrip() + "…"
 
 
 def image_url(image: str | None) -> str | None:

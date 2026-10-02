@@ -19,7 +19,7 @@
 | Phase 3 | React-WebUI | ✅ läuft in AMP im Bot-Prozess (https über das Edge-Gateway): Dashboard, Server, Moderation, Whitelist, Einstellungen, Musik, Begrüßung; Benutzer-Seite offen |
 | — | Betrieb in AMP: eigene Vorlage, Migrationen beim Start, MariaDB getestet ([AMP.md](AMP.md)) | ✅ fertig |
 | Phase 4 | `welcome`, `roles`, `music`, `stats`, `automod` | ✅ fertig (Tests ohne Discord; live in Discord noch zu prüfen) |
-| Phase 5 | Kopplung mit der Community-Seite als eigene, abschaltbare Cogs | 🔜 `community` (Verknüpfen, Auftrags-Abholung) und `news` fertig; `events`, `tickets`, Rang-Sync, `wiki` offen |
+| Phase 5 | Kopplung mit der Community-Seite als eigene, abschaltbare Cogs | 🔜 `community` (Verknüpfen, Auftrags-Abholung), `news` und `events` fertig; `tickets`, Rang-Sync, `wiki` offen |
 
 Phase 1–3 sind gegen einen echten AMP-Server und einen Test-Discord-Server live verifiziert (nicht nur Unit-Tests). Die Phase-4-Cogs sind mit Unit-Tests abgesichert (Befehle laden, Regeln, Datenbank, echter FFmpeg-Lauf), aber noch nicht in Discord ausprobiert.
 
@@ -132,6 +132,7 @@ Wikingerbot/
 │       ├── automod/             # /automod ... (Discords AutoMod + eigene Regeln) + Web-Seite
 │       ├── community/cog.py     # /verknuepfen /profil /community status (nur mit Seiten-DB)
 │       ├── news/                # News der Seite in Discord (+ Web-Seite)
+│       ├── events/              # Events mit Zusage-Knoepfen + natives Discord-Event (+ Web-Seite)
 │       ├── whitelist/cog.py    # /whitelist ...
 │       └── banner/              # /banner ... /bannergroup ... (Status-Banner, Editor-UI)
 │           ├── cog.py           # Commands, Views, Posting-/Update-Loop
@@ -308,6 +309,7 @@ da `require_role` auf `app_commands.Command` zugeschnitten ist.
 | AutoMod | Discords AutoMod → Warn-Punkte, eigene Regeln, Folgen, Ausnahmen, Alarmkanal (Admin) |
 | Community | Anbindung an die Community-Seite (Owner) |
 | News | News-Kanal, Ping-Rolle, neueste News mit Discord-Stand (Admin) |
+| Events | Event-Kanal, Ping-Rolle, natives Discord-Event, nächste Events mit Discord-Stand (Admin) |
 | Server | AMP-Instanzen verwalten, Start/Stop, Console-Log |
 | Moderation | ModLog ansehen, Verwarnungen, gebannte User |
 | Whitelist | Anfragen verwalten, genehmigen/ablehnen |

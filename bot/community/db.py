@@ -104,6 +104,38 @@ news = Table(
     Column("created_at", DateTime),
 )
 
+role_permissions = Table(
+    "role_permissions",
+    metadata,
+    Column("role_id", Integer, primary_key=True),
+    Column("permission", String(50), primary_key=True),
+)
+
+events = Table(
+    "events",
+    metadata,
+    Column("id", Integer, primary_key=True),
+    Column("user_id", Integer),
+    Column("title", String(150)),
+    Column("description", Text),
+    Column("location", String(150), default=""),
+    # Ortszeit der Seite (Europe/Berlin), ohne Zeitzone gespeichert
+    Column("starts_at", DateTime),
+    Column("ends_at", DateTime),
+    Column("max_participants", SmallInteger),
+    Column("is_cancelled", SmallInteger, default=0),
+    Column("announce_discord", SmallInteger, default=1),
+)
+
+event_participants = Table(
+    "event_participants",
+    metadata,
+    Column("event_id", Integer, primary_key=True),
+    Column("user_id", Integer, primary_key=True),
+    Column("status", String(10)),  # yes | maybe | no
+    Column("updated_at", DateTime),
+)
+
 _engine: AsyncEngine | None = None
 _session_maker: async_sessionmaker[AsyncSession] | None = None
 _config = {"db_name": "", "url": "", "site_url": ""}

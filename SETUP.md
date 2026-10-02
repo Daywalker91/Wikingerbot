@@ -56,6 +56,8 @@ Phase-2-Cogs brauchen (mit `discord.Permissions(...).value` verifiziert):
 | Manage Messages | Aufräumen/Moderation, `automod`-Cog (löscht Verstöße) |
 | Connect, Speak | `music`-Cog |
 
+**Optional:** *Events verwalten* – nur für die nativen Discord-Events des `events`-Cogs (ohne das Recht postet er nur die Nachricht).
+
 **Nicht im Link, bewusst:** *Kanäle verwalten* braucht nur der Mitgliederzähler des
 `stats`-Cogs (`/stats zaehler`) – und nur für **diesen einen** Kanal. Darum dort in den
 Kanal-Einstellungen → Berechtigungen der Bot-Rolle *Kanal verwalten* erlauben, statt dem
