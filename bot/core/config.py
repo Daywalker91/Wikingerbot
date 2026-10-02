@@ -1,4 +1,4 @@
-from pydantic import model_validator
+from pydantic import field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from sqlalchemy.engine import URL
 
@@ -23,6 +23,9 @@ class Settings(BaseSettings):
     discord_client_id: str = ""
     discord_client_secret: str = ""
     discord_redirect_uri: str = "http://localhost:8000/auth/callback"
+    # Nur falls der Bot auf mehreren Servern ist bzw. die API ohne Bot laeuft:
+    # Discord-Server, an dem sich die Web-Oberflaeche anmeldet.
+    discord_guild_id: int = 0
 
     jwt_secret: str = "change-me"
     jwt_algorithm: str = "HS256"
@@ -32,6 +35,14 @@ class Settings(BaseSettings):
     # den Redirect nach erfolgreichem OAuth2-Login (siehe api/routers/auth.py).
     cors_origins: list[str] = ["http://localhost:5173"]
     frontend_url: str = "http://localhost:5173"
+
+    # Web-Oberflaeche im Bot-Prozess (api/server.py), z.B. in AMP.
+    web_enabled: bool = True
+    web_host: str = "0.0.0.0"
+    web_port: int = 8765
+    # Oeffentliche Adresse, z.B. https://bot.wikinger.ipv64.net - daraus werden
+    # Frontend-URL und Discord-Redirect (/api/auth/callback) abgeleitet.
+    public_url: str = ""
 
     amp_url: str = "http://localhost:8080"
     amp_user: str = ""
@@ -60,6 +71,26 @@ class Settings(BaseSettings):
                 port=self.db_port,
                 database=self.db_name,
             ).render_as_string(hide_password=False)
+        return self
+
+    @field_validator("web_port", mode="before")
+    @classmethod
+    def _web_port_fallback(cls, value):
+        # AMP setzt WEB_PORT ueber einen Platzhalter der Vorlage - kommt der einmal
+        # unaufgeloest an, lieber Standardport als Absturz beim Start.
+        try:
+            return int(value)
+        except (TypeError, ValueError):
+            return 8765
+
+    @model_validator(mode="after")
+    def _urls_from_public_url(self) -> "Settings":
+        if self.public_url:
+            self.public_url = self.public_url.rstrip("/")
+            if "frontend_url" not in self.model_fields_set:
+                self.frontend_url = self.public_url
+            if "discord_redirect_uri" not in self.model_fields_set:
+                self.discord_redirect_uri = f"{self.public_url}/api/auth/callback"
         return self
 
 

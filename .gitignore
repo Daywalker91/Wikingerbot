@@ -13,3 +13,4 @@ web/.env.local
 web/.env.development.local
 web/*.tsbuildinfo
 web/.tsc-out/
+data/jwt_secret

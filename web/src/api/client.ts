@@ -1,4 +1,6 @@
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
+// Lokal (npm run dev) zeigt VITE_API_BASE_URL auf uvicorn; im fertigen Build
+// liefert der Bot Seite und API selbst aus, die API liegt dann unter /api.
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "/api";
 
 export class ApiError extends Error {
   status: number;

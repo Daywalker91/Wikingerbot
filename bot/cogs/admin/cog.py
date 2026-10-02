@@ -3,6 +3,7 @@ from discord import app_commands
 from discord.ext import commands
 
 from bot.core.base_cog import BaseCog
+from bot.core.config import settings
 from bot.core.bot_settings import SYNC_ON_STARTUP_KEY, get_bot_setting, set_bot_setting
 from bot.core.discord_utils import send_temp_followup
 from bot.core.permissions import Level, require_role
@@ -109,6 +110,25 @@ class AdminCog(BaseCog):
             interaction,
             f"Automatischer globaler Sync beim Start {state} (wirkt ab dem naechsten Bot-Start).",
         )
+
+    @management_group.command(name="web", description="Link zur Web-Oberflaeche des Bots")
+    @require_role(Level.MOD)
+    async def web_cmd(self, interaction: discord.Interaction) -> None:
+        await interaction.response.send_message(web_link_message(), ephemeral=True)
+
+
+def web_link_message() -> str:
+    """Antwort fuer /bot web - der Bot kennt seine von aussen erreichbare Adresse
+    nicht selbst (in Docker sieht er nur die Container-IP), sie kommt aus PUBLIC_URL."""
+    if not settings.web_enabled:
+        return "Die Web-Oberfläche ist abgeschaltet (WEB_ENABLED)."
+    if not settings.public_url:
+        return (
+            f"Die Web-Oberfläche läuft auf Port {settings.web_port}, aber es ist noch keine Web-Adresse "
+            "eingetragen (in AMP: Konfiguration → Web-Oberfläche → Web-Adresse, z.B. "
+            f"`http://<IP des AMP-Servers>:{settings.web_port}`)."
+        )
+    return f"Web-Oberfläche: {settings.public_url}"
 
 
 async def setup(bot: commands.Bot) -> None:

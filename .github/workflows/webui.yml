@@ -1,0 +1,43 @@
+# Baut die Web-Oberflaeche (web/ + bot/cogs/*/web) und legt sie als webui.zip an
+# das Release "webui". Die AMP-Vorlage laedt sie beim Update von dort - so braucht
+# der AMP-Server kein Node.js. Die Pfade im Zip passen zum Entpacken ins
+# Instanzverzeichnis (Wikingerbot-main/web/dist/...).
+name: Web-Oberflaeche bauen
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: webui
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+      - name: Zip packen
+        run: |
+          mkdir -p pack/Wikingerbot-main/web
+          cp -r web/dist pack/Wikingerbot-main/web/dist
+          cd pack && zip -qr ../webui.zip Wikingerbot-main
+      - name: Release "webui" aktualisieren
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release view webui >/dev/null 2>&1 || gh release create webui \
+            --title "Web-Oberflaeche (aktueller Build)" \
+            --notes "Wird bei jedem Push auf main automatisch neu gebaut. Die AMP-Vorlage laedt webui.zip beim Update." \
+            --latest=false
+          gh release upload webui webui.zip --clobber

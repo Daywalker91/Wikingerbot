@@ -14,6 +14,7 @@ from api.middleware.auth import (
     hash_refresh_token,
     verify_state_token,
 )
+from bot.core import runtime
 from bot.core.config import settings
 from bot.core.permissions import has_owner_level_bypass, resolve_level
 from db.models.role import Level
@@ -23,6 +24,18 @@ from db.session import get_db_session
 router = APIRouter(prefix="/auth", tags=["auth"])
 
 DISCORD_API = "https://discord.com/api"
+
+
+@router.get("/guilds")
+async def guilds() -> list[dict]:
+    """Discord-Server, an denen man sich anmelden kann (fuer die Login-Seite):
+    alle, auf denen der laufende Bot ist - oder DISCORD_GUILD_ID, wenn die API
+    ohne Bot laeuft. IDs als String, JavaScript kann 64-Bit-Zahlen nicht exakt."""
+    if runtime.bot is not None and runtime.bot.guilds:
+        return [{"id": str(g.id), "name": g.name} for g in runtime.bot.guilds]
+    if settings.discord_guild_id:
+        return [{"id": str(settings.discord_guild_id), "name": "Discord-Server"}]
+    return []
 
 
 @router.get("/login")
@@ -91,7 +104,13 @@ async def callback(code: str, state: str) -> RedirectResponse:
 
     access = create_access_token(user_id, guild_id, level)
     redirect = RedirectResponse(f"{settings.frontend_url}/dashboard")
-    redirect.set_cookie(SESSION_COOKIE, access, httponly=True, samesite="lax")
+    redirect.set_cookie(
+        SESSION_COOKIE,
+        access,
+        httponly=True,
+        samesite="lax",
+        secure=settings.frontend_url.startswith("https://"),
+    )
     return redirect
 
 

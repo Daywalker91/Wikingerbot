@@ -1,8 +1,8 @@
 /// <reference types="vite/client" />
 
 interface ImportMetaEnv {
-  readonly VITE_API_BASE_URL: string;
-  readonly VITE_DISCORD_GUILD_ID: string;
+  readonly VITE_API_BASE_URL?: string;
+  readonly VITE_DISCORD_GUILD_ID?: string;
 }
 
 interface ImportMeta {

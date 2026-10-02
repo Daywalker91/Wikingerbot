@@ -6,6 +6,7 @@ from pathlib import Path
 
 import discord
 
+from bot.core import runtime
 from bot.core.bot import WikingerBot
 from bot.core.config import settings
 
@@ -58,12 +59,23 @@ async def main() -> None:
         log.error("Kein Discord-Token gesetzt (DISCORD_TOKEN) - in AMP unter Konfiguration eintragen.")
         raise SystemExit(1)
     bot = WikingerBot()
-    async with bot:
-        try:
-            await bot.start(settings.discord_token)
-        except discord.LoginFailure:
-            log.error("Discord hat den Token abgelehnt (DISCORD_TOKEN ungueltig oder zurueckgesetzt).")
-            raise SystemExit(1)
+    runtime.bot = bot
+    web = None
+    if settings.web_enabled:
+        from api.server import WebServer
+
+        web = WebServer()
+        await web.start()
+    try:
+        async with bot:
+            try:
+                await bot.start(settings.discord_token)
+            except discord.LoginFailure:
+                log.error("Discord hat den Token abgelehnt (DISCORD_TOKEN ungueltig oder zurueckgesetzt).")
+                raise SystemExit(1)
+    finally:
+        if web is not None:
+            await web.stop()
 
 
 if __name__ == "__main__":

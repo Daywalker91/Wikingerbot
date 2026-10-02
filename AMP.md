@@ -68,6 +68,29 @@ Die eigene Instanz blendet der Bot überall aus (`/server discover`, Auswahllist
 sich nicht selbst stoppen kann – erkannt am Pfad `…/instances/<Name>/`, im Docker-Modus über
 das Feld *Eigene Instanz*.
 
+## Web-Oberfläche
+
+Die Web-Oberfläche läuft im selben Prozess wie der Bot, auf dem AMP-Port der Instanz
+(Standard 8765): Seite unter `/`, API unter `/api`. Das gebaute Frontend lädt die Vorlage beim
+Update als `webui.zip` vom Release [`webui`](https://github.com/Daywalker91/Wikingerbot/releases/tag/webui)
+(baut eine GitHub Action bei jedem Push) – auf dem AMP-Server ist kein Node.js nötig.
+
+Einrichten:
+
+1. **Web-Adresse** in AMP eintragen, so wie der Browser den Bot erreicht, z.B.
+   `http://192.168.4.5:8765` (http genügt). Der Bot kann sie nicht selbst ermitteln – in Docker
+   sieht er nur die Container-IP. `/bot web` schickt dann den Link.
+2. Im [Discord Developer Portal](https://discord.com/developers/applications/) unter
+   **OAuth2 → Redirects** genau `<Web-Adresse>/api/auth/callback` eintragen, z.B.
+   `http://192.168.4.5:8765/api/auth/callback`.
+3. **Client ID** und **Client Secret** (OAuth2-Seite) in AMP eintragen.
+4. Port in der Firewall nur freigeben, wenn die Oberfläche von außerhalb erreichbar sein soll.
+
+Das Signier-Geheimnis für Logins (`JWT_SECRET`) erzeugt der Bot beim ersten Start selbst
+(`data/jwt_secret`, bleibt bei Updates erhalten). Angemeldet wird über den Discord-Server,
+auf dem der Bot ist; die Seiten zeigen nur, was die eigene Bot-Rolle (Member/Mod/Admin/Owner)
+darf.
+
 ## Neue Version einspielen
 
 Änderungen nach `main` pushen → in AMP **Update** → **Restart**. Migrationen laufen beim
