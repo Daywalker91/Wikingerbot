@@ -3,7 +3,7 @@ from urllib.parse import urlencode
 
 import httpx
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response
-from fastapi.responses import RedirectResponse
+from fastapi.responses import PlainTextResponse, RedirectResponse
 
 from api.middleware.auth import (
     SESSION_COOKIE,
@@ -40,6 +40,25 @@ def redirect_uri(request: Request) -> str:
     return f"{request.url.scheme}://{request.url.netloc}{prefix}/auth/callback"
 
 
+def client_id() -> str:
+    """OAuth2-Client-ID = Application-ID des Bots - laeuft der Bot im selben
+    Prozess, muss sie also nicht extra eingetragen werden."""
+    if settings.discord_client_id:
+        return settings.discord_client_id
+    if runtime.bot is not None and runtime.bot.application_id:
+        return str(runtime.bot.application_id)
+    return ""
+
+
+def missing_oauth_settings() -> list[str]:
+    missing = []
+    if not client_id():
+        missing.append("Discord Client ID")
+    if not settings.discord_client_secret:
+        missing.append("Discord Client Secret")
+    return missing
+
+
 @router.get("/guilds")
 async def guilds() -> list[dict]:
     """Discord-Server, an denen man sich anmelden kann (fuer die Login-Seite):
@@ -53,11 +72,19 @@ async def guilds() -> list[dict]:
 
 
 @router.get("/login")
-async def login(request: Request, guild_id: int = Query(...)) -> RedirectResponse:
+async def login(request: Request, guild_id: int = Query(...)):
     """Leitet zum Discord-Authorize-Screen fuer die angegebene Guild weiter."""
+    missing = missing_oauth_settings()
+    if missing:
+        return PlainTextResponse(
+            f"Anmeldung noch nicht eingerichtet: {' und '.join(missing)} fehlt.\n\n"
+            "In AMP unter Konfiguration -> Web-Oberflaeche eintragen (Discord Developer Portal, "
+            "Seite OAuth2) und den Bot neu starten.",
+            status_code=503,
+        )
     state = create_state_token(guild_id)
     params = {
-        "client_id": settings.discord_client_id,
+        "client_id": client_id(),
         "redirect_uri": redirect_uri(request),
         "response_type": "code",
         "scope": "identify guilds.members.read",
@@ -74,7 +101,7 @@ async def callback(request: Request, code: str, state: str) -> RedirectResponse:
         token_resp = await client.post(
             f"{DISCORD_API}/oauth2/token",
             data={
-                "client_id": settings.discord_client_id,
+                "client_id": client_id(),
                 "client_secret": settings.discord_client_secret,
                 "grant_type": "authorization_code",
                 "code": code,

@@ -125,3 +125,25 @@ def test_login_redirect_fixed_when_set(monkeypatch):
 def test_unresolved_port_placeholder_falls_back():
     assert Settings(_env_file=None, web_port="{{$ApplicationPort1}}").web_port == 8765
     assert Settings(_env_file=None, web_port="9000").web_port == 9000
+
+
+def test_client_id_from_running_bot(monkeypatch):
+    from api.routers.auth import client_id
+
+    class Bot:
+        application_id = 1523404561895784448
+        guilds = []
+
+    monkeypatch.setattr(settings, "discord_client_id", "")
+    monkeypatch.setattr(runtime, "bot", Bot())
+    assert client_id() == "1523404561895784448"
+    monkeypatch.setattr(settings, "discord_client_id", "99")
+    assert client_id() == "99"
+
+
+def test_login_without_secret_explains_instead_of_redirecting(monkeypatch):
+    monkeypatch.setattr(settings, "discord_client_id", "123")
+    monkeypatch.setattr(settings, "discord_client_secret", "")
+    client = TestClient(server.build_app())
+    response = client.get("/api/auth/login?guild_id=1", follow_redirects=False)
+    assert response.status_code == 503 and "Client Secret" in response.text
