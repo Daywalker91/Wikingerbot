@@ -53,6 +53,9 @@ DESIRED_PERMISSIONS: list[str] = [
     # Eintrag hebt ein altes Verbot in bestehenden Rollen auf).
     "Core.*",
     "-Core.RoleManagement.*",
+    # Rollen nur lesen: Rollenliste fuer die AMP-Konten aktuell halten und die
+    # eigene Rolle beim Start pruefen - aendern bleibt verboten
+    "Core.RoleManagement.ViewRoles",
     "Core.UserManagement.*",
     "-Core.Scheduler.*",
     "-Core.AuditLog.*",
