@@ -2,7 +2,7 @@ from datetime import datetime, timedelta, timezone
 from urllib.parse import urlencode
 
 import httpx
-from fastapi import APIRouter, Depends, HTTPException, Query, Response
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response
 from fastapi.responses import RedirectResponse
 
 from api.middleware.auth import (
@@ -26,6 +26,20 @@ router = APIRouter(prefix="/auth", tags=["auth"])
 DISCORD_API = "https://discord.com/api"
 
 
+def redirect_uri(request: Request) -> str:
+    """Discord-Redirect: fest eingestellt - oder (Web-Oberflaeche im Bot ohne
+    PUBLIC_URL) die Adresse, unter der der Browser die API gerade aufruft.
+    Login und Callback laufen ueber denselben Host, der Wert ist also beide
+    Male gleich - so wie Discord es verlangt."""
+    if settings.discord_redirect_uri:
+        return settings.discord_redirect_uri
+    # Pfad aus der aufgerufenen URL statt base_url: so bleibt das Praefix /api
+    # erhalten, unter dem die API in der Web-Oberflaeche eingehaengt ist.
+    path = request.url.path
+    prefix = path[: path.rfind("/auth/")]
+    return f"{request.url.scheme}://{request.url.netloc}{prefix}/auth/callback"
+
+
 @router.get("/guilds")
 async def guilds() -> list[dict]:
     """Discord-Server, an denen man sich anmelden kann (fuer die Login-Seite):
@@ -39,12 +53,12 @@ async def guilds() -> list[dict]:
 
 
 @router.get("/login")
-async def login(guild_id: int = Query(...)) -> RedirectResponse:
+async def login(request: Request, guild_id: int = Query(...)) -> RedirectResponse:
     """Leitet zum Discord-Authorize-Screen fuer die angegebene Guild weiter."""
     state = create_state_token(guild_id)
     params = {
         "client_id": settings.discord_client_id,
-        "redirect_uri": settings.discord_redirect_uri,
+        "redirect_uri": redirect_uri(request),
         "response_type": "code",
         "scope": "identify guilds.members.read",
         "state": state,
@@ -53,7 +67,7 @@ async def login(guild_id: int = Query(...)) -> RedirectResponse:
 
 
 @router.get("/callback")
-async def callback(code: str, state: str) -> RedirectResponse:
+async def callback(request: Request, code: str, state: str) -> RedirectResponse:
     guild_id = verify_state_token(state)
 
     async with httpx.AsyncClient() as client:
@@ -64,7 +78,7 @@ async def callback(code: str, state: str) -> RedirectResponse:
                 "client_secret": settings.discord_client_secret,
                 "grant_type": "authorization_code",
                 "code": code,
-                "redirect_uri": settings.discord_redirect_uri,
+                "redirect_uri": redirect_uri(request),
             },
             headers={"Content-Type": "application/x-www-form-urlencoded"},
         )
@@ -103,13 +117,14 @@ async def callback(code: str, state: str) -> RedirectResponse:
         await db.commit()
 
     access = create_access_token(user_id, guild_id, level)
+    # Leere frontend_url: Seite und API kommen vom selben Host (Web-Oberflaeche im Bot)
     redirect = RedirectResponse(f"{settings.frontend_url}/dashboard")
     redirect.set_cookie(
         SESSION_COOKIE,
         access,
         httponly=True,
         samesite="lax",
-        secure=settings.frontend_url.startswith("https://"),
+        secure=(settings.frontend_url or str(request.url)).startswith("https://"),
     )
     return redirect
 

@@ -24,7 +24,7 @@ für die Konsolen-Filter/Event-Muster inkl. Regex-Grundlagen.
 | `/bot cog unload name:` | Entlädt ein Cog | Owner |
 | `/bot cog reload name:` | Lädt ein Cog neu (Code-Änderungen übernehmen ohne Bot-Neustart) | Owner |
 | `/bot cog list` | Listet geladene und verfügbare Cogs | Owner |
-| `/bot web` | Schickt den Link zur Web-Oberfläche (nur für dich sichtbar). Die Adresse kommt aus `PUBLIC_URL` (AMP: *Web-Adresse*) | Mod |
+| `/bot web` | Schickt den Link zur Web-Oberfläche (nur für dich sichtbar). Adresse aus `PUBLIC_URL` (AMP: *Web-Adresse*), sonst der Link der Instanz laut AMP | Mod |
 | `/bot sync local: reset:` | Synct Slash-Commands (`local=True`: nur dieser Server, sofort sichtbar; `local=False`: global, bis zu 1h Verzögerung; `reset=True`: vorher alle Commands löschen) | Owner |
 | `/bot sync_on_startup enabled:` | Steuert, ob beim Bot-Start automatisch global gesynct wird (Standard: an — nötig, damit eine frische Installation ohne manuellen Schritt Commands bekommt). Ohne `enabled` zeigt der aktuellen Stand an. In einer Dev-Umgebung mit zusätzlichem lokalem Sync sinnvoll abzuschalten, sonst entstehen doppelte Commands im Picker | Owner |
 

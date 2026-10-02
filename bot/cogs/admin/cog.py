@@ -114,21 +114,31 @@ class AdminCog(BaseCog):
     @management_group.command(name="web", description="Link zur Web-Oberflaeche des Bots")
     @require_role(Level.MOD)
     async def web_cmd(self, interaction: discord.Interaction) -> None:
-        await interaction.response.send_message(web_link_message(), ephemeral=True)
+        amp_url = None
+        if settings.web_enabled and not settings.public_url and settings.amp_user:
+            from bot.core.amp_client import amp_client
+
+            try:
+                amp_url = await amp_client.own_web_url()
+            except Exception:
+                amp_url = None
+        await interaction.response.send_message(web_link_message(amp_url), ephemeral=True)
 
 
-def web_link_message() -> str:
-    """Antwort fuer /bot web - der Bot kennt seine von aussen erreichbare Adresse
-    nicht selbst (in Docker sieht er nur die Container-IP), sie kommt aus PUBLIC_URL."""
+def web_link_message(amp_url: str | None = None) -> str:
+    """Antwort fuer /bot web. Reihenfolge: PUBLIC_URL, sonst die Adresse, die AMP
+    fuer die eigene Instanz kennt - der Bot selbst sieht in Docker nur die Container-IP."""
     if not settings.web_enabled:
         return "Die Web-Oberfläche ist abgeschaltet (WEB_ENABLED)."
-    if not settings.public_url:
-        return (
-            f"Die Web-Oberfläche läuft auf Port {settings.web_port}, aber es ist noch keine Web-Adresse "
-            "eingetragen (in AMP: Konfiguration → Web-Oberfläche → Web-Adresse, z.B. "
-            f"`http://<IP des AMP-Servers>:{settings.web_port}`)."
-        )
-    return f"Web-Oberfläche: {settings.public_url}"
+    if settings.public_url:
+        return f"Web-Oberfläche: {settings.public_url}"
+    if amp_url:
+        return f"Web-Oberfläche: {amp_url}"
+    return (
+        f"Die Web-Oberfläche läuft auf Port {settings.web_port}, aber die Adresse ist unbekannt – "
+        f"aufrufen über `http://<IP des AMP-Servers>:{settings.web_port}` oder in AMP unter "
+        "Konfiguration → Web-Oberfläche die Web-Adresse eintragen."
+    )
 
 
 async def setup(bot: commands.Bot) -> None:

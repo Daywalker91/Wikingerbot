@@ -58,6 +58,23 @@ def own_instance_ids() -> set[str]:
     return {name.lower()} if name else set()
 
 
+def web_url_from_endpoints(endpoints: list[dict]) -> str | None:
+    """Erste brauchbare http-Adresse aus AMPs ApplicationEndpoints."""
+    for endpoint in endpoints:
+        uri = str(endpoint.get("Uri") or "")
+        address = str(endpoint.get("Endpoint") or "")
+        if uri.startswith(("http://", "https://")):
+            candidate = uri
+        elif address:
+            candidate = f"http://{address}"
+        else:
+            continue
+        host = candidate.split("://", 1)[1].split(":", 1)[0].split("/", 1)[0]
+        if host and host not in {"0.0.0.0", "127.0.0.1", "localhost", "::"}:
+            return candidate.rstrip("/")
+    return None
+
+
 @dataclass
 class DiscoveredInstance:
     instance_id: str
@@ -146,6 +163,25 @@ class AMPClient:
                     )
                 )
         return discovered
+
+    async def own_web_url(self) -> str | None:
+        """Adresse der eigenen Instanz laut AMP (Vorlage: Meta.EndpointURIFormat
+        http://{ip}:{port}) - fuer /bot web, wenn PUBLIC_URL fehlt. None, wenn AMP
+        keine brauchbare Adresse kennt (z.B. nur 0.0.0.0)."""
+        own = own_instance_ids()
+        if not own:
+            return None
+        controller = self._controller_client()
+        nodes = await _with_timeout(controller.api_call("ADSModule/GetInstances", {"ForceIncludeSelf": True}), DEFAULT_TIMEOUT)
+        if isinstance(nodes, dict) and "result" in nodes:
+            nodes = nodes["result"]
+        for node in nodes or []:
+            for instance in node.get("AvailableInstances", []):
+                ids = {str(instance.get("InstanceName", "")).lower(), str(instance.get("InstanceID", "")).lower()}
+                if not own & ids:
+                    continue
+                return web_url_from_endpoints(instance.get("ApplicationEndpoints") or [])
+        return None
 
     async def get_status(self, instance_id: str):
         return await _with_timeout(

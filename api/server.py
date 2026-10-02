@@ -67,6 +67,19 @@ def ensure_jwt_secret(path: Path = JWT_SECRET_FILE) -> None:
     log.info("Neues JWT-Secret erzeugt (%s).", path)
 
 
+def use_same_origin_urls() -> None:
+    """Seite und API kommen hier vom selben Host. Ohne PUBLIC_URL (und ohne einzeln
+    gesetzte Werte) werden die Entwicklungs-Standardwerte (localhost:5173/8000)
+    deshalb geleert: Weiterleitungen bleiben relativ, der Discord-Redirect wird
+    aus der aufgerufenen Adresse gebildet (api/routers/auth.py)."""
+    if settings.public_url:
+        return
+    if "frontend_url" not in settings.model_fields_set:
+        settings.frontend_url = ""
+    if "discord_redirect_uri" not in settings.model_fields_set:
+        settings.discord_redirect_uri = ""
+
+
 class _Server(uvicorn.Server):
     # Strg+C/SIGTERM behandelt bot/main.py fuer den ganzen Prozess - uvicorn soll
     # sich dort nicht dazwischenhaengen.
@@ -82,6 +95,7 @@ class WebServer:
 
     async def start(self) -> None:
         ensure_jwt_secret()
+        use_same_origin_urls()
         config = uvicorn.Config(
             build_app(),
             host=settings.web_host,

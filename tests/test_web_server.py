@@ -87,11 +87,39 @@ def test_web_link_message(monkeypatch):
 
     monkeypatch.setattr(settings, "web_enabled", True)
     monkeypatch.setattr(settings, "public_url", "")
-    assert "noch keine Web-Adresse" in web_link_message()
-    monkeypatch.setattr(settings, "public_url", "http://192.168.4.5:8765")
-    assert web_link_message() == "Web-Oberfläche: http://192.168.4.5:8765"
+    assert "Adresse ist unbekannt" in web_link_message()
+    assert web_link_message("http://192.168.4.5:8765") == "Web-Oberfläche: http://192.168.4.5:8765"
+    monkeypatch.setattr(settings, "public_url", "http://bot.example.org")
+    assert web_link_message("http://192.168.4.5:8765") == "Web-Oberfläche: http://bot.example.org"
     monkeypatch.setattr(settings, "web_enabled", False)
     assert "abgeschaltet" in web_link_message()
+
+
+def test_web_url_from_amp_endpoints():
+    from bot.core.amp_client import web_url_from_endpoints
+
+    assert web_url_from_endpoints([{"DisplayName": "App", "Endpoint": "192.168.4.5:8765", "Uri": "http://192.168.4.5:8765"}]) == "http://192.168.4.5:8765"
+    assert web_url_from_endpoints([{"Endpoint": "192.168.4.5:8765", "Uri": ""}]) == "http://192.168.4.5:8765"
+    assert web_url_from_endpoints([{"Endpoint": "0.0.0.0:8765", "Uri": "http://0.0.0.0:8765"}]) is None
+    assert web_url_from_endpoints([]) is None
+
+
+def test_login_redirect_derived_from_request_without_public_url(monkeypatch):
+    monkeypatch.setattr(settings, "public_url", "")
+    monkeypatch.setattr(settings, "discord_redirect_uri", "")
+    monkeypatch.setattr(settings, "discord_client_id", "123")
+    client = TestClient(server.build_app(), base_url="http://192.168.4.5:8765")
+
+    response = client.get("/api/auth/login?guild_id=1", follow_redirects=False)
+    location = response.headers["location"]
+    assert "redirect_uri=http%3A%2F%2F192.168.4.5%3A8765%2Fapi%2Fauth%2Fcallback" in location
+
+
+def test_login_redirect_fixed_when_set(monkeypatch):
+    monkeypatch.setattr(settings, "discord_redirect_uri", "https://bot.example.org/api/auth/callback")
+    client = TestClient(server.build_app(), base_url="http://192.168.4.5:8765")
+    location = client.get("/api/auth/login?guild_id=1", follow_redirects=False).headers["location"]
+    assert "redirect_uri=https%3A%2F%2Fbot.example.org%2Fapi%2Fauth%2Fcallback" in location
 
 
 def test_unresolved_port_placeholder_falls_back():

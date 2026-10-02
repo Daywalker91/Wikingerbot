@@ -77,12 +77,13 @@ Update als `webui.zip` vom Release [`webui`](https://github.com/Daywalker91/Wiki
 
 Einrichten:
 
-1. **Web-Adresse** in AMP eintragen, so wie der Browser den Bot erreicht, z.B.
-   `http://192.168.4.5:8765` (http genügt). Der Bot kann sie nicht selbst ermitteln – in Docker
-   sieht er nur die Container-IP. `/bot web` schickt dann den Link.
+1. Die Adresse ermittelt der Bot selbst: `/bot web` fragt AMP nach dem Link der Instanz (die
+   Vorlage zeigt ihn in AMP als `http://<IP>:<Port>` an), der Login nimmt die Adresse, mit der
+   die Seite aufgerufen wurde. **Web-Adresse** nur eintragen, wenn die Oberfläche unter einem
+   anderen Namen erreichbar ist (z.B. später eine Domain) – dann gilt sie für beides.
 2. Im [Discord Developer Portal](https://discord.com/developers/applications/) unter
-   **OAuth2 → Redirects** genau `<Web-Adresse>/api/auth/callback` eintragen, z.B.
-   `http://192.168.4.5:8765/api/auth/callback`.
+   **OAuth2 → Redirects** `<Adresse>/api/auth/callback` eintragen, z.B.
+   `http://192.168.4.5:8765/api/auth/callback` – für jede Adresse, über die angemeldet wird.
 3. **Client ID** und **Client Secret** (OAuth2-Seite) in AMP eintragen.
 4. Port in der Firewall nur freigeben, wenn die Oberfläche von außerhalb erreichbar sein soll.
 
