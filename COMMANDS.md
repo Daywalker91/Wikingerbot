@@ -222,3 +222,32 @@ Knöpfen – die Berechtigungsrollen des Bots (Mod/Admin/…). Braucht das Bot-R
 | `/rollen panel erstellen kanal: titel: text:` | Postet die Panel-Nachricht | Admin |
 | `/rollen panel knopf nachricht: rolle: beschriftung: emoji:` | Knopf hinzufügen (max. 25 pro Panel); `nachricht` = Link oder ID | Admin |
 | `/rollen panel entfernen nachricht: rolle:` | Knopf entfernen | Admin |
+
+---
+
+## `/musik` — Radio, eigene Dateien und Podcasts (`music`-Cog)
+
+Ersetzt Sinusbot. Bewusst **ohne** YouTube, Spotify und Aufnahme. Der Bot kommt
+in deinen Voice-Kanal; verlässt ihn von selbst, wenn niemand mehr zuhört oder 5
+Minuten nichts lief. Steuern (Pause, Skip, Stopp, Lautstärke) darf, wer im selben
+Voice-Kanal ist – Mods immer. Eigene Dateien gehören nach `data/music` (in AMP:
+Dateimanager → `Wikingerbot-main/data/music`), Unterordner sind Playlisten;
+erlaubt sind mp3, ogg, opus, flac, wav, m4a, aac.
+
+| Command | Beschreibung | Level |
+|---|---|---|
+| `/musik radio sender:` | Spielt einen eingetragenen Radiosender | Member |
+| `/musik datei datei:` | Spielt eine eigene Datei | Member |
+| `/musik ordner ordner: zufall:` | Reiht alle Dateien eines Ordners ein | Member |
+| `/musik podcast feed: folge:` | Spielt eine Podcast-Folge, ohne Auswahl die neueste | Member |
+| `/musik url url:` | Stream, .m3u/.pls oder Audiodatei von einer Adresse (keine internen Adressen) | Mod |
+| `/musik pause` · `weiter` · `skip` · `stopp` | Wiedergabe steuern; `stopp` leert die Warteschlange und verlässt den Kanal | im Kanal / Mod |
+| `/musik lautstaerke wert:` | 0–100, Standard 50 | im Kanal / Mod |
+| `/musik mischen` | Mischt die Warteschlange | im Kanal / Mod |
+| `/musik warteschlange` | Was läuft und was kommt | Member |
+| `/musikconfig sender_hinzufuegen name: url:` | Radiosender eintragen (Stream oder .m3u/.pls) | Admin |
+| `/musikconfig sender_entfernen name:` · `sender_liste` | Sender entfernen / anzeigen | Admin / Member |
+| `/musikconfig podcast_abonnieren name: url:` | Podcast per RSS-Feed eintragen | Admin |
+| `/musikconfig podcast_entfernen name:` | Podcast entfernen | Admin |
+| `/musikconfig podcast_ankuendigen name: kanal:` | Neue Folgen im Kanal ankündigen (Prüfung alle 30 min); ohne Kanal aus | Admin |
+| `/musikconfig dateien` | Zeigt Ordner und Anzahl der eigenen Dateien | Admin |
