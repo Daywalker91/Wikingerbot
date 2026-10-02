@@ -251,3 +251,19 @@ erlaubt sind mp3, ogg, opus, flac, wav, m4a, aac.
 | `/musikconfig podcast_entfernen name:` | Podcast entfernen | Admin |
 | `/musikconfig podcast_ankuendigen name: kanal:` | Neue Folgen im Kanal ankündigen (Prüfung alle 30 min); ohne Kanal aus | Admin |
 | `/musikconfig dateien` | Zeigt Ordner und Anzahl der eigenen Dateien | Admin |
+
+---
+
+## `/stats` — Server-Statistiken (`stats`-Cog)
+
+Zählt Beitritte, Austritte, Nachrichten und Voice-Zeit (ohne AFK-Kanal), je Tag in
+der Zeitzone Europe/Vienna. Gezählt wird **nur die Anzahl, nie der Inhalt**; Werte
+pro Mitglied werden nach 90 Tagen gelöscht (`/stats aufbewahrung`). Bots zählen
+nicht mit. Gespeichert wird einmal pro Minute.
+
+| Command | Beschreibung | Level |
+|---|---|---|
+| `/stats server tage:` | 📍 Übersicht: Mitglieder, Beitritte/Austritte, Nachrichten, Voice-Zeit, aktivster Tag, Top 5 | Member |
+| `/stats mitglied mitglied: tage:` | Nachrichten, Platz und Voice-Zeit eines Mitglieds (ohne Angabe: deine) | Member |
+| `/stats zaehler kanal: format:` | Kanalname zeigt die Mitgliederzahl, z.B. `👥 Mitglieder: {count}`; alle 10 min aktualisiert, ohne Kanal aus. Braucht das Bot-Recht **Kanäle verwalten** für diesen Kanal | Admin |
+| `/stats aufbewahrung tage:` | Wie lange Werte pro Mitglied gespeichert bleiben (7–730 Tage) | Admin |

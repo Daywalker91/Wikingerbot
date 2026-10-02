@@ -11,6 +11,7 @@ from db.models.whitelist import WhitelistRequest
 from db.models.config import GuildConfig
 from db.models.bot_setting import BotSetting
 from db.models.web_session import WebSession
+from db.models.stats import StatsDaily, StatsMemberDaily
 
 __all__ = [
     "Guild",
@@ -31,4 +32,6 @@ __all__ = [
     "GuildConfig",
     "BotSetting",
     "WebSession",
+    "StatsDaily",
+    "StatsMemberDaily",
 ]
