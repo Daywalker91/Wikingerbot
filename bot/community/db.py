@@ -58,6 +58,11 @@ users = Table(
     Column("discord_id", BigInteger, unique=True),
     Column("discord_name", String(100)),
     Column("discord_linked_at", DateTime),
+    # AMP-Zugang (Migration 009 der Seite): requested | active | denied | disabled | reset_requested
+    Column("amp_username", String(50)),
+    Column("amp_status", String(20)),
+    Column("amp_note", String(255)),
+    Column("amp_updated_at", DateTime),
 )
 
 roles = Table(
@@ -134,6 +139,43 @@ event_participants = Table(
     Column("user_id", Integer, primary_key=True),
     Column("status", String(10)),  # yes | maybe | no
     Column("updated_at", DateTime),
+)
+
+tickets = Table(
+    "tickets",
+    metadata,
+    Column("id", Integer, primary_key=True, autoincrement=True),
+    Column("user_id", Integer),
+    Column("subject", String(150)),
+    Column("category", String(30)),
+    Column("status", String(20), default="open"),  # open | in_progress | waiting | closed
+    Column("priority", String(10), default="normal"),
+    Column("assigned_to", Integer),
+    Column("created_at", DateTime),
+    Column("updated_at", DateTime),
+    Column("closed_at", DateTime),
+)
+
+ticket_messages = Table(
+    "ticket_messages",
+    metadata,
+    Column("id", Integer, primary_key=True, autoincrement=True),
+    Column("ticket_id", Integer),
+    Column("user_id", Integer),  # NULL = Systemmeldung
+    Column("body", Text),
+    Column("is_internal", SmallInteger, default=0),
+    Column("created_at", DateTime),
+)
+
+wiki_pages = Table(
+    "wiki_pages",
+    metadata,
+    Column("id", Integer, primary_key=True),
+    Column("slug", String(120)),
+    Column("title", String(120)),
+    Column("category", String(60)),
+    Column("body", Text),
+    Column("min_read_level", SmallInteger, default=0),
 )
 
 _engine: AsyncEngine | None = None

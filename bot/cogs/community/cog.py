@@ -152,7 +152,7 @@ class CommunityCog(BaseCog):
             return
         member = mitglied or interaction.user
         try:
-            site_user = await user_for_discord(member.id)
+            site_user = await user_for_discord(member.id, include_banned=True)
         except Exception:
             await interaction.response.send_message("Die Seite ist gerade nicht erreichbar.", ephemeral=True)
             return

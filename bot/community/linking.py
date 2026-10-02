@@ -40,11 +40,14 @@ def _to_user(row) -> SiteUser:
     return SiteUser(id=row[0], username=row[1], discord_id=row[2], role_name=row[3], role_slug=row[4])
 
 
-async def user_for_discord(discord_id: int) -> SiteUser | None:
+async def user_for_discord(discord_id: int, *, include_banned: bool = False) -> SiteUser | None:
+    """Verknuepftes Konto. Auf der Seite gesperrte Konten zaehlen fuer Aktionen
+    (Tickets, Zusagen, ...) als nicht verknuepft - nur Anzeigen (include_banned)."""
+    query = _user_query().where(users.c.discord_id == discord_id, users.c.deleted_at.is_(None))
+    if not include_banned:
+        query = query.where(users.c.is_banned == 0)
     async with session() as db:
-        row = (
-            await db.execute(_user_query().where(users.c.discord_id == discord_id, users.c.deleted_at.is_(None)))
-        ).first()
+        row = (await db.execute(query)).first()
     return _to_user(row) if row else None
 
 
@@ -100,7 +103,7 @@ async def link_with_code(code: str, discord_id: int, discord_name: str) -> SiteU
 
 async def unlink_discord(discord_id: int) -> SiteUser | None:
     """Loest die Verknuepfung von Discord aus. Gibt das bisher verknuepfte Konto zurueck."""
-    user = await user_for_discord(discord_id)
+    user = await user_for_discord(discord_id, include_banned=True)
     if user is None:
         return None
     async with session() as db:

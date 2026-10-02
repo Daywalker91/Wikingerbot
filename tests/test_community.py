@@ -94,6 +94,16 @@ async def test_discord_account_already_linked_elsewhere(site):
         await link_with_code("BBBBBBBB", 4242, "ragnar")
 
 
+async def test_banned_linked_account_cannot_act(site):
+    await add_code(1, "AAAAAAAA")
+    await link_with_code("AAAAAAAA", 4242, "ragnar")
+    async with community_db.session() as db:
+        await db.execute(users.update().where(users.c.id == 1).values(is_banned=1))
+        await db.commit()
+    assert await user_for_discord(4242) is None  # fuer Tickets, Zusagen, ...
+    assert (await user_for_discord(4242, include_banned=True)).username == "Ragnar"  # fuer /profil
+
+
 async def test_unlink(site):
     await add_code(1, "AAAAAAAA")
     await link_with_code("AAAAAAAA", 4242, "ragnar")

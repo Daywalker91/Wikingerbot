@@ -354,3 +354,28 @@ Recht **Events verwalten**. Kanal, Ping-Rolle und natives Event stellst du im Ta
 | Command | Beschreibung | Level |
 |---|---|---|
 | `/events` | Die nächsten fünf Events mit Termin und Link | Member |
+
+---
+
+## Tickets der Community-Seite (`tickets`-Cog, Tab *Tickets*)
+
+Voll gespiegelt zwischen Seite und Discord:
+
+- Jedes Ticket bekommt einen **Thread im Staff-Kanal** (Textkanal oder Forum). Die
+  Startnachricht zeigt Status, Kategorie, Mitglied und Zuständigen und hat die Knöpfe
+  **Übernehmen**, **Schließen**, **Wieder öffnen**.
+- Alles aus dem Verlauf der Seite erscheint im Thread (interne Notizen mit 🔒,
+  Statuswechsel als Systemzeile). Was der Support im Thread schreibt, landet als
+  Antwort auf der Seite; eine Nachricht, die mit `!intern` beginnt, wird interne
+  Notiz. ✅/🔒 als Reaktion = übertragen.
+- Das Mitglied bekommt Antworten des Supports und das Schließen **per DM** – mit
+  einem Knopf **Antworten**, der direkt ins Ticket schreibt.
+- Regeln wie auf der Seite: Antwortet der Support, wartet das Ticket auf das
+  Mitglied; antwortet das Mitglied, ist es wieder offen; wer zuerst antwortet,
+  übernimmt. Bearbeiten darf, wer auf der Seite *Tickets verwalten* hat.
+- Wer schreibt oder klickt, muss mit der Seite verknüpft sein. Auf der Seite
+  gesperrte Konten können über Discord nichts tun.
+
+| Command | Beschreibung | Level |
+|---|---|---|
+| `/ticket kategorie:` | Öffnet ein Formular für ein neues Ticket (nur verknüpft, max. 3 in 10 min) | Member |
