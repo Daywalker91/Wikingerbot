@@ -167,6 +167,88 @@ class MusicCog(BaseCog):
             text = f"➕ {added} Titel eingereiht" + (" (Rest passte nicht mehr)" if added < len(tracks) else "")
         await interaction.followup.send(text, allowed_mentions=discord.AllowedMentions.none())
 
+    # --- Fuer die Web-Oberflaeche (bot/cogs/music/api.py) ----------------------------
+
+    async def resolve_tracks(
+        self, guild_id: int, kind: str, name: str, user_id: int, *, episode: int = 0, shuffle: bool = False
+    ) -> list[Track]:
+        """Quelle -> Titel, wie bei den Slash-Commands. SourceError mit Meldung fuer den Nutzer."""
+        if kind == "radio":
+            stations = await _get_json(guild_id, "music_stations")
+            if name not in stations:
+                raise SourceError("Diesen Sender gibt es nicht.")
+            return [Track(f"Radio: {name}", await resolve_stream_url(stations[name]), "stream", user_id, "Radio")]
+        if kind == "file":
+            path = safe_music_path(name)
+            if not path.is_file():
+                raise SourceError("Datei nicht gefunden.")
+            return [Track(title_from_path(name), str(path), "file", user_id, "Datei")]
+        if kind == "folder":
+            files = files_in_folder(name)
+            if not files:
+                raise SourceError("In diesem Ordner liegen keine Audiodateien.")
+            if shuffle:
+                import random
+
+                random.shuffle(files)
+            return [Track(title_from_path(f), str(safe_music_path(f)), "file", user_id, "Datei") for f in files]
+        if kind == "podcast":
+            feeds = await _get_json(guild_id, "podcast_feeds")
+            if name not in feeds:
+                raise SourceError("Diesen Podcast gibt es nicht.")
+            parsed = await fetch_feed(feeds[name]["url"])
+            if not 0 <= episode < len(parsed.episodes):
+                raise SourceError("Diese Folge gibt es nicht (mehr).")
+            item = parsed.episodes[episode]
+            await check_public_url(item.url)
+            return [Track(f"{parsed.title}: {item.title}", item.url, "stream", user_id, "Podcast")]
+        raise SourceError("Unbekannte Quelle.")
+
+    async def start_tracks(self, guild: discord.Guild, channel: discord.VoiceChannel, tracks: list[Track]) -> int:
+        """Verbinden, einreihen, ggf. starten. Gibt die Zahl eingereihter Titel zurueck."""
+        await self._connect(guild, channel)
+        added = self._player(guild.id).add(*tracks)
+        await self._play_next(guild.id)
+        return added
+
+    def state(self, guild: discord.Guild) -> dict:
+        player = self._player(guild.id)
+        voice = guild.voice_client
+        def track(t: Track | None):
+            return {"title": t.title, "label": t.label} if t else None
+        return {
+            "connected": voice is not None,
+            "channel_id": str(voice.channel.id) if voice else None,
+            "channel_name": voice.channel.name if voice else None,
+            "paused": bool(voice and voice.is_paused()),
+            "current": track(player.current),
+            "queue": [track(t) for t in list(player.queue)[:50]],
+            "queue_length": len(player.queue),
+            "volume": round(player.volume * 100),
+        }
+
+    async def control(self, guild: discord.Guild, action: str, value: int | None = None) -> None:
+        voice = guild.voice_client
+        player = self._player(guild.id)
+        if action == "volume" and value is not None:
+            volume = player.set_volume(value)
+            if voice and isinstance(voice.source, discord.PCMVolumeTransformer):
+                voice.source.volume = volume
+            return
+        if voice is None:
+            raise SourceError("Ich spiele gerade nichts.")
+        if action == "pause" and voice.is_playing():
+            voice.pause()
+        elif action == "resume" and voice.is_paused():
+            voice.resume()
+        elif action == "skip":
+            voice.stop()
+        elif action == "shuffle":
+            player.shuffle()
+        elif action == "stop":
+            player.clear()
+            await voice.disconnect()
+
     async def _is_mod(self, interaction: discord.Interaction) -> bool:
         member = interaction.user
         if not isinstance(member, discord.Member):

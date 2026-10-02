@@ -28,7 +28,15 @@ export async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> 
   });
 
   if (!response.ok) {
-    throw new ApiError(response.status, `${init?.method ?? "GET"} ${path} -> ${response.status}`);
+    // FastAPI liefert {"detail": "..."} - die Meldung ist fuer den Nutzer gedacht
+    let message = `${init?.method ?? "GET"} ${path} -> ${response.status}`;
+    try {
+      const body = (await response.json()) as { detail?: unknown };
+      if (typeof body.detail === "string") message = body.detail;
+    } catch {
+      // kein JSON - Standardmeldung behalten
+    }
+    throw new ApiError(response.status, message);
   }
 
   if (response.status === 204) {
