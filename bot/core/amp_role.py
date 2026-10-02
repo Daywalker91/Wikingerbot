@@ -77,6 +77,9 @@ class RoleReport:
     no_admin_rights: bool = False
     # Name -> ID aller AMP-Rollen, soweit lesbar (fuer die AMP-Konten zwischengespeichert)
     roles: dict[str, str] = field(default_factory=dict)
+    # Woran es lag (Schritt + Meldung von AMP) - fuer die Fehlersuche im Log
+    no_admin_detail: str = ""
+    is_super_admin: bool = False
 
 
 def parse_node(entry: str) -> tuple[str, bool]:
@@ -139,6 +142,11 @@ def unknown_nodes(desired: list[str], known: set[str]) -> list[str]:
 CoreCall = Callable[..., Awaitable]
 
 
+def _first_line(error: Exception) -> str:
+    text = str(error).strip()
+    return text.splitlines()[0][:300] if text else type(error).__name__
+
+
 def is_permission_error(error: Exception) -> bool:
     text = str(error).lower()
     return "unauthorized" in text or "permission" in text
@@ -156,6 +164,7 @@ async def ensure_bot_role(core_call: CoreCall, amp_user: str, *, keep_super_admi
         if not is_permission_error(error):
             raise
         report.no_admin_rights = True
+        report.no_admin_detail = f"Benutzerdaten lesen (GetAMPUserInfo): {_first_line(error)}"
         return report
     if not isinstance(user, dict) or not user.get("ID"):
         report.skipped_reason = f"AMP-Benutzer '{amp_user}' nicht gefunden"
@@ -169,10 +178,12 @@ async def ensure_bot_role(core_call: CoreCall, amp_user: str, *, keep_super_admi
         if not is_permission_error(error):
             raise
         report.no_admin_rights = True
+        report.no_admin_detail = f"Rollen lesen (GetRoleIds): {_first_line(error)}"
         return report
     report.roles = dict(roles)
     super_id = roles.get(SUPER_ADMIN_ROLE)
     is_super = super_id is not None and super_id in user_roles
+    report.is_super_admin = is_super
     role_id = roles.get(ROLE_NAME)
 
     # Ohne Super Admin: nur pruefen und melden
@@ -189,6 +200,10 @@ async def ensure_bot_role(core_call: CoreCall, amp_user: str, *, keep_super_admi
             if not is_permission_error(error):
                 raise
             report.no_admin_rights = True
+            report.no_admin_detail = (
+                f"nicht Super Admin laut AMP (Rollen des Benutzers: {', '.join(sorted(user_roles)) or 'keine'}; "
+                f"'{SUPER_ADMIN_ROLE}' = {super_id or 'unbekannt'}), Rollenrechte lesen: {_first_line(error)}"
+            )
             return report
         report.missing_without_super_admin = [
             ("" if enabled else "-") + node for node, enabled in plan_permission_changes(current, DESIRED_PERMISSIONS)
@@ -239,6 +254,8 @@ def log_report(report: RoleReport, amp_user: str) -> None:
             "Fehlt dem Bot in AMP etwas, '%s' einmalig '%s' geben, er ergaenzt beim naechsten Start selbst.",
             amp_user, SUPER_ADMIN_ROLE,
         )
+        if report.no_admin_detail:
+            log.info("AMP-Rolle: Grund: %s", report.no_admin_detail)
         return
     if report.created_role:
         log.info("AMP-Rolle '%s' angelegt.", ROLE_NAME)
