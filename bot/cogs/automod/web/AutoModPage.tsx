@@ -216,7 +216,7 @@ export default function AutoModPage() {
                   style={{ width: 320, background: "var(--wb-bg)", color: "var(--wb-text)", border: "1px solid var(--wb-border)", borderRadius: 4 }}
                   value={allowText}
                   onChange={(e) => setAllowText(e.target.value)}
-                  placeholder={"youtube.com\nwikinger.ipv64.net"}
+                  placeholder={"youtube.com\ncommunity.example.com"}
                 />
               </div>
             )}

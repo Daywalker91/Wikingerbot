@@ -81,7 +81,7 @@ def use_same_origin_urls() -> None:
 
 
 def forwarded_allow_ips() -> list[str] | str:
-    """TRUSTED_PROXIES als Liste fuer uvicorn (IPs oder Netze wie 10.42.0.0/16).
+    """TRUSTED_PROXIES als Liste fuer uvicorn (IPs oder Netze wie 192.0.2.0/24).
     Leer: jedem glauben - bequem im eigenen Netz, aber dann kann jeder, der den
     Port direkt erreicht, sich per X-Forwarded-Proto als https ausgeben."""
     entries = [e.strip() for e in settings.trusted_proxies.split(",") if e.strip()]

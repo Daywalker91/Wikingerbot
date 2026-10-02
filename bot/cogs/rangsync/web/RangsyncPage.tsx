@@ -34,7 +34,7 @@ export default function RangsyncPage() {
   const load = useCallback(async () => {
     const loaded = await getRangsync();
     setData(loaded);
-    // Vorschlag aus der Rechte-Matrix uebernehmen, solange nichts gewaehlt ist
+    // Vorschlag (gleichnamige Discord-Rolle) uebernehmen, solange nichts gewaehlt ist
     setRanks(loaded.ranks.map((r) => ({ ...r, role_id: r.role_id ?? (r.is_king ? null : r.suggested_role_id) })));
     setEnabled(loaded.enabled);
     setOwner(loaded.ticket_owner);
@@ -135,7 +135,7 @@ export default function RangsyncPage() {
             })}
           </tbody>
         </table>
-        <p style={muted}>Vorbelegt nach der Rechte-Matrix (Member, Mod, Admin) – bitte prüfen und speichern.</p>
+        <p style={muted}>Vorbelegt mit gleichnamigen Discord-Rollen (Member, Mod, Admin), falls vorhanden – bitte prüfen und speichern.</p>
 
         <div style={{ margin: "12px 0" }}>
           System-Tickets (z.B. Discord-Bann) eröffnen im Namen von:{" "}

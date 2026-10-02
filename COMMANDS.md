@@ -257,7 +257,7 @@ erlaubt sind mp3, ogg, opus, flac, wav, m4a, aac.
 ## `/stats` — Server-Statistiken (`stats`-Cog)
 
 Zählt Beitritte, Austritte, Nachrichten und Voice-Zeit (ohne AFK-Kanal), je Tag in
-der Zeitzone Europe/Vienna. Gezählt wird **nur die Anzahl, nie der Inhalt**; Werte
+der Zeitzone aus `TIMEZONE` (Standard Europe/Berlin). Gezählt wird **nur die Anzahl, nie der Inhalt**; Werte
 pro Mitglied werden nach 90 Tagen gelöscht (`/stats aufbewahrung`). Bots zählen
 nicht mit. Gespeichert wird einmal pro Minute.
 
@@ -386,7 +386,7 @@ Voll gespiegelt zwischen Seite und Discord:
 
 Keine Befehle – läuft im Hintergrund, sobald im Tab eingeschaltet. Pro Rang der
 Seite eine Discord-Rolle und eine Richtung (beide / nur Discord → Seite / nur Seite
-→ Discord / aus); vorbelegt nach der Rechte-Matrix.
+→ Discord / aus); vorbelegt mit gleichnamigen Discord-Rollen (Member, Mod, Admin), falls vorhanden.
 
 - **Seite → Discord**: Rang auf der Seite geändert oder neu verknüpft → das Mitglied
   bekommt die Rolle seines Rangs, die Rollen der anderen gesyncten Ränge werden

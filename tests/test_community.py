@@ -186,10 +186,10 @@ async def test_cog_loads_with_community_db(site):
 
 
 def test_url_for_uses_bot_db_server_and_user(monkeypatch):
-    monkeypatch.setattr(settings, "db_host", "10.0.0.107")
+    monkeypatch.setattr(settings, "db_host", "192.0.2.10")
     monkeypatch.setattr(settings, "db_user", "wikingerbot")
     monkeypatch.setattr(settings, "db_password", "p#w")
-    assert community_db._url_for("php") == "mysql+asyncmy://wikingerbot:p%23w@10.0.0.107:3306/php"
+    assert community_db._url_for("php") == "mysql+asyncmy://wikingerbot:p%23w@192.0.2.10:3306/php"
     assert community_db._url_for("") == ""
     monkeypatch.setattr(settings, "db_host", "")
     assert community_db._url_for("php") == ""  # ohne DB_HOST keine Anbindung

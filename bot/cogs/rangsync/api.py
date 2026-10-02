@@ -15,7 +15,8 @@ from db.models.role import Level
 
 router = APIRouter(prefix="/rangsync", tags=["rangsync"])
 
-# Vorschlag aus der Rechte-Matrix: Rang -> Name der Discord-Rolle
+# Standardvorschlag fuer die mitgelieferten Raenge: Rang -> Name der Discord-Rolle
+# (passt eine gleichnamige Rolle, wird sie vorbelegt)
 SUGGESTED_ROLE_NAMES = {"karl": "member", "huskarl": "mod", "jarl": "admin", "konig": "owner"}
 
 

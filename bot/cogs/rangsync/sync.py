@@ -7,7 +7,7 @@ Pro Rang: eine Discord-Rolle und eine Richtung
   to_discord  nur Seite -> Discord
   off         gar nicht (z.B. Koenig - bleibt Handarbeit)
 
-Regeln (abgestimmt):
+Regeln:
 - Koenig wird nie automatisch vergeben, ein Koenig auf der Seite nie automatisch geaendert.
 - Seite -> Discord nur, wenn der Rang des Mitglieds Richtung both/to_discord hat;
   dann bekommt es die Rolle seines Rangs, die Rollen der anderen so gesyncten
@@ -27,7 +27,8 @@ from bot.core.guild_config import get_config, set_config
 
 CONFIG_KEY = "rangsync_map"
 DIRECTIONS = ("both", "to_site", "to_discord", "off")
-# Vorschlag aus der Rechte-Matrix; die Discord-Rollen waehlt man im Tab
+# Standardvorschlag fuer die mitgelieferten Raenge der Community-Seite; die
+# Discord-Rollen waehlt man im Tab
 DEFAULT_DIRECTIONS = {"thrall": "both", "karl": "both", "huskarl": "both", "jarl": "to_site", "konig": "off"}
 KING_SLUGS = {"konig", "koenig", "king"}
 

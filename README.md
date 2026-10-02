@@ -1,5 +1,6 @@
 # WikingerBot — Projektdokumentation
-*Eigener Discord Bot für den Wikinger Server*
+*Discord-Bot für Gaming-Communities: AMP-Gameserver steuern, Moderation, Musik, Statistik –
+optional gekoppelt an eine eigene Community-Webseite.*
 
 > Für die einmaligen Setup-Schritte (Discord-Bot anlegen, einladen, Rollen-Hierarchie) siehe [SETUP.md](SETUP.md).
 > Für eine vollständige Liste aller Slash-Commands mit Beschreibung und benötigtem Berechtigungslevel siehe [COMMANDS.md](COMMANDS.md).
@@ -16,14 +17,25 @@
 | Phase 2 | `amp`-Cog, `moderation`-Cog, `whitelist`-Cog | ✅ fertig |
 | — | Konsolen-Filter (Blacklist/Whitelist) + Event-Kanal für den `amp`-Cog | ✅ fertig |
 | — | `banner`-Cog (Embed/Bild-Banner, Steam-Artwork, Banner-Gruppen, Editor-UI) | ✅ fertig |
-| Phase 3 | React-WebUI | ✅ läuft in AMP im Bot-Prozess (https über das Edge-Gateway): Dashboard, Server, Moderation, Whitelist, Einstellungen, Musik, Begrüßung; Benutzer-Seite offen |
+| Phase 3 | React-WebUI | ✅ läuft im Bot-Prozess (optional https über einen Reverse-Proxy): Dashboard, Server, Moderation, Whitelist, Einstellungen und je ein Tab pro Cog; Benutzer-Seite offen |
 | — | Betrieb in AMP: eigene Vorlage, Migrationen beim Start, MariaDB getestet ([AMP.md](AMP.md)) | ✅ fertig |
 | Phase 4 | `welcome`, `roles`, `music`, `stats`, `automod` | ✅ fertig (Tests ohne Discord; live in Discord noch zu prüfen) |
 | Phase 5 | Kopplung mit der Community-Seite als eigene, abschaltbare Cogs | 🔜 `community` (Verknüpfen, Auftrags-Abholung), `news`, `events`, `tickets`, `rangsync`, `wiki` und `ampkonten` fertig |
 
-Phase 1–3 sind gegen einen echten AMP-Server und einen Test-Discord-Server live verifiziert (nicht nur Unit-Tests). Die Phase-4-Cogs sind mit Unit-Tests abgesichert (Befehle laden, Regeln, Datenbank, echter FFmpeg-Lauf), aber noch nicht in Discord ausprobiert.
+Phase 1–3 sind gegen einen echten AMP-Server und einen Discord-Server live erprobt (nicht nur Unit-Tests). Die Cogs aus Phase 4 und 5 sind mit Unit-Tests abgesichert (Befehle laden, Regeln, Datenbank, echter FFmpeg-Lauf, nachgebaute Discord-/AMP-/Seiten-Gegenstellen); im Betrieb erprobt sind davon bisher die Anbindung und Verknüpfung.
 
 Grundsatz: Der Bot läuft auch **ohne** die Community-Seite – alles, was mit ihr zusammenarbeitet, kommt in eigene Cogs, die man weglassen kann.
+
+### Community-Seite (optional)
+
+Die Community-Cogs (`community`, `news`, `events`, `tickets`, `rangsync`, `wiki`, `ampkonten`)
+arbeiten mit einer Community-Webseite zusammen – über deren Datenbank, nicht über HTTP: Die Seite
+schreibt Aufträge in eine Tabelle `bot_outbox`, der Bot holt sie ab und schreibt nur in wenige,
+spaltengenau freigegebene Tabellen zurück. Erwartet wird das Datenbankschema der zugehörigen
+PHP-Community-Seite (eigenes Projekt; Tabellen wie `users`, `roles`, `news`, `events`, `tickets`,
+`wiki_pages` und die Migrationen `008_discord`/`009_amp_zugang`). Die nötigen Datenbank-Rechte
+stehen in [docs/community-grants.sql](docs/community-grants.sql), die Einrichtung in
+[AMP.md](AMP.md#community-seite-anbinden-optional). Ohne Seite bleiben diese Cogs untätig.
 
 ---
 
@@ -46,11 +58,11 @@ Ablösung von GatekeeperV2, Red Discord Bot und Sinusbot durch einen einheitlich
 | Discord Library | discord.py | Größte Community, beste Dokumentation |
 | REST API / Backend | FastAPI | Async-nativ, automatische API-Docs, sauber trennbar |
 | WebUI Frontend | React | Modern, erweiterbar, bereits bekannt |
-| Datenbank (Prod) | MariaDB | Läuft bereits in k3s |
+| Datenbank (Prod) | MariaDB / MySQL | Für den Betrieb empfohlen |
 | Datenbank (Dev) | SQLite | Einfach, kein Overhead lokal |
 | ORM | SQLAlchemy (async) | Unterstützt MariaDB und SQLite, Datenbankwechsel einfach |
 | AMP Integration | ampapi (Python) | Offizieller Wrapper für CubeCoders AMP REST API |
-| Hosting | k3s oder AMP-Instanz | Beides möglich |
+| Hosting | AMP-Instanz (fertige Vorlage) oder eigener Server | siehe *Hosting* |
 
 ---
 
@@ -93,8 +105,7 @@ flowchart TB
 
 ## Ordnerstruktur
 
-Tatsächlicher aktueller Stand (Phase 1–4). `docker/`, `k8s/` aus der ursprünglichen Planung existieren
-noch nicht.
+Aktueller Stand.
 
 Ein Cog kann optional `api.py` (FastAPI-Router) und/oder `web/` (React-
 Seite) mitbringen — beides wird automatisch eingesammelt, siehe
@@ -118,6 +129,7 @@ Wikingerbot/
 │   │   ├── bot_settings.py     # BotSetting get/set (globale, nicht guild-gebundene Schalter)
 │   │   ├── steam_art.py        # Steam-Store-Artwork ueber die App-ID (aus AMPs DisplayImageSource) - von amp+banner-Cog genutzt
 │   │   └── discord_utils.py    # send_temp_followup (auto-loeschende Ephemeral-Replies)
+│   ├── community/              # gemeinsam fuer die Community-Cogs: Seiten-DB, Outbox-Verteiler, Verknuepfung, System-Tickets
 │   └── cogs/
 │       ├── admin/cog.py        # /bot cog ..., /bot sync, /bot sync_on_startup
 │       ├── amp/
@@ -144,7 +156,6 @@ Wikingerbot/
 │           ├── image.py         # Pillow-Rendering der Bild-Banner-Variante
 │           └── embed.py         # Embed-Rendering der Embed-Banner-Variante
 │
-├── bot/community/               # gemeinsam fuer die Community-Cogs: Seiten-DB, Outbox-Verteiler, Verknuepfung
 ├── api/                         # FastAPI Backend
 │   ├── main.py                  # CORS, sammelt Cog-Router ein
 │   ├── cog_routers.py           # discover_cog_routers() - analog zu discover_cogs() fuer Discord-Cogs
@@ -168,6 +179,7 @@ Wikingerbot/
 │   ├── models/                   # siehe Datenbankschema oben
 │   └── migrations/               # Alembic
 │
+├── docs/                        # Plaene, community-grants.sql
 ├── tests/
 ├── package.json                 # Node-Root (siehe Hinweis oben zu node_modules)
 ├── .env.example
@@ -179,9 +191,7 @@ Wikingerbot/
 └── requirements.txt
 ```
 
-**Noch nicht existent** (Phase 4): `docker/`, `k8s/` — sobald die
-tatsächliche Hosting-Umsetzung beginnt, werden sie analog zur
-ursprünglichen Planung ergänzt.
+**Noch nicht vorhanden:** fertige Dateien für Docker/Kubernetes (siehe *Hosting*).
 
 ---
 
@@ -247,6 +257,9 @@ der Tabellen:
 | `GuildConfig` | `config.py` | Key-Value-Konfiguration pro Guild |
 | `BotSetting` | `bot_setting.py` | Key-Value-Konfiguration global (nicht guild-gebunden), z.B. `sync_globally_on_startup` |
 | `WebSession` | `web_session.py` | Refresh-Tokens für den WebUI-Login (Phase 3, noch ungenutzt) |
+| `StatsDaily` / `StatsMemberDaily` | `stats.py` | Tageszähler der Statistik (nur Anzahlen) |
+| `CommunityPost` | `community_post.py` | Welche Discord-Nachricht/welcher Thread zu welchem Beitrag der Community-Seite gehört |
+| `AmpAccount` | `amp_account.py` | Vom Bot angelegte AMP-Konten (nur diese fasst er an) |
 
 ---
 
@@ -357,21 +370,18 @@ einziger Berührungspunkt sind die beiden Ports plus `cors_origins`/
 
 ## Hosting
 
-### Option A — k3s (empfohlen)
-```yaml
-# 3 Deployments:
-# - wikingerbot-discord   (Bot Core)
-# - wikingerbot-api       (FastAPI)
-# - wikingerbot-web       (React via nginx)
-# + MariaDB bereits vorhanden
-```
-
-### Option B — AMP-Instanz (umgesetzt)
-Eigene AMP-Vorlage nach dem Vorbild von GatekeeperV2 im Repo
+### AMP-Instanz (empfohlen, fertige Vorlage)
+AMP-Vorlage nach dem Vorbild von GatekeeperV2 im Repo
 [Daywalker91/AMPTemplate](https://github.com/Daywalker91/AMPTemplate): Code als ZIP von
 `main`, eigenes venv, Einstellungen als Eingabefelder in AMP (AMP schreibt daraus die
 `.env`), Datenbank-Migrationen beim Start. Anleitung: [AMP.md](AMP.md).
 Die Web-Oberfläche läuft im selben Prozess mit; das gebaute Frontend kommt per GitHub Action als `webui.zip`.
+
+### Eigener Server
+Ein Prozess genügt: `python -m bot.main` mit einer `.env` (Vorlage: [.env.example](.env.example))
+startet Bot und Web-Oberfläche (`WEB_PORT`). Das Frontend vorher mit `npm run build` bauen oder
+`webui.zip` aus dem Release [`webui`](https://github.com/Daywalker91/Wikingerbot/releases/tag/webui)
+nach `web/dist` entpacken. Fertige Docker-/Kubernetes-Dateien gibt es (noch) nicht.
 
 ---
 
@@ -390,15 +400,17 @@ Die Web-Oberfläche läuft im selben Prozess mit; das gebaute Frontend kommt per
 - Banner Cog (Embed/Bild, Steam-Artwork, Banner-Gruppen, Editor-UI)
 
 **Phase 3 — WebUI** ✅
-- Dashboard, Server, Moderation, Whitelist, Einstellungen, Musik, Begrüßung
-- Betrieb in AMP im Bot-Prozess, https über das Edge-Gateway
+- Dashboard, Server, Moderation, Whitelist, Einstellungen und je ein Tab pro Cog
+- Betrieb im Bot-Prozess, optional https über einen Reverse-Proxy
 - offen: Benutzer-Seite
 
 **Phase 4 — Erweiterungen** ✅
 - welcome, roles, music, stats, automod
 
-**Phase 5 — Community-Seite** (offen)
-- `community` (Konto-Verknüpfung, Aufträge der Seite), Rollen-Sync, `tickets`, `news`, `events`
+**Phase 5 — Community-Seite** ✅
+- `community` (Konto-Verknüpfung, Aufträge der Seite), `news`, `events`, `tickets`, `rangsync`, `wiki`, `ampkonten`
+
+**Geplant** – mehrere Discord-Server mit je eigener Community-Seite: [docs/PLAN_MEHRERE_SERVER.md](docs/PLAN_MEHRERE_SERVER.md)
 
 ---
 

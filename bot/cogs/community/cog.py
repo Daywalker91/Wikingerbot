@@ -78,7 +78,7 @@ class CommunityCog(BaseCog):
         await self.bot.wait_until_ready()
 
     async def _on_site_unlinked(self, payload: dict) -> None:
-        # Rollen bleiben bewusst, wie sie sind (abgestimmt) - nur fuer andere Cogs melden
+        # Rollen bleiben bewusst, wie sie sind - nur fuer andere Cogs melden
         discord_id = int(payload.get("discord_id") or 0)
         if discord_id:
             self.bot.dispatch("community_unlink", discord_id, int(payload.get("user_id") or 0))

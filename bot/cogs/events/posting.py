@@ -7,13 +7,13 @@ fuer verknuepfte Mitglieder mit dem Recht events.join, mit denselben Regeln wie
 auf der Seite (Limit zaehlt nur feste Zusagen, keine Zusagen fuer abgesagte oder
 vergangene Events).
 
-Zeiten: Die Seite speichert Event-Zeiten ohne Zeitzone in Europe/Berlin.
+Zeiten: Die Seite speichert Event-Zeiten ohne Zeitzone in ihrer Ortszeit (TIMEZONE).
 """
 
 import logging
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
-from zoneinfo import ZoneInfo
+from bot.core.timezone import community_timezone
 
 import discord
 from sqlalchemy import delete, func, insert, select, update
@@ -29,7 +29,7 @@ log = logging.getLogger("wikingerbot.events")
 
 KIND = "event"
 NATIVE_KIND = "event_native"  # message_id = ID des nativen Discord-Events
-SITE_TZ = ZoneInfo("Europe/Berlin")
+SITE_TZ = community_timezone()
 DEFAULT_DURATION = timedelta(hours=3)  # wie auf der Seite, wenn kein Ende angegeben ist
 COLOR = 0x5FA8A0
 ANSWERS = {"yes": ("✅", "Dabei"), "maybe": ("❔", "Vielleicht"), "no": ("❌", "Nicht dabei")}

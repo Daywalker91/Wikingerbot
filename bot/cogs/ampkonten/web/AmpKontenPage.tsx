@@ -66,7 +66,7 @@ export default function AmpKontenPage() {
         <label>
           Adresse des AMP-Panels für die DM
           <br />
-          <input style={{ width: "100%", maxWidth: 420 }} value={url} onChange={(e) => setUrl(e.target.value)} placeholder="https://amp.wikinger.ipv64.net" />
+          <input style={{ width: "100%", maxWidth: 420 }} value={url} onChange={(e) => setUrl(e.target.value)} placeholder="https://amp.example.com" />
         </label>
 
         <table style={{ width: "100%", borderCollapse: "collapse", marginTop: 16 }}>

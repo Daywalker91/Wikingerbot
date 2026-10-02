@@ -56,12 +56,12 @@ def test_parse_feed_rejects_garbage_and_entity_bombs():
 
 def test_is_public_ip():
     assert is_public_ip("1.1.1.1")
-    for address in ("10.0.0.5", "192.168.4.5", "127.0.0.1", "169.254.1.1", "::1", "fd00::1", "224.0.0.1"):
+    for address in ("10.0.0.5", "192.168.1.5", "127.0.0.1", "169.254.1.1", "::1", "fd00::1", "224.0.0.1"):
         assert not is_public_ip(address), address
 
 
 async def test_check_public_url_blocks_internal_and_other_schemes():
-    for url in ("http://127.0.0.1/x", "http://localhost/x", "http://10.0.0.107:3306/", "file:///etc/passwd", "ftp://x/y"):
+    for url in ("http://127.0.0.1/x", "http://localhost/x", "http://10.0.0.10:3306/", "file:///etc/passwd", "ftp://x/y"):
         with pytest.raises(SourceError):
             await check_public_url(url)
 

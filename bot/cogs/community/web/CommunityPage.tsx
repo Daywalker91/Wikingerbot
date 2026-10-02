@@ -95,7 +95,7 @@ export default function CommunityPage() {
             style={{ width: "100%", maxWidth: 420 }}
             value={siteUrl}
             onChange={(e) => setSiteUrl(e.target.value)}
-            placeholder="https://wikinger.ipv64.net"
+            placeholder="https://community.example.com"
           />
         </label>
         <button disabled={busy} onClick={() => void save()}>

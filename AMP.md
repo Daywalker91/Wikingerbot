@@ -19,10 +19,10 @@ Alle Einstellungen (Token, Datenbank, AMP-Zugang) sind Eingabefelder in AMP unte
 
 ## Voraussetzungen
 
-- **AMP-Box:** Python **3.11 oder neuer** mit venv (`sudo apt install python3 python3-venv`),
+- **AMP-Server:** Python **3.11 oder neuer** mit venv (`sudo apt install python3 python3-venv`),
   alternativ die Instanz im Docker-Modus betreiben (Image `cubecoders/ampbase:python-3`).
-- **Datenbank:** MariaDB-Datenbank `wikingerbot` + Benutzer, der sich von der AMP-Box aus
-  anmelden darf. Firewall: AMP-Box → MariaDB, Port 3306.
+- **Datenbank:** MariaDB/MySQL-Datenbank (z.B. `wikingerbot`) + Benutzer, der sich vom
+  AMP-Server aus anmelden darf. Ggf. Firewall: AMP-Server → Datenbank, Port 3306.
 - **Discord:** Bot-Token aus dem [Developer Portal](https://discord.com/developers/applications/).
 - **AMP-Benutzer für den Bot:** eigenen Benutzer anlegen (nicht den eigenen verwenden) und ihm
   zunächst **Super Admins** geben – der Bot richtet sich beim Start seine eigene Rolle ein
@@ -36,8 +36,8 @@ Alle Einstellungen (Token, Datenbank, AMP-Zugang) sind Eingabefelder in AMP unte
 2. **Instanz anlegen:** *Create Instance* → Anwendung **WikingerBot** wählen.
 3. **Einstellungen** in der neuen Instanz unter *Configuration → WikingerBot*:
    - *Discord Bot Token*
-   - *Datenbank-Host* (z.B. `10.0.0.107`), Port, Name, Benutzer, Passwort
-   - *AMP URL*: `http://127.0.0.1:8080` – im Docker-Modus die IP der AMP-Box
+   - *Datenbank-Host* (z.B. `db.example.lan`), Port, Name, Benutzer, Passwort
+   - *AMP URL*: `http://127.0.0.1:8080` – im Docker-Modus die IP des AMP-Servers
    - *AMP Benutzer* / *AMP Passwort*
 4. **Update** klicken (lädt den Bot und installiert alles), danach **Start**.
 5. In der **Konsole** prüfen:
@@ -91,19 +91,21 @@ Einrichten:
    anderen Namen erreichbar ist (z.B. später eine Domain) – dann gilt sie für beides.
 2. Im [Discord Developer Portal](https://discord.com/developers/applications/) unter
    **OAuth2 → Redirects** `<Adresse>/api/auth/callback` eintragen, z.B.
-   `http://192.168.4.5:8765/api/auth/callback` – für jede Adresse, über die angemeldet wird.
-3. **Client ID** und **Client Secret** (OAuth2-Seite) in AMP eintragen.
+   `http://192.0.2.20:8765/api/auth/callback` – für jede Adresse, über die angemeldet wird.
+3. **Client Secret** (OAuth2-Seite → *Reset Secret*) in AMP eintragen. Die *Client ID* ist
+   optional – ohne nimmt der Bot seine eigene Application-ID, die dasselbe ist.
 4. Port in der Firewall nur freigeben, wenn die Oberfläche von außerhalb erreichbar sein soll.
 
-### https über einen Reverse-Proxy (z.B. Edge-Gateway)
+### https über einen Reverse-Proxy (z.B. Caddy, nginx, Traefik)
 
 Am Bot ändert sich dafür nichts außer zwei Feldern:
 
-- **Web-Adresse** = die https-Adresse, z.B. `https://bot.wikinger.ipv64.net` (Discord-Redirect
-  dann `https://bot.wikinger.ipv64.net/api/auth/callback`).
-- **Vertrauenswürdige Proxys** = die Adressen, von denen der Proxy beim Bot ankommt (beim
-  Edge-Gateway die DMZ-IPs der k3s-Knoten – nicht die internen aus `kubectl get nodes`). Nur deren `X-Forwarded-*` glaubt der Bot – sonst
-  könnte jeder, der den Port direkt erreicht, sich als https ausgeben. Leer = jedem.
+- **Web-Adresse** = die https-Adresse, z.B. `https://bot.example.com` (Discord-Redirect
+  dann `https://bot.example.com/api/auth/callback`).
+- **Vertrauenswürdige Proxys** = die IP-Adressen oder Netze, von denen der Proxy beim Bot
+  ankommt (bei einem Proxy in Kubernetes meist die Knoten-IPs im Netz des Bots, nicht die
+  Pod-IPs). Nur deren `X-Forwarded-*` glaubt der Bot – sonst könnte jeder, der den Port direkt
+  erreicht, sich als https ausgeben. Leer = jedem.
 
 Der Proxy muss `X-Forwarded-Proto` setzen und den `Host` durchreichen (Caddy tut beides von
 selbst). Das Login-Cookie wird bei https automatisch als `Secure` gesetzt.
@@ -117,15 +119,19 @@ darf.
 
 Der Bot läuft ohne die Seite. Für die Anbindung (Verknüpfen, News, Events, Tickets …):
 
-1. Auf der Seite läuft die Migration `008_discord` von selbst (beim nächsten Seitenaufruf).
-2. Dem Bot-Benutzer der Datenbank eng begrenzte Rechte auf die Datenbank der Seite geben
-   (spaltengenau – er sieht z.B. weder E-Mail noch Passwort-Hash).
-3. In der **Bot-Oberfläche → Community** (nur Owner): Datenbankname der Seite (z.B. `php`) und
-   ihre Adresse (z.B. `https://wikinger.ipv64.net`) eintragen, *Speichern und verbinden*. Host,
+1. Auf der Seite laufen die Migrationen `008_discord` und `009_amp_zugang` von selbst (beim
+   nächsten Seitenaufruf).
+2. Dem Datenbank-Benutzer des Bots eng begrenzte Rechte auf die Datenbank der Seite geben –
+   SQL mit Platzhaltern: [docs/community-grants.sql](docs/community-grants.sql) (spaltengenau,
+   der Bot sieht z.B. weder E-Mail noch Passwort-Hash). Die Seite muss dafür auf demselben
+   Datenbank-Server liegen wie die Datenbank des Bots.
+3. In der **Bot-Oberfläche → Community** (nur Owner): Datenbankname der Seite und ihre
+   Adresse (z.B. `https://community.example.com`) eintragen, *Speichern und verbinden*. Host,
    Benutzer und Passwort sind die aus AMP (Abschnitt *Datenbank*); ein Neustart ist nicht nötig.
    Die Seite zeigt sofort, ob die Verbindung steht und die Rechte passen.
-4. Erst danach auf der Seite in `config.local.php` `'discord_enabled' => true` setzen – vorher
-   würde die Seite Aufträge schreiben, die niemand abholt.
+4. Erst danach auf der Seite `'discord_enabled' => true` setzen (in ihrer `config.local.php`) –
+   vorher würde die Seite Aufträge schreiben, die niemand abholt.
+5. Die weiteren Tabs einstellen: *News*, *Events*, *Tickets*, *Rang-Sync*, *AMP-Konten*.
 
 ## Neue Version einspielen
 
@@ -140,6 +146,7 @@ Start automatisch. Tipp: In AMP unter *Schedule* einen nächtlichen Update+Resta
 | `Discord hat den Token abgelehnt` | Token falsch oder im Developer Portal zurückgesetzt |
 | `Can't connect to MySQL server` / Timeout | Firewall/IP falsch oder MariaDB nicht erreichbar |
 | `Access denied for user` | DB-Benutzer/Passwort falsch oder Benutzer darf sich von dieser IP nicht anmelden |
+| `AMP-Rolle: keine Verwaltungsrechte` + `Grund: …` | Normal nach der Einrichtung. Fehlt dem Bot etwas: Benutzer kurz *Super Admins* geben, neu starten. Steht dort „nicht Super Admin laut AMP“, wurde der Haken nicht gespeichert – und die Rolle *WikingerBot* nicht abhaken |
 | Instanz bleibt auf *Starting* | Bot nicht bei Discord angemeldet – Konsole auf Fehler prüfen |
 
 Die Log-Zeile `WikingerBot bereit: …` (in `bot/core/bot.py`) nur zusammen mit

@@ -46,10 +46,10 @@ class Settings(BaseSettings):
     web_enabled: bool = True
     web_host: str = "0.0.0.0"
     web_port: int = 8765
-    # Oeffentliche Adresse, z.B. https://bot.wikinger.ipv64.net - daraus werden
+    # Oeffentliche Adresse, z.B. https://bot.example.com - daraus werden
     # Frontend-URL und Discord-Redirect (/api/auth/callback) abgeleitet.
     public_url: str = ""
-    # Reverse-Proxys (z.B. Edge-Gateway), deren X-Forwarded-* Header geglaubt werden:
+    # Reverse-Proxys (z.B. Caddy, nginx), deren X-Forwarded-* Header geglaubt werden:
     # IPs/Netze, kommagetrennt. Leer = jedem (Standard von frueher).
     trusted_proxies: str = ""
 
@@ -68,6 +68,9 @@ class Settings(BaseSettings):
     # Fuer den Betrieb in AMP gedacht, wo niemand Migrationen von Hand anstoesst.
     auto_migrate: bool = True
     log_level: str = "INFO"
+    # Zeitzone der Community: Tage der Statistik und Event-Zeiten der Community-Seite
+    # (die Seite speichert Zeiten ohne Zeitzone in ihrer Ortszeit).
+    timezone: str = "Europe/Berlin"
 
     @model_validator(mode="after")
     def _database_url_from_parts(self) -> "Settings":

@@ -1,13 +1,13 @@
 """Zaehler fuer den stats-Cog - sammelt im Speicher, schreibt einmal pro Minute.
 
-Ohne Discord-Abhaengigkeit, damit testbar. Tage werden in Europe/Vienna
-gezaehlt (der Bot laeuft in AMP oft in UTC - "heute" soll aber der Tag der
+Ohne Discord-Abhaengigkeit, damit testbar. Tage werden in der Zeitzone aus
+TIMEZONE gezaehlt (der Bot laeuft oft in UTC - "heute" soll aber der Tag der
 Community sein).
 """
 
 from collections import Counter, defaultdict
 from datetime import date, datetime, timedelta
-from zoneinfo import ZoneInfo
+from bot.core.timezone import community_timezone
 
 from sqlalchemy import delete, func, select
 
@@ -15,7 +15,7 @@ from bot.core.entities import ensure_guild
 from db.models.stats import StatsDaily, StatsMemberDaily
 from db.session import get_db_session
 
-TZ = ZoneInfo("Europe/Vienna")
+TZ = community_timezone()
 
 
 def now() -> datetime:
