@@ -194,3 +194,31 @@ keinen Ping aus. Bots werden weder begrüßt noch verabschiedet.
 | `/welcome dm text:` | Zusätzliche DM an neue Mitglieder, z.B. Regeln und Link zur Seite; `aus` schaltet ab | Admin |
 | `/welcome abschied aktiv: text: kanal:` | Meldung, wenn jemand geht; ohne eigenen Kanal im Begrüßungskanal | Admin |
 | `/welcome test` | Zeigt Begrüßung, DM und Abschied mit dir als Beispiel | Admin |
+
+---
+
+## `/rollen` — Autorole und Selbstwahl-Rollen (`roles`-Cog)
+
+**Autorole:** Neue Mitglieder bekommen die eingetragenen Rollen automatisch. Ist
+Discords Regel-Screening aktiv, erst nachdem sie die Regeln akzeptiert haben.
+
+**Selbstwahl-Rollen:** Eine Bot-Nachricht („Panel“) mit Knöpfen; jeder Knopf
+schaltet eine Rolle an oder aus (z.B. Spiele-Rollen zum gezielten Pingen). Die
+Knöpfe funktionieren auch nach einem Neustart weiter. Ablauf:
+`/rollen panel erstellen` → Link der Nachricht kopieren → pro Rolle einmal
+`/rollen panel knopf`.
+
+Aus Sicherheitsgründen nicht vergebbar: `@everyone`, von Integrationen verwaltete
+Rollen, Rollen über der Bot-Rolle, Rollen mit Verwaltungsrechten (Administrator,
+Rollen/Kanäle/Server verwalten, Bannen, Kicken, Timeout, …) und – bei den
+Knöpfen – die Berechtigungsrollen des Bots (Mod/Admin/…). Braucht das Bot-Recht
+**Rollen verwalten**.
+
+| Command | Beschreibung | Level |
+|---|---|---|
+| `/rollen auto hinzufuegen rolle:` | Rolle wird neuen Mitgliedern automatisch gegeben | Admin |
+| `/rollen auto entfernen rolle:` | Rolle nicht mehr automatisch vergeben | Admin |
+| `/rollen auto liste` | Zeigt die Autoroles, mit Warnung bei nicht vergebbaren | Admin |
+| `/rollen panel erstellen kanal: titel: text:` | Postet die Panel-Nachricht | Admin |
+| `/rollen panel knopf nachricht: rolle: beschriftung: emoji:` | Knopf hinzufügen (max. 25 pro Panel); `nachricht` = Link oder ID | Admin |
+| `/rollen panel entfernen nachricht: rolle:` | Knopf entfernen | Admin |
