@@ -39,7 +39,7 @@ für die Konsolen-Filter/Event-Muster inkl. Regex-Grundlagen.
 | `/server start name:` | 📍 Startet einen Server über den AMP-Controller | Mod |
 | `/server stop name:` | 📍 Stoppt einen Server | Mod |
 | `/server console name: command:` | Sendet einen rohen Konsolenbefehl an die Instanz | Mod |
-| `/server discover` | Listet AMP-Instanzen, die am Controller bekannt, aber noch nicht angelegt sind | Owner |
+| `/server discover` | Listet AMP-Instanzen, die am Controller bekannt, aber noch nicht angelegt sind. Instanzen von Discord-Servern, auf denen der Bot nicht mehr ist, gelten als frei; `/server add` übernimmt sie samt eigener Muster (Kanäle, Banner und Whitelist-Rolle neu setzen) | Owner |
 | `/server add name: amp_instance_id: display_name: host:` | Legt einen neuen Server-Eintrag an (`host` ist nur die Anzeige-Adresse für Spieler, Autocomplete schlägt bereits genutzte Adressen dieser Guild vor — bleibt aber freier Text). Erkennt die Steam-App-ID automatisch aus AMPs `DisplayImageSource`, falls vorhanden (siehe `/server steam_appid` für manuelle Korrektur) | Owner |
 | `/server console_channel name: channel:` | Setzt/entfernt den Kanal für die Konsolen-Bridge | Owner |
 | `/server chat_channel name: channel:` | Setzt/entfernt den Kanal für die Chat-Bridge (Discord → Spiel) | Owner |

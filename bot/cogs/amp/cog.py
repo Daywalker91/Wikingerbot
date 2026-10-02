@@ -7,6 +7,7 @@ from discord.app_commands import Choice
 from discord.ext import commands, tasks
 from sqlalchemy import select
 
+from bot.cogs.amp.registry import add_server, known_instance_ids
 from bot.core.amp_client import amp_client
 from bot.core.base_cog import BaseCog
 from bot.core.console_filters import (
@@ -62,9 +63,7 @@ async def _autocomplete_amp_instance_id(
     except Exception:
         return []
 
-    async with get_db_session() as db:
-        result = await db.execute(select(Server.amp_instance_id))
-        known_ids = {row[0] for row in result.all()}
+    known_ids = await known_instance_ids({g.id for g in interaction.client.guilds})
 
     current_lower = current.lower()
     choices = [
@@ -369,9 +368,7 @@ class AMPCog(BaseCog):
 
         instances = await amp_client.list_instances()
 
-        async with get_db_session() as db:
-            result = await db.execute(select(Server.amp_instance_id))
-            known_ids = {row[0] for row in result.all()}
+        known_ids = await known_instance_ids({g.id for g in self.bot.guilds})
 
         unknown = [i for i in instances if i.instance_id not in known_ids]
         if not unknown:
@@ -413,20 +410,16 @@ class AMPCog(BaseCog):
                 steam_app_id = parse_steam_appid(instance.display_image_source)
                 break
 
-        async with get_db_session() as db:
-            db.add(
-                Server(
-                    guild_id=interaction.guild_id,
-                    instance_name=name,
-                    amp_instance_id=amp_instance_id,
-                    display_name=display_name,
-                    host=host,
-                    steam_app_id=steam_app_id,
-                )
-            )
-            await db.commit()
-
-        await _followup_temp(interaction, f"Server `{display_name}` angelegt.")
+        result = await add_server(
+            {g.id for g in self.bot.guilds},
+            interaction.guild_id,
+            name=name,
+            amp_instance_id=amp_instance_id,
+            display_name=display_name,
+            host=host,
+            steam_app_id=steam_app_id,
+        )
+        await _followup_temp(interaction, result.message)
 
     async def _set_channel(
         self,

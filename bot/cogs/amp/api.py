@@ -15,6 +15,8 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.middleware.auth import CurrentUser, get_current_user, require_level
+from bot.cogs.amp.registry import add_server, known_instance_ids
+from bot.core import runtime
 from bot.core.amp_client import amp_client
 from bot.core.config import settings
 from bot.core.entities import ensure_guild
@@ -106,8 +108,7 @@ async def list_discoverable_instances(
     """AMP-Instanzen, die noch nicht als Server angelegt sind - Pendant zu
     /server discover (bot/cogs/amp/cog.py:server_discover)."""
     instances = await amp_client.list_instances()
-    result = await db.execute(select(Server.amp_instance_id))
-    known_ids = {row[0] for row in result.all()}
+    known_ids = await known_instance_ids(_active_guild_ids())
     return [
         DiscoverableInstanceOut(
             instance_id=i.instance_id, friendly_name=i.friendly_name, module=i.module, running=i.running
@@ -115,6 +116,11 @@ async def list_discoverable_instances(
         for i in instances
         if i.instance_id not in known_ids
     ]
+
+
+def _active_guild_ids() -> set[int] | None:
+    """Discord-Server, auf denen der Bot gerade ist (None, wenn der Bot nicht laeuft)."""
+    return {g.id for g in runtime.bot.guilds} if runtime.bot is not None else None
 
 
 async def _ensure_guild_from_discord(guild_id: int) -> None:
@@ -148,17 +154,18 @@ async def create_server(
             steam_app_id = parse_steam_appid(instance.display_image_source)
             break
 
-    server = Server(
-        guild_id=user.guild_id,
-        instance_name=body.instance_name,
+    result = await add_server(
+        _active_guild_ids(),
+        user.guild_id,
+        name=body.instance_name,
         amp_instance_id=body.amp_instance_id,
         display_name=body.display_name,
         host=body.host,
         steam_app_id=steam_app_id,
     )
-    db.add(server)
-    await db.commit()
-    await db.refresh(server)
+    if not result.ok:
+        raise HTTPException(409, result.message)
+    server = await db.get(Server, result.server_id)
     return await _status_for(server)
 
 
