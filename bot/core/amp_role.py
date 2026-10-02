@@ -41,7 +41,6 @@ DESIRED_PERMISSIONS: list[str] = [
     "-ADS.InstanceManagement.AttachRemoteADSInstance",
     "-ADS.InstanceManagement.RemoveRemoteADSInstance",
     "-ADS.InstanceManagement.EditRemoteTargets",
-    "-ADS.InstanceManagement.Convert",
     "-ADS.InstanceManagement.Reconfigure",
     "-ADS.InstanceManagement.RefreshConfiguration",
     "-ADS.InstanceManagement.RefreshRemoteConfigStores",
@@ -207,7 +206,7 @@ def log_report(report: RoleReport, amp_user: str) -> None:
     if report.joined_role:
         log.info("AMP-Benutzer '%s' in die Rolle '%s' aufgenommen.", amp_user, ROLE_NAME)
     if report.left_super_admin:
-        log.warning("AMP-Benutzer '%s' hat '%s' abgegeben und arbeitet jetzt nur noch mit der Rolle '%s'.", amp_user, SUPER_ADMIN_ROLE, ROLE_NAME)
+        log.info("AMP-Benutzer '%s' hat '%s' abgegeben und arbeitet jetzt nur noch mit der Rolle '%s'.", amp_user, SUPER_ADMIN_ROLE, ROLE_NAME)
     if report.unknown_nodes:
         log.warning("AMP kennt diese Rechte nicht (andere AMP-Version?): %s", ", ".join(report.unknown_nodes))
     if report.missing_without_super_admin:

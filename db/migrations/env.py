@@ -11,7 +11,8 @@ from db.models import *  # noqa: F401,F403  (registriert alle Modelle bei Base.m
 
 config = context.config
 
-if config.config_file_name is not None:
+# Beim Bot-Start (bot/main.py) richtet der Bot das Logging selbst ein.
+if config.config_file_name is not None and config.attributes.get("configure_logger", True):
     # disable_existing_loggers=False: Migrationen laufen auch beim Bot-Start
     # (bot/main.py) - sonst waeren danach alle Logger des Bots stumm.
     fileConfig(config.config_file_name, disable_existing_loggers=False)

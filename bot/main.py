@@ -23,6 +23,7 @@ def run_migrations() -> None:
     from alembic.config import Config
 
     config = Config(str(ROOT / "alembic.ini"))
+    config.attributes["configure_logger"] = False
     config.set_main_option("script_location", str(ROOT / "db" / "migrations"))
     command.upgrade(config, "head")
 
@@ -39,6 +40,17 @@ def setup_logging() -> None:
         stream=sys.stdout,
         force=True,
     )
+    # Ruhiger Start: alembic meldet sonst bei jedem Start Plugins und Kontext -
+    # nur tatsaechlich ausgefuehrte Migrationen ("Running upgrade ...") bleiben.
+    logging.getLogger("alembic").setLevel(logging.WARNING)
+    migration_log = logging.getLogger("alembic.runtime.migration")
+    migration_log.setLevel(logging.INFO)
+    migration_log.filters.clear()
+    migration_log.addFilter(lambda r: r.levelno >= logging.WARNING or r.getMessage().startswith("Running "))
+    # Sprachkanaele nutzt der Bot nicht - die Warnungen zu PyNaCl/davey sind Rauschen.
+    voice_log = logging.getLogger("discord.client")
+    voice_log.filters.clear()
+    voice_log.addFilter(lambda r: "voice will NOT be supported" not in r.getMessage())
 
 
 async def main() -> None:
