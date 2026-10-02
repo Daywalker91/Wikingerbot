@@ -177,3 +177,20 @@ Ein Server gehört zu maximal einer Gruppe. Zwei Layouts stehen zur Wahl:
   `background`/`customize`-Befehle wirken in diesem Layout nicht, da jedes
   Mitglied seine eigene Optik behält (dafür `/banner theme` usw. pro
   Mitgliedsserver nutzen).
+
+---
+
+## `/welcome` — Begrüßung neuer Mitglieder (`welcome`-Cog)
+
+Texte kennen die Platzhalter `{user}` (Erwähnung), `{name}` (Anzeigename),
+`{server}` und `{count}` (Mitgliederzahl); `\n` im Text wird zum Zeilenumbruch.
+Gepingt wird nur das neue Mitglied – `@everyone` oder Rollen im Text lösen
+keinen Ping aus. Bots werden weder begrüßt noch verabschiedet.
+
+| Command | Beschreibung | Level |
+|---|---|---|
+| `/welcome kanal kanal:` | Kanal für die Begrüßung; ohne Angabe ist die Begrüßung aus | Admin |
+| `/welcome text text:` | Text der Begrüßung (zeigt gleich eine Vorschau) | Admin |
+| `/welcome dm text:` | Zusätzliche DM an neue Mitglieder, z.B. Regeln und Link zur Seite; `aus` schaltet ab | Admin |
+| `/welcome abschied aktiv: text: kanal:` | Meldung, wenn jemand geht; ohne eigenen Kanal im Begrüßungskanal | Admin |
+| `/welcome test` | Zeigt Begrüßung, DM und Abschied mit dir als Beispiel | Admin |

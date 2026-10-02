@@ -4,10 +4,12 @@ import logging
 from pathlib import Path
 
 import discord
+from discord import app_commands
 from discord.ext import commands
 
 from bot.core.bot_settings import SYNC_ON_STARTUP_KEY, get_bot_setting, set_bot_setting
 from bot.core.config import settings
+from bot.core.permissions import InsufficientPermissions
 
 COGS_PACKAGE = "bot.cogs"
 COGS_PATH = Path(__file__).resolve().parent.parent / "cogs"
@@ -47,6 +49,7 @@ class WikingerBot(commands.Bot):
         super().__init__(command_prefix="!", intents=intents)
 
     async def setup_hook(self) -> None:
+        self.tree.on_error = self._on_app_command_error
         for name in self.discover_cogs():
             await self.load_cog(name)
         await self._sync_loaded_cogs_to_db()
@@ -77,6 +80,27 @@ class WikingerBot(commands.Bot):
         except Exception as error:
             first_line = str(error).strip().splitlines()[0] if str(error).strip() else type(error).__name__
             log.warning("AMP-Rolle konnte nicht geprueft werden (AMP nicht erreichbar?): %s", first_line)
+
+    async def _on_app_command_error(
+        self, interaction: discord.Interaction, error: app_commands.AppCommandError
+    ) -> None:
+        """Ohne diesen Handler sieht der Aufrufer bei jedem Fehler - auch bei
+        fehlender Berechtigung - nur "Die Interaktion ist fehlgeschlagen"."""
+        if isinstance(error, InsufficientPermissions):
+            message = f"Dafür fehlt dir die Berechtigung (mindestens {error.required.value})."
+        elif isinstance(error, app_commands.CheckFailure):
+            message = "Das geht hier nicht."
+        else:
+            command = interaction.command.qualified_name if interaction.command else "?"
+            log.error("Fehler in /%s", command, exc_info=error)
+            message = "Da ist etwas schiefgelaufen. Details stehen im Log des Bots."
+        try:
+            if interaction.response.is_done():
+                await interaction.followup.send(message, ephemeral=True)
+            else:
+                await interaction.response.send_message(message, ephemeral=True, delete_after=20)
+        except discord.HTTPException:
+            pass
 
     async def on_ready(self) -> None:
         # Feste Log-Zeile: AMP erkennt daran, dass der Bot laeuft (Console.AppReadyRegex
