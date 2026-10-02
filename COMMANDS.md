@@ -267,3 +267,30 @@ nicht mit. Gespeichert wird einmal pro Minute.
 | `/stats mitglied mitglied: tage:` | Nachrichten, Platz und Voice-Zeit eines Mitglieds (ohne Angabe: deine) | Member |
 | `/stats zaehler kanal: format:` | Kanalname zeigt die Mitgliederzahl, z.B. `👥 Mitglieder: {count}`; alle 10 min aktualisiert, ohne Kanal aus. Braucht das Bot-Recht **Kanäle verwalten** für diesen Kanal | Admin |
 | `/stats aufbewahrung tage:` | Wie lange Werte pro Mitglied gespeichert bleiben (7–730 Tage) | Admin |
+
+---
+
+## `/automod` — eigene AutoMod-Regeln (`automod`-Cog)
+
+**Ergänzung** zu Discords eingebautem AutoMod (Stichwörter, Erwähnungs-Spam,
+verdächtige Inhalte macht Discord selbst; deren Treffer verarbeitet der
+`moderation`-Cog). Hier nur, was Discord nicht kann. Standardmäßig **aus**
+(`/automod aktiv an:True`). Mods, Admins und Server-Administratoren sind immer
+ausgenommen. Bei einem Verstoß: Nachricht löschen, kurzer Hinweis im Kanal,
+optional Warn-Punkte (über das Verwarnsystem von `moderation`) und Timeout,
+Meldung im Alarmkanal. Während einer Flut wird nur einmal pro 30 s bestraft.
+
+| Command | Beschreibung | Level |
+|---|---|---|
+| `/automod status` | Alle Regeln und Einstellungen | Mod |
+| `/automod aktiv an:` | Bot-AutoMod an/aus | Admin |
+| `/automod flut an: nachrichten: sekunden:` | Mehr als X Nachrichten in Y Sekunden (Standard 6 in 8 s) | Admin |
+| `/automod wiederholung an: anzahl: sekunden:` | Gleiche Nachricht X-mal in Y Sekunden (Standard 3 in 60 s) | Admin |
+| `/automod grossbuchstaben an: prozent: mindestlaenge:` | Zu viel Großschrift (Standard ab 70 % bei mind. 12 Buchstaben) | Admin |
+| `/automod emojis an: maximal:` | Mehr als X Emojis (Standard 10) | Admin |
+| `/automod links modus:` | `aus`, `nur_erlaubte` (Liste unten) oder `alle_sperren`; Discord-Einladungen zählen als `discord.gg` | Admin |
+| `/automod link_erlauben domain:` · `link_entfernen domain:` | Erlaubte Domains (gilt mit Subdomains) | Admin |
+| `/automod neue_konten tage:` | Hinweis im Alarmkanal, wenn ein jüngeres Konto beitritt (0 = aus) | Admin |
+| `/automod aktion loeschen: punkte: timeout_minuten:` | Folgen eines Verstoßes (Standard: nur löschen) | Admin |
+| `/automod alarmkanal kanal:` | Kanal für Meldungen – derselbe wie für Discords AutoMod | Admin |
+| `/automod ausnahme kanal: rolle:` | Kanal/Rolle ausnehmen; nochmal aufrufen hebt es auf | Admin |
