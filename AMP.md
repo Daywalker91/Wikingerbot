@@ -94,8 +94,8 @@ Am Bot ändert sich dafür nichts außer zwei Feldern:
 
 - **Web-Adresse** = die https-Adresse, z.B. `https://bot.wikinger.ipv64.net` (Discord-Redirect
   dann `https://bot.wikinger.ipv64.net/api/auth/callback`).
-- **Vertrauenswürdige Proxys** = die Adressen, von denen der Proxy beim Bot ankommt (bei k3s
-  die Knoten-IPs, `kubectl get nodes -o wide`). Nur deren `X-Forwarded-*` glaubt der Bot – sonst
+- **Vertrauenswürdige Proxys** = die Adressen, von denen der Proxy beim Bot ankommt (beim
+  Edge-Gateway die DMZ-IPs der k3s-Knoten – nicht die internen aus `kubectl get nodes`). Nur deren `X-Forwarded-*` glaubt der Bot – sonst
   könnte jeder, der den Port direkt erreicht, sich als https ausgeben. Leer = jedem.
 
 Der Proxy muss `X-Forwarded-Proto` setzen und den `Host` durchreichen (Caddy tut beides von
