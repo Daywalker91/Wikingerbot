@@ -35,7 +35,7 @@ export default function RangsyncPage() {
     const loaded = await getRangsync();
     setData(loaded);
     // Vorschlag (gleichnamige Discord-Rolle) uebernehmen, solange nichts gewaehlt ist
-    setRanks(loaded.ranks.map((r) => ({ ...r, role_id: r.role_id ?? (r.is_king ? null : r.suggested_role_id) })));
+    setRanks(loaded.ranks.map((r) => ({ ...r, role_id: r.role_id ?? r.suggested_role_id })));
     setEnabled(loaded.enabled);
     setOwner(loaded.ticket_owner);
   }, []);
@@ -76,7 +76,7 @@ export default function RangsyncPage() {
       <h1>Rang-Sync</h1>
       <p style={muted}>
         Hält die Ränge der Community-Seite und die Discord-Rollen verknüpfter Mitglieder gleich. Der König wird nie
-        automatisch vergeben oder geändert. Weichen die Ränge beim Verknüpfen ab, eröffnet der Bot ein Ticket statt etwas zu
+        automatisch vergeben oder geändert – seine Discord-Rolle ist nur eine Zuordnung. Weichen die Ränge beim Verknüpfen ab, eröffnet der Bot ein Ticket statt etwas zu
         ändern; ein Discord-Bann eines verknüpften Mitglieds wird ebenfalls als Ticket gemeldet. Wer Discord verlässt,
         behält seinen Rang.
       </p>
@@ -105,7 +105,7 @@ export default function RangsyncPage() {
                 <tr key={r.slug}>
                   <td style={cell}>{r.name}</td>
                   <td style={cell}>
-                    <select value={r.role_id ?? ""} disabled={r.is_king} onChange={(e) => setRank(r.slug, { role_id: e.target.value || null })}>
+                    <select value={r.role_id ?? ""} onChange={(e) => setRank(r.slug, { role_id: e.target.value || null })}>
                       <option value="">– keine (@everyone) –</option>
                       {data.roles.map((x) => (
                         <option key={x.id} value={x.id}>
@@ -119,7 +119,9 @@ export default function RangsyncPage() {
                   </td>
                   <td style={cell}>
                     {r.is_king ? (
-                      <span style={muted}>nur von Hand</span>
+                      <span style={muted} title="Der Bot vergibt und entzieht diese Rolle nie – sie dient nur zum Erkennen von Konflikten">
+                        nur Zuordnung, kein Sync
+                      </span>
                     ) : (
                       <select value={r.direction} onChange={(e) => setRank(r.slug, { direction: e.target.value as Direction })}>
                         {(Object.keys(DIRECTION_LABELS) as Direction[]).map((d) => (

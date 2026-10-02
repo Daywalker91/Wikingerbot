@@ -7,8 +7,12 @@ Pro Rang: eine Discord-Rolle und eine Richtung
   to_discord  nur Seite -> Discord
   off         gar nicht (z.B. Koenig - bleibt Handarbeit)
 
+Der Koenig hat immer "off". Seine Discord-Rolle ist nur eine Zuordnung: Der Bot
+vergibt und entzieht sie nie, erkennt daran aber Konflikte beim Verknuepfen.
+
 Regeln:
-- Koenig wird nie automatisch vergeben, ein Koenig auf der Seite nie automatisch geaendert.
+- Koenig wird nie automatisch vergeben, ein Koenig auf der Seite nie automatisch geaendert;
+  ebenso wenig der Rang von jemandem, der in Discord die Koenig-Rolle hat.
 - Seite -> Discord nur, wenn der Rang des Mitglieds Richtung both/to_discord hat;
   dann bekommt es die Rolle seines Rangs, die Rollen der anderen so gesyncten
   Raenge werden entfernt (Rang ohne Rolle, z.B. Thrall = @everyone: alle weg).
@@ -111,6 +115,11 @@ def rank_from_discord(ranks: list[Rank], member_role_ids: set[int]) -> Rank | No
         return max(held, key=lambda r: r.level)
     roleless = [r for r in candidates if not r.role_id]
     return min(roleless, key=lambda r: r.level) if roleless else None
+
+
+def holds_king_role(ranks: list[Rank], member_role_ids: set[int]) -> bool:
+    """Hat das Mitglied die dem Koenig zugeordnete Discord-Rolle?"""
+    return any(r.is_king and r.role_id and r.role_id in member_role_ids for r in ranks)
 
 
 def has_any_rank_role(ranks: list[Rank], member_role_ids: set[int]) -> bool:

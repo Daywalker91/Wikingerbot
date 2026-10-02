@@ -403,7 +403,10 @@ Seite eine Discord-Rolle und eine Richtung (beide / nur Discord → Seite / nur 
   entfernt (Thrall = keine Rang-Rolle). Andere Rollen bleiben.
 - **Discord → Seite**: Rollen eines verknüpften Mitglieds geändert → höchster
   zugeordneter Rang wird auf der Seite gesetzt.
-- Der **König** wird nie automatisch vergeben oder geändert.
+- Der **König** wird nie automatisch vergeben oder geändert. Ihm lässt sich eine
+  Discord-Rolle zuordnen – die vergibt und entzieht der Bot nie, erkennt daran aber
+  Konflikte beim Verknüpfen. Wer in Discord die König-Rolle hat, dessen Rang auf der
+  Seite ändert der Bot ebenfalls nicht.
 - **Konflikt beim Verknüpfen** (Discord sagt anderes als die Seite) → Ticket, nichts
   wird geändert. Ohne jede Rang-Rolle in Discord gibt es keinen Konflikt – dann
   kommt die Rolle von der Seite.

@@ -162,6 +162,38 @@ async def test_link_conflict_opens_ticket_and_changes_nothing(site, db_session):
     assert member.edits == [] and await site_rank(1) == 2
 
 
+async def test_king_role_is_only_a_mapping(site, db_session):  # noqa: F811
+    """Die Koenig-Rolle wird nie vergeben/entzogen und schuetzt den Rang vor Discord-Aenderungen."""
+    db_session.add(Guild(id=1, name="Wikinger"))
+    await db_session.commit()
+    await seed_site()
+    members = {}
+    cog, guild, _ = make(members)
+
+    # Seite -> Discord: Koenig-Rolle bleibt beim Befoerdern stehen
+    members[4242] = FakeMember(guild, 4242, [MEMBER, OWNER])
+    async with community_db.session() as db:
+        await db.execute(update(community_db.users).where(community_db.users.c.id == 1).values(role_id=3))
+        await db.commit()
+    await cog._on_site_role({"user_id": 1})
+    assert members[4242].edits == [{MOD, OWNER}]
+
+    # Discord -> Seite: mit Koenig-Rolle aendert sich der Rang auf der Seite nicht
+    await cog.on_member_update(FakeMember(guild, 4242, [MOD, OWNER]), FakeMember(guild, 4242, [OWNER]))
+    assert await site_rank(1) == 3
+
+
+async def test_link_with_king_role_but_no_king_on_site_opens_ticket(site, db_session):  # noqa: F811
+    db_session.add(Guild(id=1, name="Wikinger"))
+    await db_session.commit()
+    await seed_site()
+    cog, guild, _ = make({})
+    member = FakeMember(guild, 4242, [OWNER, MEMBER])  # Discord: Koenig-Rolle, Seite: Karl
+    await cog.on_community_link(member, SimpleNamespace(id=1, username="Ragnar"))
+    assert await tickets() == [(1, "Rang-Konflikt: Seite Karl, Discord König", "konto")]
+    assert member.edits == [] and await site_rank(1) == 2
+
+
 async def test_link_without_rank_roles_takes_site_rank(site, db_session):  # noqa: F811
     db_session.add(Guild(id=1, name="Wikinger"))
     await db_session.commit()

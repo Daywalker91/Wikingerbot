@@ -19,6 +19,7 @@ from discord.ext import commands
 
 from bot.cogs.rangsync.sync import (
     has_any_rank_role,
+    holds_king_role,
     linked_members,
     load_mapping,
     rank_from_discord,
@@ -121,9 +122,10 @@ class RangsyncCog(BaseCog):
         ranks = await load_mapping(after.guild.id)
         site_rank_id = await site_rank_of(site_user.id)
         site_rank = next((r for r in ranks if r.id == site_rank_id), None)
-        if site_rank is not None and site_rank.is_king:
-            return  # Koenig nie automatisch aendern
-        derived = rank_from_discord(ranks, {r.id for r in after.roles})
+        role_ids = {r.id for r in after.roles}
+        if (site_rank is not None and site_rank.is_king) or holds_king_role(ranks, role_ids):
+            return  # Koenig (auf der Seite oder in Discord) nie automatisch aendern
+        derived = rank_from_discord(ranks, role_ids)
         if derived is None or derived.id == site_rank_id:
             return
         await set_site_rank(site_user.id, derived.id)
@@ -140,6 +142,10 @@ class RangsyncCog(BaseCog):
         site_rank_id = await site_rank_of(site_user.id)
         site_rank = next((r for r in ranks if r.id == site_rank_id), None)
         role_ids = {r.id for r in member.roles}
+        if site_rank is not None and not site_rank.is_king and holds_king_role(ranks, role_ids):
+            king = next(r for r in ranks if r.is_king)
+            await self._conflict_ticket(member, site_user, site_rank.name, king.name)
+            return
         derived = rank_from_discord(ranks, role_ids)
         if site_rank is None or site_rank.is_king or derived is None or derived.id == site_rank_id:
             if site_rank is not None and not site_rank.is_king:
@@ -149,13 +155,16 @@ class RangsyncCog(BaseCog):
             # in Discord noch ohne Rang-Rolle: kein Widerspruch, Rolle von der Seite uebernehmen
             await self.apply_site_rank(member.guild, member, site_rank_id)
             return
+        await self._conflict_ticket(member, site_user, site_rank.name, derived.name)
+
+    async def _conflict_ticket(self, member: discord.Member, site_user, site_name: str, discord_name: str) -> None:
         body = (
             f"Beim Verknüpfen weichen die Ränge ab:\n"
-            f"- Seite: {site_rank.name}\n- Discord: {derived.name} ({member} / {member.id})\n\n"
+            f"- Seite: {site_name}\n- Discord: {discord_name} ({member} / {member.id})\n\n"
             "Der Bot hat nichts geändert. Bitte den richtigen Rang auf der Seite setzen "
             "(dann zieht Discord nach) oder die Discord-Rolle anpassen (dann zieht die Seite nach)."
         )
-        await open_system_ticket(self.bot, site_user.id, f"Rang-Konflikt: Seite {site_rank.name}, Discord {derived.name}", body)
+        await open_system_ticket(self.bot, site_user.id, f"Rang-Konflikt: Seite {site_name}, Discord {discord_name}", body)
 
     # --- Discord-Bann -> Ticket ----------------------------------------------------
 
