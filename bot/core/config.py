@@ -36,6 +36,13 @@ class Settings(BaseSettings):
     amp_url: str = "http://localhost:8080"
     amp_user: str = ""
     amp_password: str = ""
+    # Eigene AMP-Rolle beim Start einrichten (bot/core/amp_role.py). Mit Super Admin
+    # legt der Bot sie an und gibt Super Admin danach ab - ausser amp_keep_super_admin.
+    amp_manage_role: bool = True
+    # Name oder ID der AMP-Instanz, in der der Bot selbst laeuft (wird ausgeblendet).
+    # Leer = automatisch aus dem Pfad (.../instances/<Name>/...) erkannt.
+    amp_own_instance: str = ""
+    amp_keep_super_admin: bool = False
 
     # Beim Start des Bots automatisch "alembic upgrade head" ausfuehren (bot/main.py).
     # Fuer den Betrieb in AMP gedacht, wo niemand Migrationen von Hand anstoesst.

@@ -24,13 +24,15 @@ Alle Einstellungen (Token, Datenbank, AMP-Zugang) sind Eingabefelder in AMP unte
 - **Datenbank:** MariaDB-Datenbank `wikingerbot` + Benutzer, der sich von der AMP-Box aus
   anmelden darf. Firewall: AMP-Box → MariaDB, Port 3306.
 - **Discord:** Bot-Token aus dem [Developer Portal](https://discord.com/developers/applications/).
-- **AMP-Benutzer für den Bot:** eigenen Benutzer anlegen (nicht den eigenen verwenden), mit
-  Rechten zum Starten/Stoppen der Instanzen und für die Konsole.
+- **AMP-Benutzer für den Bot:** eigenen Benutzer anlegen (nicht den eigenen verwenden) und ihm
+  zunächst **Super Admins** geben – der Bot richtet sich beim Start seine eigene Rolle ein
+  (siehe unten).
 
 ## Einrichtung
 
 1. **Vorlagen-Repo einbinden:** *Configuration → Instance Deployment → Configuration Repository*
-   → `Daywalker91/AMPTemplate:main` hinzufügen → *Fetch latest*.
+   → `Daywalker91/AMPTemplate:main` hinzufügen → *Fetch Latest* → **AMP (ADS) neu starten**
+   (neue Vorlagen erscheinen erst nach dem Neustart).
 2. **Instanz anlegen:** *Create Instance* → Anwendung **WikingerBot** wählen.
 3. **Einstellungen** in der neuen Instanz unter *Configuration → WikingerBot*:
    - *Discord Bot Token*
@@ -44,6 +46,27 @@ Alle Einstellungen (Token, Datenbank, AMP-Zugang) sind Eingabefelder in AMP unte
    INFO    [wikingerbot] Datenbank ist aktuell.
    INFO    [wikingerbot] WikingerBot bereit: angemeldet als Wikinger#1234 (ID …) auf 1 Server(n)
    ```
+
+## Die AMP-Rolle des Bots
+
+Nach dem Vorbild von GatekeeperV2 richtet sich der Bot seine Rechte selbst ein
+(`bot/core/amp_role.py`):
+
+1. Hat der AMP-Benutzer des Bots **Super Admins**, legt der Bot beim Start die Rolle
+   **WikingerBot** an – nur mit den Rechten, die er braucht (Instanzen auflisten,
+   starten, stoppen, Status, Konsole) – und nimmt sich selbst hinein.
+2. Danach gibt er **Super Admins** ab (außer *Super Admin behalten* ist angehakt).
+3. Bei späteren Starts prüft er nur, ob die Rolle vollständig ist. Fehlt etwas (z.B. nach
+   einem Update mit neuen Funktionen), nennt das Log die fehlenden Rechte – dann dem
+   Benutzer einmal kurz wieder Super Admins geben, der Bot ergänzt beim nächsten Start selbst.
+
+Ausdrücklich **nicht** enthalten: Benutzer- und Rollenverwaltung, Instanzen anlegen/löschen,
+Updates, Dateimanager, Einstellungen, Backups. Im Log stehen alle Schritte unter
+`[wikingerbot.amp_role]`.
+
+Die eigene Instanz blendet der Bot überall aus (`/server discover`, Auswahllisten), damit er
+sich nicht selbst stoppen kann – erkannt am Pfad `…/instances/<Name>/`, im Docker-Modus über
+das Feld *Eigene Instanz*.
 
 ## Neue Version einspielen
 

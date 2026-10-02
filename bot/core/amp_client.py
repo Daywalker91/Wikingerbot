@@ -1,5 +1,6 @@
 import asyncio
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Awaitable, TypeVar
 
 from ampapi.auth import RefreshingAuthProviderAsync
@@ -35,6 +36,26 @@ async def _raw_call(module, endpoint: str, args: dict) -> None:
     zurueckgeben. Die Antwort wird hier nicht ausgewertet (keiner unserer
     Aufrufer braucht sie), api_call() umgeht die kaputte Deserialisierung."""
     await module.api_call(endpoint, args)
+
+
+def instance_name_from_path(path: Path) -> str | None:
+    """AMP legt jede Instanz unter .../instances/<InstanzName>/ an - laeuft der Bot
+    selbst in AMP, steckt sein eigener Instanzname also in seinem Pfad."""
+    parts = path.parts
+    for index, part in enumerate(parts[:-1]):
+        if part.lower() == "instances":
+            return parts[index + 1]
+    return None
+
+
+def own_instance_ids() -> set[str]:
+    """Name/ID der AMP-Instanz, in der der Bot selbst laeuft (wird ueberall
+    ausgeblendet, damit er sich nicht selbst stoppen kann). AMP_OWN_INSTANCE
+    hat Vorrang - noetig im Docker-Modus, wo der Pfad den Namen nicht enthaelt."""
+    if settings.amp_own_instance:
+        return {settings.amp_own_instance.lower()}
+    name = instance_name_from_path(Path(__file__).resolve())
+    return {name.lower()} if name else set()
 
 
 @dataclass
@@ -101,15 +122,19 @@ class AMPClient:
         verwaltete ADS-Knoten, keine Spiele-Server - die sollen sich nirgends
         (weder Discord-Autocomplete/-discover noch WebUI) versehentlich
         anlegen/starten/stoppen lassen, deshalb hier zentral herausgefiltert.
+        Aus demselben Grund fehlt die Instanz, in der der Bot selbst laeuft.
         """
         controller = self._controller_client()
         nodes = await _with_timeout(
             controller.ADSModule.GetInstances(ForceIncludeSelf=False), DEFAULT_TIMEOUT
         )
+        own = own_instance_ids()
         discovered = []
         for node in nodes:
             for instance in node.AvailableInstances:
                 if instance.Module == "ADS":
+                    continue
+                if own & {str(getattr(instance, "InstanceName", "")).lower(), str(instance.InstanceID).lower()}:
                     continue
                 discovered.append(
                     DiscoveredInstance(
@@ -193,6 +218,21 @@ class AMPClient:
             self._instance_client(instance_id).MinecraftModule.AddToWhitelist(UserOrUUID=ign),
             DEFAULT_TIMEOUT,
         )
+
+    # --- Rollen und Rechte am Controller (fuer bot/core/amp_role.py) ---------------
+    # Bewusst roh per api_call: ampapis Deserialisierung ist bei diesen Typen
+    # unzuverlaessig (siehe _raw_call), und wir brauchen nur einfache JSON-Werte.
+
+    async def core_call(self, endpoint: str, args: dict | None = None):
+        """Ruft einen Core-Endpunkt am Controller auf und gibt das rohe JSON zurueck.
+        Aeltere AMP-Versionen verpacken das Ergebnis in {"result": ...} - das wird
+        hier einheitlich ausgepackt."""
+        result = await _with_timeout(
+            self._controller_client().Core.api_call(f"Core/{endpoint}", args or {}), DEFAULT_TIMEOUT
+        )
+        if isinstance(result, dict) and set(result) == {"result"}:
+            return result["result"]
+        return result
 
     async def poll_console(self, instance_id: str) -> list[ConsoleLine]:
         """Neue Konsolenzeilen seit dem letzten Poll dieser Instanz-Session."""

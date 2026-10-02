@@ -119,7 +119,7 @@ export default function ServerPage() {
               {discoverable.length === 0 && <option value="">Keine neuen AMP-Instanzen gefunden</option>}
               {discoverable.map((instance) => (
                 <option key={instance.instance_id} value={instance.instance_id}>
-                  {instance.friendly_name} ({instance.module})
+                  {instance.friendly_name} ({instance.running ? 'läuft' : 'gestoppt'})
                 </option>
               ))}
             </select>

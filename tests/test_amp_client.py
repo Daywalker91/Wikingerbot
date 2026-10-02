@@ -140,3 +140,37 @@ def test_instance_client_is_cached_per_instance_id(monkeypatch):
 
     assert first is second
     assert first is not third
+
+
+async def test_list_instances_hides_own_instance(monkeypatch):
+    own = _instance("bot-id", True, module="GenericModule")
+    own.InstanceName = "WikingerBot01"
+    ads_module = SimpleNamespace(
+        GetInstances=AsyncMock(return_value=[_node([_instance("game-1", False), own])])
+    )
+    client = AMPClient()
+    client._controller_client = lambda: SimpleNamespace(ADSModule=ads_module)
+    monkeypatch.setattr("bot.core.amp_client.own_instance_ids", lambda: {"wikingerbot01"})
+
+    instances = await client.list_instances()
+
+    assert [i.instance_id for i in instances] == ["game-1"]
+
+
+def test_instance_name_from_path():
+    from pathlib import PurePosixPath, PureWindowsPath
+
+    from bot.core.amp_client import instance_name_from_path
+
+    linux = PurePosixPath("/home/amp/.ampdata/instances/WikingerBot01/wikingerbot/Wikingerbot-main/bot/core/amp_client.py")
+    windows = PureWindowsPath(r"C:\AMPDatastore\Instances\WikingerBot01\wikingerbot\Wikingerbot-main\bot\core\amp_client.py")
+    assert instance_name_from_path(linux) == "WikingerBot01"
+    assert instance_name_from_path(windows) == "WikingerBot01"
+    assert instance_name_from_path(PurePosixPath("/d/day_w/Github/Wikingerbot/bot/core/amp_client.py")) is None
+
+
+def test_own_instance_setting_wins(monkeypatch):
+    from bot.core import amp_client as module
+
+    monkeypatch.setattr(module.settings, "amp_own_instance", "MeinBot")
+    assert module.own_instance_ids() == {"meinbot"}

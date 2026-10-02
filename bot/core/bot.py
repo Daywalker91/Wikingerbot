@@ -1,3 +1,4 @@
+import asyncio
 import json
 import logging
 from pathlib import Path
@@ -6,6 +7,7 @@ import discord
 from discord.ext import commands
 
 from bot.core.bot_settings import SYNC_ON_STARTUP_KEY, get_bot_setting, set_bot_setting
+from bot.core.config import settings
 
 COGS_PACKAGE = "bot.cogs"
 COGS_PATH = Path(__file__).resolve().parent.parent / "cogs"
@@ -57,6 +59,23 @@ class WikingerBot(commands.Bot):
         sync_on_startup = await get_bot_setting(SYNC_ON_STARTUP_KEY, default="true")
         if sync_on_startup == "true":
             await self.tree.sync()
+
+        # Eigene AMP-Rolle einrichten/pruefen - im Hintergrund, damit ein nicht
+        # erreichbares AMP den Discord-Login nicht aufhaelt.
+        if settings.amp_manage_role and settings.amp_user:
+            self._amp_role_task = asyncio.create_task(self._ensure_amp_role())
+
+    async def _ensure_amp_role(self) -> None:
+        from bot.core.amp_client import amp_client
+        from bot.core.amp_role import ensure_bot_role, log_report
+
+        try:
+            report = await ensure_bot_role(
+                amp_client.core_call, settings.amp_user, keep_super_admin=settings.amp_keep_super_admin
+            )
+            log_report(report, settings.amp_user)
+        except Exception as error:
+            log.warning("AMP-Rolle konnte nicht geprueft werden (AMP nicht erreichbar?): %s", error)
 
     async def on_ready(self) -> None:
         # Feste Log-Zeile: AMP erkennt daran, dass der Bot laeuft (Console.AppReadyRegex

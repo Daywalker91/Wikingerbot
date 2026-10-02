@@ -68,7 +68,7 @@ async def _autocomplete_amp_instance_id(
 
     current_lower = current.lower()
     choices = [
-        app_commands.Choice(name=f"{i.friendly_name} ({i.module})", value=i.instance_id)
+        app_commands.Choice(name=f"{i.friendly_name} ({'läuft' if i.running else 'gestoppt'})", value=i.instance_id)
         for i in instances
         if i.instance_id not in known_ids
         and (current_lower in i.friendly_name.lower() or current_lower in i.instance_id.lower())
@@ -379,8 +379,8 @@ class AMPCog(BaseCog):
             return
 
         lines = [
-            f"`{i.instance_id}` — {i.friendly_name} ({i.module}, {'laeuft' if i.running else 'gestoppt'})"
-            for i in unknown
+            f"{'🟢' if i.running else '🔴'} **{i.friendly_name}** — `{i.instance_id}`"
+            for i in sorted(unknown, key=lambda i: i.friendly_name.lower())
         ]
         await _followup_temp(interaction, "\n".join(lines))
 
