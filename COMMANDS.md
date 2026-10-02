@@ -294,3 +294,17 @@ Meldung im Alarmkanal. Während einer Flut wird nur einmal pro 30 s bestraft.
 | `/automod aktion loeschen: punkte: timeout_minuten:` | Folgen eines Verstoßes (Standard: nur löschen) | Admin |
 | `/automod alarmkanal kanal:` | Kanal für Meldungen – derselbe wie für Discords AutoMod | Admin |
 | `/automod ausnahme kanal: rolle:` | Kanal/Rolle ausnehmen; nochmal aufrufen hebt es auf | Admin |
+
+---
+
+## Community-Seite (`community`-Cog)
+
+Nur aktiv, wenn die Datenbank der Seite angebunden ist (siehe [AMP.md](AMP.md)). Grundlage für
+die weiteren Community-Cogs: holt alle 5 Sekunden die Aufträge der Seite ab.
+
+| Command | Beschreibung | Level |
+|---|---|---|
+| `/verknuepfen code:` | Verknüpft dein Discord-Konto mit deinem Konto auf der Seite. Den Code (8 Zeichen, 15 min gültig) gibt es auf der Seite unter *Einstellungen → Discord* | Member |
+| `/verknuepfung_loesen` | Löst die Verknüpfung; deine Discord-Rollen bleiben | Member |
+| `/profil mitglied:` | Link zum Profil auf der Seite und Rang (ohne Angabe: deins) | Member |
+| `/community status` | Erreichbarkeit der Seiten-Datenbank, verknüpfte Mitglieder, offene/fehlgeschlagene Aufträge | Admin |

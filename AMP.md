@@ -106,6 +106,22 @@ Das Signier-Geheimnis für Logins (`JWT_SECRET`) erzeugt der Bot beim ersten Sta
 auf dem der Bot ist; die Seiten zeigen nur, was die eigene Bot-Rolle (Member/Mod/Admin/Owner)
 darf.
 
+## Community-Seite anbinden (optional)
+
+Der Bot läuft ohne die Seite. Für die Anbindung (Verknüpfen, News, Events, Tickets …):
+
+1. Auf der Seite läuft die Migration `008_discord` von selbst (beim nächsten Seitenaufruf).
+2. Dem Bot-Benutzer der Datenbank eng begrenzte Rechte auf die Datenbank der Seite geben
+   (spaltengenau – er sieht z.B. weder E-Mail noch Passwort-Hash). Das SQL dafür steht im
+   README der Seite bzw. wurde einmalig bereitgestellt.
+3. In AMP unter *Community-Seite*: **Datenbank der Community-Seite** (z.B. `php`) und
+   **Adresse der Community-Seite** (z.B. `https://wikinger.ipv64.net`). Host, Benutzer und
+   Passwort kommen aus dem Abschnitt *Datenbank*.
+4. Neustart. Im Log darf dann **nicht** „Community-Seite nicht angebunden“ stehen;
+   `/community status` zeigt, ob die Datenbank erreichbar ist.
+5. Erst danach auf der Seite in `config.local.php` `'discord_enabled' => true` setzen – vorher
+   würde die Seite Aufträge schreiben, die niemand abholt.
+
 ## Neue Version einspielen
 
 Änderungen nach `main` pushen → in AMP **Update** → **Restart**. Migrationen laufen beim

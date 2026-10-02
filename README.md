@@ -19,7 +19,7 @@
 | Phase 3 | React-WebUI | ✅ läuft in AMP im Bot-Prozess (https über das Edge-Gateway): Dashboard, Server, Moderation, Whitelist, Einstellungen, Musik, Begrüßung; Benutzer-Seite offen |
 | — | Betrieb in AMP: eigene Vorlage, Migrationen beim Start, MariaDB getestet ([AMP.md](AMP.md)) | ✅ fertig |
 | Phase 4 | `welcome`, `roles`, `music`, `stats`, `automod` | ✅ fertig (Tests ohne Discord; live in Discord noch zu prüfen) |
-| Phase 5 | Kopplung mit der Community-Seite als eigene, abschaltbare Cogs (`community`, Rollen-Sync, `tickets`, `news`, `events`) | ⏳ offen |
+| Phase 5 | Kopplung mit der Community-Seite als eigene, abschaltbare Cogs | 🔜 `community` (Verknüpfen, Auftrags-Abholung) fertig; `news`, `events`, `tickets`, Rang-Sync, `wiki` offen |
 
 Phase 1–3 sind gegen einen echten AMP-Server und einen Test-Discord-Server live verifiziert (nicht nur Unit-Tests). Die Phase-4-Cogs sind mit Unit-Tests abgesichert (Befehle laden, Regeln, Datenbank, echter FFmpeg-Lauf), aber noch nicht in Discord ausprobiert.
 
@@ -130,6 +130,7 @@ Wikingerbot/
 │       ├── music/               # /musik ... /musikconfig ... (Radio, Dateien, Podcasts) + Web-Seite
 │       ├── stats/               # /stats ... (Aktivitaet, Mitgliederzaehler)
 │       ├── automod/             # /automod ... (Regeln, die Discords AutoMod nicht kann)
+│       ├── community/cog.py     # /verknuepfen /profil /community status (nur mit Seiten-DB)
 │       ├── whitelist/cog.py    # /whitelist ...
 │       └── banner/              # /banner ... /bannergroup ... (Status-Banner, Editor-UI)
 │           ├── cog.py           # Commands, Views, Posting-/Update-Loop
@@ -137,6 +138,7 @@ Wikingerbot/
 │           ├── image.py         # Pillow-Rendering der Bild-Banner-Variante
 │           └── embed.py         # Embed-Rendering der Embed-Banner-Variante
 │
+├── bot/community/               # gemeinsam fuer die Community-Cogs: Seiten-DB, Outbox-Verteiler, Verknuepfung
 ├── api/                         # FastAPI Backend
 │   ├── main.py                  # CORS, sammelt Cog-Router ein
 │   ├── cog_routers.py           # discover_cog_routers() - analog zu discover_cogs() fuer Discord-Cogs
