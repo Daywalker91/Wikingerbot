@@ -80,6 +80,14 @@ def use_same_origin_urls() -> None:
         settings.discord_redirect_uri = ""
 
 
+def forwarded_allow_ips() -> list[str] | str:
+    """TRUSTED_PROXIES als Liste fuer uvicorn (IPs oder Netze wie 10.42.0.0/16).
+    Leer: jedem glauben - bequem im eigenen Netz, aber dann kann jeder, der den
+    Port direkt erreicht, sich per X-Forwarded-Proto als https ausgeben."""
+    entries = [e.strip() for e in settings.trusted_proxies.split(",") if e.strip()]
+    return entries or "*"
+
+
 class _Server(uvicorn.Server):
     # Strg+C/SIGTERM behandelt bot/main.py fuer den ganzen Prozess - uvicorn soll
     # sich dort nicht dazwischenhaengen.
@@ -103,7 +111,7 @@ class WebServer:
             log_config=None,
             access_log=False,
             proxy_headers=True,
-            forwarded_allow_ips="*",
+            forwarded_allow_ips=forwarded_allow_ips(),
         )
         self._server = _Server(config)
         self._task = asyncio.create_task(self._server.serve())

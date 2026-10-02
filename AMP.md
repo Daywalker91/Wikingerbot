@@ -88,6 +88,19 @@ Einrichten:
 3. **Client ID** und **Client Secret** (OAuth2-Seite) in AMP eintragen.
 4. Port in der Firewall nur freigeben, wenn die Oberfläche von außerhalb erreichbar sein soll.
 
+### https über einen Reverse-Proxy (z.B. Edge-Gateway)
+
+Am Bot ändert sich dafür nichts außer zwei Feldern:
+
+- **Web-Adresse** = die https-Adresse, z.B. `https://bot.wikinger.ipv64.net` (Discord-Redirect
+  dann `https://bot.wikinger.ipv64.net/api/auth/callback`).
+- **Vertrauenswürdige Proxys** = die Adressen, von denen der Proxy beim Bot ankommt (bei k3s
+  die Knoten-IPs, `kubectl get nodes -o wide`). Nur deren `X-Forwarded-*` glaubt der Bot – sonst
+  könnte jeder, der den Port direkt erreicht, sich als https ausgeben. Leer = jedem.
+
+Der Proxy muss `X-Forwarded-Proto` setzen und den `Host` durchreichen (Caddy tut beides von
+selbst). Das Login-Cookie wird bei https automatisch als `Secure` gesetzt.
+
 Das Signier-Geheimnis für Logins (`JWT_SECRET`) erzeugt der Bot beim ersten Start selbst
 (`data/jwt_secret`, bleibt bei Updates erhalten). Angemeldet wird über den Discord-Server,
 auf dem der Bot ist; die Seiten zeigen nur, was die eigene Bot-Rolle (Member/Mod/Admin/Owner)

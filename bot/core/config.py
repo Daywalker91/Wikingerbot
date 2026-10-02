@@ -43,6 +43,9 @@ class Settings(BaseSettings):
     # Oeffentliche Adresse, z.B. https://bot.wikinger.ipv64.net - daraus werden
     # Frontend-URL und Discord-Redirect (/api/auth/callback) abgeleitet.
     public_url: str = ""
+    # Reverse-Proxys (z.B. Edge-Gateway), deren X-Forwarded-* Header geglaubt werden:
+    # IPs/Netze, kommagetrennt. Leer = jedem (Standard von frueher).
+    trusted_proxies: str = ""
 
     amp_url: str = "http://localhost:8080"
     amp_user: str = ""

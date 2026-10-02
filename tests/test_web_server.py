@@ -147,3 +147,10 @@ def test_login_without_secret_explains_instead_of_redirecting(monkeypatch):
     client = TestClient(server.build_app())
     response = client.get("/api/auth/login?guild_id=1", follow_redirects=False)
     assert response.status_code == 503 and "Client Secret" in response.text
+
+
+def test_trusted_proxies(monkeypatch):
+    monkeypatch.setattr(settings, "trusted_proxies", "")
+    assert server.forwarded_allow_ips() == "*"
+    monkeypatch.setattr(settings, "trusted_proxies", " 10.0.0.35, 10.42.0.0/16 ,")
+    assert server.forwarded_allow_ips() == ["10.0.0.35", "10.42.0.0/16"]
