@@ -1,13 +1,8 @@
-import json
+"""Verwarnsystem des moderation-Cogs (wird auch vom automod-Cog genutzt)."""
+
 from types import SimpleNamespace
 
-from bot.cogs.moderation.cog import (
-    DEFAULT_AUTOMOD_POINTS,
-    _apply_warning,
-    _automod_points_for,
-    _build_automod_reason,
-    _resolve_automod_channel,
-)
+from bot.cogs.moderation.cog import _apply_warning
 from bot.core.guild_config import set_config
 from db.models.guild import Guild
 from db.models.modlog import Warning
@@ -16,55 +11,6 @@ from db.models.modlog import Warning
 async def _seed_guild(db_session, guild_id: int = 1):
     db_session.add(Guild(id=guild_id, name="Wikinger"))
     await db_session.commit()
-
-
-async def test_automod_points_for_returns_default_weight(db_session):
-    await _seed_guild(db_session)
-
-    assert await _automod_points_for(1, "keyword") == DEFAULT_AUTOMOD_POINTS["keyword"]
-    assert await _automod_points_for(1, "spam") == DEFAULT_AUTOMOD_POINTS["spam"]
-
-
-async def test_automod_points_for_unknown_trigger_falls_back_to_one(db_session):
-    await _seed_guild(db_session)
-
-    assert await _automod_points_for(1, "future_trigger_type") == 1
-
-
-async def test_automod_points_for_uses_configured_override(db_session):
-    await _seed_guild(db_session)
-    weights = {**DEFAULT_AUTOMOD_POINTS, "keyword": 9}
-    await set_config(1, "automod_warn_points", json.dumps(weights))
-
-    assert await _automod_points_for(1, "keyword") == 9
-
-
-def test_build_automod_reason_without_matched_keyword():
-    assert _build_automod_reason("spam", None) == "AutoMod: spam"
-
-
-def test_build_automod_reason_with_matched_keyword():
-    reason = _build_automod_reason("keyword", "boese-woerter")
-    assert reason == "AutoMod: keyword (Treffer: 'boese-woerter')"
-
-
-async def test_resolve_automod_channel_prefers_configured_channel(db_session):
-    await _seed_guild(db_session)
-    await set_config(1, "automod_alert_channel_id", "999")
-    bot = SimpleNamespace(get_channel=lambda cid: f"channel-{cid}")
-
-    channel = await _resolve_automod_channel(bot, 1, fallback_channel_id=111)
-
-    assert channel == "channel-999"
-
-
-async def test_resolve_automod_channel_falls_back_when_unset(db_session):
-    await _seed_guild(db_session)
-    bot = SimpleNamespace(get_channel=lambda cid: f"channel-{cid}")
-
-    channel = await _resolve_automod_channel(bot, 1, fallback_channel_id=111)
-
-    assert channel == "channel-111"
 
 
 async def test_apply_warning_sums_points_and_returns_threshold(db_session):

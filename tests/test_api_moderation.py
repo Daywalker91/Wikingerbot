@@ -226,16 +226,7 @@ async def test_get_mod_config_returns_defaults(db_session):
         "warn_ladder": ["timeout", "kick", "ban"],
         "warn_timeout_minutes": 60,
         "warn_decay_days": 30,
-        "automod_warn_enabled": False,
-        "automod_warn_points": {
-            "spam": 1,
-            "keyword": 2,
-            "keyword_preset": 2,
-            "mention_spam": 2,
-            "harmful_link": 3,
-            "member_profile": 1,
-        },
-        "automod_alert_channel_id": None,
+        "modlog_channel_id": None,
     }
 
 
@@ -261,16 +252,7 @@ async def test_update_mod_config_persists_values(db_session):
                 "warn_ladder": ["ban", "kick"],
                 "warn_timeout_minutes": 30,
                 "warn_decay_days": 14,
-                "automod_warn_enabled": True,
-                "automod_warn_points": {
-                    "spam": 2,
-                    "keyword": 3,
-                    "keyword_preset": 3,
-                    "mention_spam": 3,
-                    "harmful_link": 5,
-                    "member_profile": 2,
-                },
-                "automod_alert_channel_id": 555,
+                "modlog_channel_id": 555,
             },
         )
         get_response = await client.get("/moderation/mod-config")
@@ -281,16 +263,7 @@ async def test_update_mod_config_persists_values(db_session):
         "warn_ladder": ["ban", "kick"],
         "warn_timeout_minutes": 30,
         "warn_decay_days": 14,
-        "automod_warn_enabled": True,
-        "automod_warn_points": {
-            "spam": 2,
-            "keyword": 3,
-            "keyword_preset": 3,
-            "mention_spam": 3,
-            "harmful_link": 5,
-            "member_profile": 2,
-        },
-        "automod_alert_channel_id": "555",
+        "modlog_channel_id": "555",
     }
 
 

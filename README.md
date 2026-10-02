@@ -129,7 +129,7 @@ Wikingerbot/
 │       ├── roles/cog.py         # /rollen auto ... /rollen panel ... (Autorole, Selbstwahl-Knoepfe)
 │       ├── music/               # /musik ... /musikconfig ... (Radio, Dateien, Podcasts) + Web-Seite
 │       ├── stats/               # /stats ... (Aktivitaet, Mitgliederzaehler)
-│       ├── automod/             # /automod ... (Regeln, die Discords AutoMod nicht kann)
+│       ├── automod/             # /automod ... (Discords AutoMod + eigene Regeln) + Web-Seite
 │       ├── community/cog.py     # /verknuepfen /profil /community status (nur mit Seiten-DB)
 │       ├── whitelist/cog.py    # /whitelist ...
 │       └── banner/              # /banner ... /bannergroup ... (Status-Banner, Editor-UI)
@@ -292,7 +292,7 @@ da `require_role` auf `app_commands.Command` zugeschnitten ist.
 |---|---|---|
 | `music` | Ersetzt Sinusbot: Radio-Streams (inkl. .m3u/.pls), eigene Dateien, Podcasts (RSS) – bewusst ohne YouTube, Spotify und Aufnahme | ✅ fertig |
 | `stats` | Beitritte/Austritte, Nachrichten, Voice-Zeit, Top-Mitglieder, Mitgliederzähler-Kanal – nur Anzahlen, nie Inhalte | ✅ fertig |
-| `automod` | Nur Regeln, die Discords AutoMod nicht kann: Flut, Wiederholung, Großbuchstaben, Emojis, Link-Allowlist, junge Konten | ✅ fertig |
+| `automod` | Warn-Punkte aus Discords AutoMod (früher in `moderation`) und eigene Regeln, die Discord nicht kann: Flut, Wiederholung, Großbuchstaben, Emojis, Link-Allowlist, junge Konten; eigener Tab | ✅ fertig |
 | `trivia` | Quiz-System | vorerst nicht geplant |
 
 ---
@@ -304,6 +304,8 @@ da `require_role` auf `app_commands.Command` zugeschnitten ist.
 | Dashboard | Server-Übersicht, Online-Status, Spielerzahlen |
 | Musik | Jetzt läuft, Steuerung, Radio/Podcasts/Dateien abspielen; Admin: Sender und Podcasts |
 | Begrüßung | Begrüßung, DM und Abschied mit Vorschau (Admin) |
+| AutoMod | Discords AutoMod → Warn-Punkte, eigene Regeln, Folgen, Ausnahmen, Alarmkanal (Admin) |
+| Community | Anbindung an die Community-Seite (Owner) |
 | Server | AMP-Instanzen verwalten, Start/Stop, Console-Log |
 | Moderation | ModLog ansehen, Verwarnungen, gebannte User |
 | Whitelist | Anfragen verwalten, genehmigen/ablehnen |

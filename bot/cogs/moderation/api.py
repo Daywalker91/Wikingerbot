@@ -28,7 +28,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.types import Snowflake
 from api.middleware.auth import CurrentUser, require_level
-from bot.cogs.moderation.cog import DEFAULT_AUTOMOD_POINTS, DEFAULT_LADDER, reset_escalation_tier
+from bot.cogs.moderation.cog import DEFAULT_LADDER, reset_escalation_tier
 from bot.core.config import settings
 from bot.core.guild_config import get_config, set_config
 from db.models.modlog import ModAction, ModLogEntry, Warning, WarnEscalationState
@@ -75,23 +75,12 @@ class ActionResult(BaseModel):
     message: str
 
 
-class AutoModPointsOut(BaseModel):
-    spam: int
-    keyword: int
-    keyword_preset: int
-    mention_spam: int
-    harmful_link: int
-    member_profile: int
-
-
 class ModConfigOut(BaseModel):
     warn_threshold: int
     warn_ladder: list[Literal["timeout", "ban", "kick"]]
     warn_timeout_minutes: int
     warn_decay_days: int
-    automod_warn_enabled: bool
-    automod_warn_points: AutoModPointsOut
-    automod_alert_channel_id: Snowflake | None
+    modlog_channel_id: Snowflake | None = None
 
 
 class MemberSearchResult(BaseModel):
@@ -116,19 +105,12 @@ class EscalationResetBody(BaseModel):
 
 @router.get("/mod-config", response_model=ModConfigOut)
 async def get_mod_config(user: CurrentUser = Depends(require_level(Level.OWNER))) -> ModConfigOut:
-    channel_id = await get_config(user.guild_id, "automod_alert_channel_id", None)
     return ModConfigOut(
         warn_threshold=int(await get_config(user.guild_id, "warn_threshold", "3")),
         warn_ladder=json.loads(await get_config(user.guild_id, "warn_ladder", json.dumps(DEFAULT_LADDER))),
         warn_timeout_minutes=int(await get_config(user.guild_id, "warn_timeout_minutes", "60")),
         warn_decay_days=int(await get_config(user.guild_id, "warn_decay_days", "30")),
-        automod_warn_enabled=await get_config(user.guild_id, "automod_warn_enabled", "false") == "true",
-        automod_warn_points=AutoModPointsOut(
-            **json.loads(
-                await get_config(user.guild_id, "automod_warn_points", json.dumps(DEFAULT_AUTOMOD_POINTS))
-            )
-        ),
-        automod_alert_channel_id=int(channel_id) if channel_id else None,
+        modlog_channel_id=int(modlog) if (modlog := await get_config(user.guild_id, "modlog_channel_id", None)) else None,
     )
 
 
@@ -140,15 +122,7 @@ async def update_mod_config(
     await set_config(user.guild_id, "warn_ladder", json.dumps(body.warn_ladder))
     await set_config(user.guild_id, "warn_timeout_minutes", str(body.warn_timeout_minutes))
     await set_config(user.guild_id, "warn_decay_days", str(body.warn_decay_days))
-    await set_config(
-        user.guild_id, "automod_warn_enabled", "true" if body.automod_warn_enabled else "false"
-    )
-    await set_config(user.guild_id, "automod_warn_points", json.dumps(body.automod_warn_points.model_dump()))
-    await set_config(
-        user.guild_id,
-        "automod_alert_channel_id",
-        str(body.automod_alert_channel_id) if body.automod_alert_channel_id else "",
-    )
+    await set_config(user.guild_id, "modlog_channel_id", str(body.modlog_channel_id) if body.modlog_channel_id else "")
     return body
 
 

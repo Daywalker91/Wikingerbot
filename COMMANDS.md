@@ -78,7 +78,7 @@ Minecraft; vanilla Valheim z.B. nicht).
 | `/modconfig threshold value:` | Setzt die Warn-Punkte-Schwelle für automatische Eskalation (Default 3) | Owner |
 | `/modconfig action action:` | Setzt die Eskalations-Aktion: `timeout` / `ban` / `kick` (Default `timeout`) | Owner |
 | `/modconfig timeout minutes:` | Setzt die Timeout-Dauer für Eskalationen in Minuten (Default 60) | Owner |
-| `/modconfig log_channel channel:` | Kanal, in dem jeder Bann, Kick und Timeout gemeldet wird (Mod, Grund, bei Bann der `/unban`-Befehl). Ohne eigenen Kanal wird der AutoMod-Kanal benutzt | Owner |
+| `/modconfig log_channel channel:` | Kanal, in dem jeder Bann, Kick und Timeout gemeldet wird (Mod, Grund, bei Bann der `/unban`-Befehl). Auch im Moderations-Tab einstellbar. Wer bisher keinen eigenen hatte, behält einmalig den bisherigen AutoMod-Kanal | Owner |
 
 **Rangregel**: Vor `/kick`, `/ban`, `/timeout`, `/warn` und jeder automatischen
 Eskalation prüft der Bot Discords eigene Regel – das Ziel muss **unter** dem
@@ -270,20 +270,29 @@ nicht mit. Gespeichert wird einmal pro Minute.
 
 ---
 
-## `/automod` — eigene AutoMod-Regeln (`automod`-Cog)
+## `/automod` — AutoMod (`automod`-Cog, eigener Tab in der Oberfläche)
 
-**Ergänzung** zu Discords eingebautem AutoMod (Stichwörter, Erwähnungs-Spam,
-verdächtige Inhalte macht Discord selbst; deren Treffer verarbeitet der
-`moderation`-Cog). Hier nur, was Discord nicht kann. Standardmäßig **aus**
-(`/automod aktiv an:True`). Mods, Admins und Server-Administratoren sind immer
-ausgenommen. Bei einem Verstoß: Nachricht löschen, kurzer Hinweis im Kanal,
-optional Warn-Punkte (über das Verwarnsystem von `moderation`) und Timeout,
-Meldung im Alarmkanal. Während einer Flut wird nur einmal pro 30 s bestraft.
+Alles zu AutoMod an einer Stelle:
+
+1. **Discords eigener AutoMod** (Regeln in Discord unter Servereinstellungen →
+   Sicherheit): blockiert er eine Nachricht, vergibt der Bot Warn-Punkte je
+   Regeltyp – mit der Eskalation aus dem `moderation`-Cog. Früher Teil von
+   `moderation`; die bisherigen Einstellungen gelten weiter.
+2. **Eigene Regeln**, die Discord nicht kann. Standardmäßig **aus**
+   (`/automod aktiv an:True`). Mods, Admins und Server-Administratoren sind immer
+   ausgenommen. Bei einem Verstoß: Nachricht löschen, kurzer Hinweis im Kanal,
+   optional Warn-Punkte und Timeout. Während einer Flut wird nur einmal pro 30 s bestraft.
+
+Warn-Punkte gibt es nur, wenn der `moderation`-Cog geladen ist (er führt das
+Verwarnsystem) – ohne ihn wird nur gelöscht und gemeldet. Alle Meldungen gehen in
+den eigenen AutoMod-Alarmkanal.
 
 | Command | Beschreibung | Level |
 |---|---|---|
 | `/automod status` | Alle Regeln und Einstellungen | Mod |
-| `/automod aktiv an:` | Bot-AutoMod an/aus | Admin |
+| `/automod discord an:` | Warn-Punkte, wenn Discords AutoMod eine Nachricht blockiert | Admin |
+| `/automod discord_punkte typ: punkte:` | Warn-Punkte je Regeltyp von Discords AutoMod | Admin |
+| `/automod aktiv an:` | Eigene Regeln an/aus | Admin |
 | `/automod flut an: nachrichten: sekunden:` | Mehr als X Nachrichten in Y Sekunden (Standard 6 in 8 s) | Admin |
 | `/automod wiederholung an: anzahl: sekunden:` | Gleiche Nachricht X-mal in Y Sekunden (Standard 3 in 60 s) | Admin |
 | `/automod grossbuchstaben an: prozent: mindestlaenge:` | Zu viel Großschrift (Standard ab 70 % bei mind. 12 Buchstaben) | Admin |
@@ -292,7 +301,7 @@ Meldung im Alarmkanal. Während einer Flut wird nur einmal pro 30 s bestraft.
 | `/automod link_erlauben domain:` · `link_entfernen domain:` | Erlaubte Domains (gilt mit Subdomains) | Admin |
 | `/automod neue_konten tage:` | Hinweis im Alarmkanal, wenn ein jüngeres Konto beitritt (0 = aus) | Admin |
 | `/automod aktion loeschen: punkte: timeout_minuten:` | Folgen eines Verstoßes (Standard: nur löschen) | Admin |
-| `/automod alarmkanal kanal:` | Kanal für Meldungen – derselbe wie für Discords AutoMod | Admin |
+| `/automod alarmkanal kanal:` | Kanal für alle AutoMod-Meldungen (eigene Regeln und Discords AutoMod) | Admin |
 | `/automod ausnahme kanal: rolle:` | Kanal/Rolle ausnehmen; nochmal aufrufen hebt es auf | Admin |
 
 ---

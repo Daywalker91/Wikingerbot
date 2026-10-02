@@ -1,10 +1,14 @@
-"""Eigene AutoMod-Regeln (Flut, Wiederholung, Grossbuchstaben, Emojis, Links,
-neue Konten) - Ergaenzung zu Discords eingebautem AutoMod, nicht Ersatz.
+"""Alles zu AutoMod an einer Stelle (eigener Tab in der Oberflaeche):
 
-Bei einem Verstoss: Nachricht loeschen, optional Warn-Punkte (ueber den
-moderation-Cog, falls geladen) und Timeout, Meldung im AutoMod-Alarmkanal
-(derselbe wie fuer Discords AutoMod: guild_config "automod_alert_channel_id").
-Mods und hoeher sowie Administratoren sind ausgenommen.
+1. Discords eingebauter AutoMod: blockiert er eine Nachricht, gibt es Warn-Punkte
+   je Regeltyp (frueher Teil des moderation-Cogs, gleiche Einstellungen).
+2. Eigene Regeln, die Discord nicht kann: Flut, Wiederholung, Grossbuchstaben,
+   Emojis, Links, Hinweis bei jungen Konten. Folgen: loeschen, optional Warn-Punkte
+   und Timeout. Mods und hoeher sowie Administratoren sind ausgenommen.
+
+Warn-Punkte laufen ueber das Verwarnsystem des moderation-Cogs (mit Eskalation) -
+nur wenn der geladen ist; sonst wird nur geloescht und gemeldet. Meldungen gehen
+in den eigenen AutoMod-Alarmkanal (guild_config "automod_alert_channel_id").
 """
 
 import json
@@ -12,6 +16,8 @@ import logging
 import time
 from datetime import timedelta
 from typing import Literal
+
+from discord.app_commands import Choice
 
 import discord
 from discord import app_commands
@@ -27,6 +33,50 @@ log = logging.getLogger(__name__)
 CONFIG_KEY = "automod_rules"
 CONFIG_CACHE_SECONDS = 60
 PUNISH_COOLDOWN_SECONDS = 30  # waehrend einer Flut nur einmal verwarnen, Rest nur loeschen
+
+# Warn-Punkte je Regeltyp von Discords AutoMod (guild_config "automod_warn_points")
+DEFAULT_AUTOMOD_POINTS = {
+    "spam": 1,
+    "keyword": 2,
+    "keyword_preset": 2,
+    "mention_spam": 2,
+    "harmful_link": 3,
+    "member_profile": 1,
+}
+AUTOMOD_TRIGGER_LABELS = {
+    "spam": "Spam",
+    "keyword": "Eigene Stichwörter",
+    "keyword_preset": "Discord-Stichwortlisten",
+    "mention_spam": "Erwähnungs-Spam",
+    "harmful_link": "Schädliche Links",
+    "member_profile": "Mitgliederprofil",
+}
+
+
+async def automod_points(guild_id: int) -> dict[str, int]:
+    try:
+        stored = json.loads(await get_config(guild_id, "automod_warn_points", "{}") or "{}")
+    except json.JSONDecodeError:
+        stored = {}
+    return {**DEFAULT_AUTOMOD_POINTS, **{k: int(v) for k, v in stored.items()}}
+
+
+async def automod_points_for(guild_id: int, trigger_type: str) -> int:
+    return (await automod_points(guild_id)).get(trigger_type, 1)
+
+
+def build_automod_reason(trigger_type: str, matched_keyword: str | None) -> str:
+    reason = f"AutoMod: {trigger_type}"
+    if matched_keyword:
+        reason += f" (Treffer: '{matched_keyword}')"
+    return reason
+
+
+async def resolve_alert_channel(bot: discord.Client, guild_id: int, fallback_channel_id: int | None = None):
+    channel_id = await get_config(guild_id, "automod_alert_channel_id", None)
+    if channel_id:
+        return bot.get_channel(int(channel_id))
+    return bot.get_channel(fallback_channel_id) if fallback_channel_id else None
 
 
 class AutomodCog(BaseCog):
@@ -120,13 +170,16 @@ class AutomodCog(BaseCog):
         await self._alert(message.guild, f"{member.mention} in {message.channel.mention}: **{reason}**", results, message.content)
 
     async def _warn(self, message: discord.Message, reason: str, points: int) -> bool:
+        return await self._apply_points(message.guild, message.author.id, reason, points, message.channel)
+
+    async def _apply_points(self, guild: discord.Guild, user_id: int, reason: str, points: int, channel) -> bool:
         """Ueber das Verwarnsystem des moderation-Cogs - nur wenn der geladen ist."""
         if self.bot.get_cog("ModerationCog") is None:
             return False
         from bot.cogs.moderation.cog import _apply_warning
 
         try:
-            await _apply_warning(self.bot.user.id, message.guild, message.author.id, self.bot.user.id, reason, points, message.channel)
+            await _apply_warning(self.bot.user.id, guild, user_id, self.bot.user.id, reason, points, channel)
             return True
         except Exception as error:
             log.warning("AutoMod-Verwarnung fehlgeschlagen: %s", error)
@@ -146,6 +199,23 @@ class AutomodCog(BaseCog):
             await channel.send(embed=embed, allowed_mentions=discord.AllowedMentions.none())
         except discord.HTTPException as error:
             log.warning("AutoMod-Meldung fehlgeschlagen: %s", error)
+
+    @commands.Cog.listener("on_automod_action")
+    async def on_automod_action(self, execution: discord.AutoModAction) -> None:
+        """Discords eigener AutoMod hat zugeschlagen -> Warn-Punkte je Regeltyp."""
+        if execution.action.type != discord.AutoModRuleActionType.block_message:
+            return  # nur einmal zaehlen, auch wenn eine Regel mehrere Aktionen hat
+        if await get_config(execution.guild_id, "automod_warn_enabled", "false") != "true":
+            return
+        guild = self.bot.get_guild(execution.guild_id)
+        if guild is None:
+            return
+        trigger = execution.rule_trigger_type.name
+        points = await automod_points_for(execution.guild_id, trigger)
+        channel = await resolve_alert_channel(self.bot, execution.guild_id, execution.channel_id)
+        if channel is None or not points:
+            return
+        await self._apply_points(guild, execution.user_id, build_automod_reason(trigger, execution.matched_keyword), points, channel)
 
     @commands.Cog.listener()
     async def on_member_join(self, member: discord.Member) -> None:
@@ -176,8 +246,12 @@ class AutomodCog(BaseCog):
         on = lambda flag: "✅" if flag else "❌"  # noqa: E731
         links = {"off": "aus", "allowlist": "nur erlaubte Domains", "block": "alle gesperrt"}[c["links"]["mode"]]
         channel_id = await get_config(interaction.guild_id, "automod_alert_channel_id")
+        discord_on = await get_config(interaction.guild_id, "automod_warn_enabled", "false") == "true"
+        points = await automod_points(interaction.guild_id)
         lines = [
-            f"**Bot-AutoMod {'an' if c['enabled'] else 'AUS'}**",
+            f"**Discords AutoMod → Warn-Punkte: {'an' if discord_on else 'aus'}** "
+            f"({', '.join(f'{AUTOMOD_TRIGGER_LABELS[k]} {v}' for k, v in points.items() if k in AUTOMOD_TRIGGER_LABELS)})",
+            f"**Eigene Regeln {'an' if c['enabled'] else 'AUS'}**",
             f"{on(c['flood']['on'])} Flut: mehr als {c['flood']['messages']} Nachrichten in {c['flood']['seconds']} s",
             f"{on(c['duplicates']['on'])} Wiederholung: {c['duplicates']['count']}× gleich in {c['duplicates']['seconds']} s",
             f"{on(c['caps']['on'])} Großbuchstaben: ab {c['caps']['percent']} % (ab {c['caps']['min_length']} Buchstaben)",
@@ -192,7 +266,26 @@ class AutomodCog(BaseCog):
         ]
         await interaction.response.send_message("\n".join(lines), ephemeral=True, allowed_mentions=discord.AllowedMentions.none())
 
-    @automod_group.command(name="aktiv", description="Bot-AutoMod an- oder abschalten")
+    @automod_group.command(name="discord", description="Warn-Punkte, wenn Discords eigener AutoMod eine Nachricht blockiert")
+    @require_role(Level.ADMIN)
+    async def discord_toggle(self, interaction: discord.Interaction, an: bool) -> None:
+        await set_config(interaction.guild_id, "automod_warn_enabled", "true" if an else "false", interaction.guild.name)
+        await interaction.response.send_message(
+            f"Warn-Punkte aus Discords AutoMod sind {'an' if an else 'aus'}.", ephemeral=True, delete_after=20
+        )
+
+    @automod_group.command(name="discord_punkte", description="Warn-Punkte je Regeltyp von Discords AutoMod")
+    @app_commands.choices(typ=[Choice(name=label, value=key) for key, label in AUTOMOD_TRIGGER_LABELS.items()])
+    @require_role(Level.ADMIN)
+    async def discord_points(
+        self, interaction: discord.Interaction, typ: Choice[str], punkte: app_commands.Range[int, 0, 100]
+    ) -> None:
+        weights = await automod_points(interaction.guild_id)
+        weights[typ.value] = punkte
+        await set_config(interaction.guild_id, "automod_warn_points", json.dumps(weights), interaction.guild.name)
+        await interaction.response.send_message(f"{typ.name}: {punkte} Warn-Punkte.", ephemeral=True, delete_after=20)
+
+    @automod_group.command(name="aktiv", description="Eigene Bot-Regeln an- oder abschalten")
     @require_role(Level.ADMIN)
     async def toggle(self, interaction: discord.Interaction, an: bool) -> None:
         await self._update(interaction, lambda c: c.update(enabled=an), f"Bot-AutoMod ist {'an' if an else 'aus'}.")
@@ -305,7 +398,7 @@ class AutomodCog(BaseCog):
             f"Bei Verstoß: {'löschen' if loeschen else 'nicht löschen'}, {punkte} Warn-Punkte, Timeout {timeout_minuten} min.",
         )
 
-    @automod_group.command(name="alarmkanal", description="Kanal fuer AutoMod-Meldungen (gilt auch fuer Discords AutoMod)")
+    @automod_group.command(name="alarmkanal", description="Kanal fuer alle AutoMod-Meldungen (eigene Regeln und Discords AutoMod)")
     @require_role(Level.ADMIN)
     async def alert_channel(self, interaction: discord.Interaction, kanal: discord.TextChannel) -> None:
         await set_config(interaction.guild_id, "automod_alert_channel_id", str(kanal.id), interaction.guild.name)

@@ -3,7 +3,6 @@ from datetime import datetime, timedelta, timezone
 
 import discord
 from discord import app_commands
-from discord.app_commands import Choice
 from discord.ext import commands, tasks
 from sqlalchemy import func, select, update
 
@@ -77,35 +76,6 @@ async def _decay_warnings() -> None:
             await db.commit()
 
 
-DEFAULT_AUTOMOD_POINTS = {
-    "spam": 1,
-    "keyword": 2,
-    "keyword_preset": 2,
-    "mention_spam": 2,
-    "harmful_link": 3,
-    "member_profile": 1,
-}
-
-
-async def _automod_points_for(guild_id: int, trigger_type: str) -> int:
-    weights = json.loads(
-        await get_config(guild_id, "automod_warn_points", json.dumps(DEFAULT_AUTOMOD_POINTS))
-    )
-    return weights.get(trigger_type, 1)
-
-
-def _build_automod_reason(trigger_type: str, matched_keyword: str | None) -> str:
-    reason = f"AutoMod: {trigger_type}"
-    if matched_keyword:
-        reason += f" (Treffer: '{matched_keyword}')"
-    return reason
-
-
-async def _resolve_automod_channel(bot: discord.Client, guild_id: int, fallback_channel_id: int):
-    channel_id = await get_config(guild_id, "automod_alert_channel_id", None)
-    return bot.get_channel(int(channel_id)) if channel_id else bot.get_channel(fallback_channel_id)
-
-
 async def _dm(member: discord.Member, message: str) -> None:
     try:
         await member.send(message)
@@ -147,10 +117,17 @@ def _guild_block_reason(interaction: discord.Interaction, target: discord.Member
 
 
 async def _modlog_channel(bot: discord.Client, guild_id: int):
-    """Kanal fuer Moderations-Meldungen; ohne eigenen Kanal der AutoMod-Kanal."""
-    channel_id = await get_config(guild_id, "modlog_channel_id", None) or await get_config(
-        guild_id, "automod_alert_channel_id", None
-    )
+    """Kanal fuer Moderations-Meldungen (/modconfig log_channel bzw. Moderations-Seite).
+
+    Frueher fiel er ohne eigenen Kanal auf den AutoMod-Kanal zurueck. Seit AutoMod ein
+    eigener Cog ist, wird jener Kanal einmalig als eigener Log-Kanal uebernommen -
+    danach sind beide unabhaengig."""
+    channel_id = await get_config(guild_id, "modlog_channel_id", None)
+    if channel_id is None:
+        legacy = await get_config(guild_id, "automod_alert_channel_id", None)
+        if legacy:
+            await set_config(guild_id, "modlog_channel_id", legacy)
+            channel_id = legacy
     return bot.get_channel(int(channel_id)) if channel_id else None
 
 
@@ -388,7 +365,7 @@ async def _apply_warning(
     channel: discord.abc.Messageable,
 ) -> tuple[int, int]:
     """Traegt eine Verwarnung ein, prueft die Schwelle und eskaliert bei
-    Bedarf - gemeinsame Logik fuer /warn UND die AutoMod-Integration.
+    Bedarf - gemeinsame Logik fuer /warn UND den automod-Cog (Warn-Punkte aus AutoMod).
     Gibt (total_points, threshold) zurueck."""
     await ensure_guild(guild.id, guild.name)
     await ensure_user(user_id)
@@ -629,28 +606,6 @@ class ModerationCog(BaseCog):
             f"{user.mention} hat die Warn-Schwelle erreicht ({total_points}/{threshold})."
         )
 
-    @commands.Cog.listener("on_automod_action")
-    async def on_automod_action(self, execution: discord.AutoModAction) -> None:
-        if execution.action.type != discord.AutoModRuleActionType.block_message:
-            return  # Vermeidet Doppelzaehlung bei Regeln mit mehreren Aktionen
-
-        if await get_config(execution.guild_id, "automod_warn_enabled", "false") != "true":
-            return
-
-        guild = self.bot.get_guild(execution.guild_id)
-        if guild is None:
-            return
-
-        points = await _automod_points_for(execution.guild_id, execution.rule_trigger_type.name)
-        reason = _build_automod_reason(execution.rule_trigger_type.name, execution.matched_keyword)
-        channel = await _resolve_automod_channel(self.bot, execution.guild_id, execution.channel_id)
-        if channel is None:
-            return
-
-        await _apply_warning(
-            self.bot.user.id, guild, execution.user_id, self.bot.user.id, reason, points, channel
-        )
-
     @app_commands.command(name="warnings", description="Zeigt aktive Verwarnungen eines Mitglieds")
     @app_commands.describe(user="Mitglied")
     @require_role(Level.MOD)
@@ -755,35 +710,6 @@ class ModerationCog(BaseCog):
         )
 
     @modconfig_group.command(
-        name="automod", description="Aktiviert/deaktiviert automatische Warnungen aus Discords AutoMod"
-    )
-    @app_commands.describe(enabled="An oder aus")
-    @require_role(Level.OWNER)
-    async def modconfig_automod(self, interaction: discord.Interaction, enabled: bool) -> None:
-        await set_config(
-            interaction.guild_id, "automod_warn_enabled", "true" if enabled else "false", interaction.guild.name
-        )
-        state = "aktiviert" if enabled else "deaktiviert"
-        await interaction.response.send_message(
-            f"AutoMod-Integration {state}.", ephemeral=True, delete_after=20
-        )
-
-    @modconfig_group.command(
-        name="automod_channel", description="Setzt den Kanal fuer AutoMod-Eskalations-Meldungen"
-    )
-    @app_commands.describe(channel="Zielkanal")
-    @require_role(Level.OWNER)
-    async def modconfig_automod_channel(
-        self, interaction: discord.Interaction, channel: discord.TextChannel
-    ) -> None:
-        await set_config(
-            interaction.guild_id, "automod_alert_channel_id", str(channel.id), interaction.guild.name
-        )
-        await interaction.response.send_message(
-            f"AutoMod-Eskalations-Kanal auf {channel.mention} gesetzt.", ephemeral=True, delete_after=20
-        )
-
-    @modconfig_group.command(
         name="log_channel", description="Setzt den Kanal, in dem jeder Bann, Kick und Timeout gemeldet wird"
     )
     @app_commands.describe(channel="Zielkanal (z.B. ein Kanal nur fuer Admins/Mods)")
@@ -794,31 +720,6 @@ class ModerationCog(BaseCog):
         await set_config(interaction.guild_id, "modlog_channel_id", str(channel.id), interaction.guild.name)
         await interaction.response.send_message(
             f"Moderations-Meldungen gehen jetzt nach {channel.mention}.", ephemeral=True, delete_after=20
-        )
-
-    @modconfig_group.command(
-        name="automod_points", description="Setzt die Warn-Punkte fuer einen AutoMod-Regeltyp"
-    )
-    @app_commands.describe(trigger_type="AutoMod-Regeltyp", points="Punkte")
-    @app_commands.choices(
-        trigger_type=[Choice(name=key, value=key) for key in DEFAULT_AUTOMOD_POINTS]
-    )
-    @require_role(Level.OWNER)
-    async def modconfig_automod_points(
-        self,
-        interaction: discord.Interaction,
-        trigger_type: Choice[str],
-        points: app_commands.Range[int, 0, 100],
-    ) -> None:
-        weights = json.loads(
-            await get_config(interaction.guild_id, "automod_warn_points", json.dumps(DEFAULT_AUTOMOD_POINTS))
-        )
-        weights[trigger_type.value] = points
-        await set_config(interaction.guild_id, "automod_warn_points", json.dumps(weights), interaction.guild.name)
-        await interaction.response.send_message(
-            f"AutoMod-Punkte fuer `{trigger_type.value}` auf {points} gesetzt.",
-            ephemeral=True,
-            delete_after=20,
         )
 
     @app_commands.command(

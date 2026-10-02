@@ -26,23 +26,12 @@ export interface ActionResult {
 
 export type LadderAction = "timeout" | "ban" | "kick";
 
-export interface AutoModPoints {
-  spam: number;
-  keyword: number;
-  keyword_preset: number;
-  mention_spam: number;
-  harmful_link: number;
-  member_profile: number;
-}
-
 export interface ModConfig {
   warn_threshold: number;
   warn_ladder: LadderAction[];
   warn_timeout_minutes: number;
   warn_decay_days: number;
-  automod_warn_enabled: boolean;
-  automod_warn_points: AutoModPoints;
-  automod_alert_channel_id: string | null;
+  modlog_channel_id: string | null;
 }
 
 export interface MemberSearchResult {
