@@ -48,6 +48,9 @@ def setup_logging() -> None:
     migration_log.setLevel(logging.INFO)
     migration_log.filters.clear()
     migration_log.addFilter(lambda r: r.levelno >= logging.WARNING or r.getMessage().startswith("Running "))
+    # uvicorn meldet Start/Stopp ueber den Logger "uvicorn.error" - AMP faerbt das
+    # rot, obwohl es keine Fehler sind. Die Port-Zeile kommt von api/server.py.
+    logging.getLogger("uvicorn").setLevel(logging.WARNING)
     # Sprachkanaele nutzt der Bot nicht - die Warnungen zu PyNaCl/davey sind Rauschen.
     voice_log = logging.getLogger("discord.client")
     voice_log.filters.clear()

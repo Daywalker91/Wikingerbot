@@ -125,6 +125,28 @@ async def test_unknown_user_is_skipped():
     assert report.skipped_reason and "nicht gefunden" in report.skipped_reason
 
 
+async def test_without_user_management_rights_is_normal_and_quiet():
+    async def amp(endpoint, args):
+        raise RuntimeError(
+            "Unauthorized Access: You do not have permission to use this method (GSMyAdmin.WebServer.GetAMPUserInfo) "
+            "at this time. This method requires the Core.UserManagement.ViewUserInfo permission."
+        )
+
+    report = await ensure_bot_role(amp, "wikingerbot", keep_super_admin=False)
+    assert report.no_admin_rights and not report.skipped_reason
+
+
+async def test_other_errors_still_raise():
+    async def amp(endpoint, args):
+        raise TimeoutError("AMP hat nach 10s nicht geantwortet")
+
+    try:
+        await ensure_bot_role(amp, "wikingerbot", keep_super_admin=False)
+    except TimeoutError:
+        return
+    raise AssertionError("TimeoutError erwartet")
+
+
 def test_plan_permission_changes():
     assert plan_permission_changes(["A.*", "-B.C"], ["A.*", "-B.C"]) == []
     assert plan_permission_changes(["A.*"], ["-A.*"]) == [("A.*", False)]

@@ -68,6 +68,9 @@ class RoleReport:
     missing_without_super_admin: list[str] = field(default_factory=list)
     unknown_nodes: list[str] = field(default_factory=list)
     skipped_reason: str | None = None
+    # Normalfall nach der Einrichtung: ohne Super Admin darf der Bot Benutzer und
+    # Rollen nicht einmal lesen - dann wird nicht geprueft, nur kurz gemeldet.
+    no_admin_rights: bool = False
 
 
 def parse_node(entry: str) -> tuple[str, bool]:
@@ -130,13 +133,24 @@ def unknown_nodes(desired: list[str], known: set[str]) -> list[str]:
 CoreCall = Callable[..., Awaitable]
 
 
+def is_permission_error(error: Exception) -> bool:
+    text = str(error).lower()
+    return "unauthorized" in text or "permission" in text
+
+
 async def ensure_bot_role(core_call: CoreCall, amp_user: str, *, keep_super_admin: bool) -> RoleReport:
     """Gleicht die AMP-Rolle des Bots ab. `core_call(endpoint, args)` ruft einen
     Core-Endpunkt am Controller auf (siehe AMPClient.core_call) - als Parameter,
     damit der Ablauf ohne echtes AMP testbar ist."""
     report = RoleReport()
 
-    user = await core_call("GetAMPUserInfo", {"Username": amp_user})
+    try:
+        user = await core_call("GetAMPUserInfo", {"Username": amp_user})
+    except Exception as error:
+        if not is_permission_error(error):
+            raise
+        report.no_admin_rights = True
+        return report
     if not isinstance(user, dict) or not user.get("ID"):
         report.skipped_reason = f"AMP-Benutzer '{amp_user}' nicht gefunden"
         return report
@@ -198,6 +212,13 @@ async def ensure_bot_role(core_call: CoreCall, amp_user: str, *, keep_super_admi
 def log_report(report: RoleReport, amp_user: str) -> None:
     if report.skipped_reason:
         log.warning("AMP-Rolle: %s", report.skipped_reason)
+        return
+    if report.no_admin_rights:
+        log.info(
+            "AMP-Rolle: keine Verwaltungsrechte (Normalfall nach der Einrichtung) - Pruefung uebersprungen. "
+            "Fehlt dem Bot in AMP etwas, '%s' einmalig '%s' geben, er ergaenzt beim naechsten Start selbst.",
+            amp_user, SUPER_ADMIN_ROLE,
+        )
         return
     if report.created_role:
         log.info("AMP-Rolle '%s' angelegt.", ROLE_NAME)

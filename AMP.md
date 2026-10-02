@@ -56,9 +56,10 @@ Nach dem Vorbild von GatekeeperV2 richtet sich der Bot seine Rechte selbst ein
    **WikingerBot** an – nur mit den Rechten, die er braucht (Instanzen auflisten,
    starten, stoppen, Status, Konsole) – und nimmt sich selbst hinein.
 2. Danach gibt er **Super Admins** ab (außer *Super Admin behalten* ist angehakt).
-3. Bei späteren Starts prüft er nur, ob die Rolle vollständig ist. Fehlt etwas (z.B. nach
-   einem Update mit neuen Funktionen), nennt das Log die fehlenden Rechte – dann dem
-   Benutzer einmal kurz wieder Super Admins geben, der Bot ergänzt beim nächsten Start selbst.
+3. Danach darf der Bot Benutzer und Rollen nicht einmal mehr lesen – das ist gewollt. Bei
+   späteren Starts steht dann nur „keine Verwaltungsrechte … Pruefung uebersprungen“ im Log.
+   Braucht eine neue Bot-Version mehr Rechte, dem Benutzer einmal kurz wieder **Super Admins**
+   geben: Der Bot ergänzt die Rolle beim nächsten Start und gibt Super Admin wieder ab.
 
 Ausdrücklich **nicht** enthalten: Benutzer- und Rollenverwaltung, Instanzen anlegen/löschen,
 Updates, Dateimanager, Einstellungen, Backups. Im Log stehen alle Schritte unter

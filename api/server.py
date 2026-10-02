@@ -107,8 +107,10 @@ class WebServer:
         )
         self._server = _Server(config)
         self._task = asyncio.create_task(self._server.serve())
-        url = settings.public_url or f"http://{settings.web_host}:{settings.web_port}"
-        log.info("Web-Oberflaeche auf Port %d (%s)", settings.web_port, url)
+        if settings.public_url:
+            log.info("Web-Oberflaeche auf Port %d (%s)", settings.web_port, settings.public_url)
+        else:
+            log.info("Web-Oberflaeche auf Port %d (Link: /bot web)", settings.web_port)
 
     async def stop(self) -> None:
         if self._server is None or self._task is None:

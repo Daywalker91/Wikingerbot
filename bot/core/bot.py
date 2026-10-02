@@ -75,7 +75,8 @@ class WikingerBot(commands.Bot):
             )
             log_report(report, settings.amp_user)
         except Exception as error:
-            log.warning("AMP-Rolle konnte nicht geprueft werden (AMP nicht erreichbar?): %s", error)
+            first_line = str(error).strip().splitlines()[0] if str(error).strip() else type(error).__name__
+            log.warning("AMP-Rolle konnte nicht geprueft werden (AMP nicht erreichbar?): %s", first_line)
 
     async def on_ready(self) -> None:
         # Feste Log-Zeile: AMP erkennt daran, dass der Bot laeuft (Console.AppReadyRegex
