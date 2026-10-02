@@ -52,7 +52,8 @@ export default function NewsPage() {
       <h1>News</h1>
       <p style={muted}>
         Veröffentlichte News der Community-Seite mit Haken „In Discord ankündigen“ landen als Nachricht im News-Kanal.
-        Bearbeiten auf der Seite aktualisiert sie, Löschen oder Zurückziehen entfernt sie wieder.
+        Bearbeiten auf der Seite aktualisiert sie, Löschen oder Zurückziehen entfernt sie wieder. In einem Ankündigungskanal
+        veröffentlicht der Bot sie gleich mit.
       </p>
       {!data.community_enabled && (
         <p style={{ ...card, borderColor: "var(--wb-border-strong)" }}>Die Community-Seite ist nicht angebunden (Tab Community).</p>

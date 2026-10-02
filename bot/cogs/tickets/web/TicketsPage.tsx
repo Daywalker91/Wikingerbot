@@ -54,7 +54,8 @@ export default function TicketsPage() {
         Jedes Ticket der Seite bekommt einen Thread im Staff-Kanal – voll gespiegelt: was auf der Seite steht, erscheint im
         Thread; was der Support im Thread schreibt, landet als Antwort auf der Seite („!intern …“ = interne Notiz). Das
         Mitglied bekommt Antworten per DM und kann direkt daraus antworten. Wer schreibt, muss mit der Seite verknüpft sein;
-        bearbeiten darf, wer auf der Seite das Recht „Tickets verwalten“ hat.
+        bearbeiten darf, wer auf der Seite das Recht „Tickets verwalten“ hat. In einem Forum bekommt jeder Beitrag Tags für
+        Status und Kategorie – zum Anlegen fehlender Tags braucht der Bot dort „Kanäle verwalten“.
       </p>
       {!data.community_enabled && (
         <p style={{ ...card, borderColor: "var(--wb-border-strong)" }}>Die Community-Seite ist nicht angebunden (Tab Community).</p>

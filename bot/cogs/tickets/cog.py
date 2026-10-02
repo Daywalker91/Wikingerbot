@@ -8,6 +8,9 @@
 - Das Mitglied bekommt Antworten des Supports und das Schliessen per DM, mit
   einem Knopf "Antworten", der direkt ins Ticket schreibt.
 - /ticket eroeffnet ein Ticket (nur verknuepfte Mitglieder).
+- Im Forum bekommt jeder Beitrag einen Status- und einen Kategorie-Tag. Fehlende
+  Tags legt der Bot an (braucht "Kanaele verwalten" im Forum), sonst nutzt er nur
+  die vorhandenen gleichnamigen.
 
 Wer schreibt, muss verknuepft sein - jede Nachricht gehoert auf der Seite zu einem
 Konto. Einstellungen im Tab "Tickets".
@@ -51,6 +54,18 @@ DM_CURSOR_KIND = "ticket_dm"  # message_id = zuletzt fuer DMs gepruefte Nachrich
 INTERNAL_PREFIX = "!intern"
 COLOR = 0x5FA8A0
 CREATE_LIMIT = 3  # Tickets pro 10 Minuten und Mitglied (wie auf der Seite)
+MAX_FORUM_TAGS = 20  # Discord-Grenze pro Forum
+MAX_THREAD_TAGS = 5  # Discord-Grenze pro Beitrag
+
+
+def wanted_tags(ticket: Ticket) -> list[tuple[str, str | None]]:
+    """(Name, Emoji) der Forum-Tags fuer ein Ticket: Status und Kategorie."""
+    emoji, label = STATUSES.get(ticket.status, STATUSES["open"])
+    return [(label, emoji), (CATEGORIES.get(ticket.category, ticket.category)[:20], None)]
+
+
+def _our_tag_names() -> set[str]:
+    return {label.casefold() for _, label in STATUSES.values()} | {c[:20].casefold() for c in CATEGORIES.values()}
 
 
 def ticket_link(ticket_id: int) -> str | None:
@@ -185,6 +200,7 @@ class TicketsCog(BaseCog):
         super().__init__(bot)
         self._from_discord: set[int] = set()  # im Thread geschrieben -> nicht nochmal hineinspiegeln
         self._created: dict[int, list[float]] = {}
+        self._tags_denied: set[int] = set()  # Foren, in denen der Bot keine Tags anlegen darf
 
     async def cog_load(self) -> None:
         self.bot.add_dynamic_items(TicketActionButton, TicketReplyButton)
@@ -262,10 +278,7 @@ class TicketsCog(BaseCog):
             mirrored = await self._mirror(guild, thread, ticket)
             if mirrored:
                 done.append(f"{guild.name}: {mirrored} Nachricht(en) gespiegelt")
-            if ticket.status == "closed" and not thread.archived:
-                await thread.edit(archived=True)
-            elif ticket.status != "closed" and thread.archived:
-                await thread.edit(archived=False)
+            await self._update_thread(thread, ticket)
         # DMs unabhaengig von Threads (auch ohne Staff-Kanal, auch fuer Antworten aus dem Thread)
         await self._notify_new(ticket)
         return done
@@ -277,7 +290,12 @@ class TicketsCog(BaseCog):
         mentions = discord.AllowedMentions(roles=[role] if role else False, users=False, everyone=False)
         if isinstance(channel, discord.ForumChannel):
             created = await channel.create_thread(
-                name=thread_name(ticket), content=role.mention if role else None, embed=embed, view=view, allowed_mentions=mentions
+                name=thread_name(ticket),
+                content=role.mention if role else None,
+                embed=embed,
+                view=view,
+                allowed_mentions=mentions,
+                applied_tags=await self._forum_tags(channel, ticket),
             )
             thread = created.thread
         else:
@@ -285,6 +303,52 @@ class TicketsCog(BaseCog):
             thread = await starter.create_thread(name=thread_name(ticket), auto_archive_duration=10080)
         await self._set(THREAD_KIND, guild, ticket.id, channel.id, thread.id)
         return thread
+
+    async def _forum_tags(self, forum: discord.ForumChannel, ticket: Ticket) -> list[discord.ForumTag]:
+        """Status- und Kategorie-Tag des Tickets; fehlende werden im Forum angelegt, wenn erlaubt."""
+        wanted = wanted_tags(ticket)
+        by_name = {tag.name.casefold(): tag for tag in forum.available_tags}
+        missing = [(name, emoji) for name, emoji in wanted if name.casefold() not in by_name]
+        if missing and forum.id not in self._tags_denied:
+            tags = list(forum.available_tags) + [discord.ForumTag(name=name, emoji=emoji) for name, emoji in missing]
+            if len(tags) > MAX_FORUM_TAGS:
+                log.warning("Forum #%s hat keinen Platz fuer weitere Tags (max. %s)", forum.name, MAX_FORUM_TAGS)
+                self._tags_denied.add(forum.id)
+            else:
+                try:
+                    forum = await forum.edit(available_tags=tags) or forum
+                    by_name = {tag.name.casefold(): tag for tag in forum.available_tags}
+                except discord.Forbidden:
+                    log.warning("Tickets: keine Tags in #%s - dem Bot fehlt dort \"Kanaele verwalten\"", forum.name)
+                    self._tags_denied.add(forum.id)
+                except discord.HTTPException as error:
+                    log.warning("Tickets: Tags in #%s nicht angelegt: %s", forum.name, error)
+        return [by_name[name.casefold()] for name, _ in wanted if name.casefold() in by_name]
+
+    async def _update_thread(self, thread: discord.Thread, ticket: Ticket) -> None:
+        """Archiviert/oeffnet den Thread passend zum Status und zieht im Forum die Tags nach."""
+        changes: dict = {}
+        if isinstance(thread.parent, discord.ForumChannel):
+            ours = _our_tag_names()
+            # Tags, die das Team selbst gesetzt hat, bleiben stehen
+            others = [tag for tag in thread.applied_tags if tag.name.casefold() not in ours]
+            tags = (await self._forum_tags(thread.parent, ticket) + others)[:MAX_THREAD_TAGS]
+            if {tag.id for tag in tags} != {tag.id for tag in thread.applied_tags}:
+                changes["applied_tags"] = tags
+        archived = ticket.status == "closed"
+        if thread.archived != archived:
+            changes["archived"] = archived
+        if not changes:
+            return
+        # In einem Aufruf: ein archivierter Thread laesst sich sonst nicht mehr bearbeiten
+        try:
+            await thread.edit(**changes)
+        except discord.HTTPException as error:
+            if "applied_tags" not in changes:
+                raise
+            log.warning("Tags von Ticket #%s nicht gesetzt: %s", ticket.id, error)
+            if "archived" in changes:
+                await thread.edit(archived=archived)
 
     async def _starter(self, thread: discord.Thread) -> discord.Message | None:
         # Startnachricht hat dieselbe ID wie der Thread - im Forum liegt sie im Thread, sonst im Elternkanal

@@ -185,7 +185,9 @@ Ein Server gehört zu maximal einer Gruppe. Zwei Layouts stehen zur Wahl:
 Texte kennen die Platzhalter `{user}` (Erwähnung), `{name}` (Anzeigename),
 `{server}` und `{count}` (Mitgliederzahl); `\n` im Text wird zum Zeilenumbruch.
 Gepingt wird nur das neue Mitglied – `@everyone` oder Rollen im Text lösen
-keinen Ping aus. Bots werden weder begrüßt noch verabschiedet.
+keinen Ping aus. Bots werden weder begrüßt noch verabschiedet. Nutzt der Server
+Discords Mitgliedschaftsprüfung (Regeln/Onboarding), kommen Begrüßung und DM erst,
+wenn das Mitglied die Regeln akzeptiert hat.
 
 | Command | Beschreibung | Level |
 |---|---|---|
@@ -326,8 +328,10 @@ Veröffentlichte News mit Haken „In Discord ankündigen“ landen als Embed (T
 Anrisstext, Titelbild, Link zur Seite) im News-Kanal; optional wird beim ersten
 Posten eine Rolle angepingt. Bearbeiten auf der Seite aktualisiert die Nachricht,
 Löschen, Entwurf oder Haken weg entfernt sie. Kanal und Rolle stellst du im Tab
-*News* ein – dort lassen sich ältere News auch von Hand posten. Braucht die
-angebundene Community-Seite.
+*News* ein – dort lassen sich ältere News auch von Hand posten. Ist der Kanal ein
+**Ankündigungskanal**, veröffentlicht der Bot die Nachricht gleich mit, damit sie
+auch bei folgenden Servern ankommt (Discord erlaubt etwa 10 pro Stunde und Kanal).
+Braucht die angebundene Community-Seite.
 
 | Command | Beschreibung | Level |
 |---|---|---|
@@ -349,7 +353,8 @@ werden nachgezogen.
 Optional legt der Bot zusätzlich ein **natives Discord-Event** an (Event-Bereich
 des Servers) und zieht Änderungen/Absagen nach – dafür braucht die Bot-Rolle das
 Recht **Events verwalten**. Kanal, Ping-Rolle und natives Event stellst du im Tab
-*Events* ein; bestehende Events lassen sich dort von Hand posten.
+*Events* ein; bestehende Events lassen sich dort von Hand posten. In einem
+Ankündigungskanal wird die Nachricht wie bei den News veröffentlicht.
 
 | Command | Beschreibung | Level |
 |---|---|---|
@@ -364,6 +369,11 @@ Voll gespiegelt zwischen Seite und Discord:
 - Jedes Ticket bekommt einen **Thread im Staff-Kanal** (Textkanal oder Forum). Die
   Startnachricht zeigt Status, Kategorie, Mitglied und Zuständigen und hat die Knöpfe
   **Übernehmen**, **Schließen**, **Wieder öffnen**.
+- Im **Forum** bekommt jeder Beitrag einen Status-Tag (Offen, In Bearbeitung,
+  Wartet auf Antwort, Geschlossen) und einen Kategorie-Tag, filterbar im Forum.
+  Fehlende Tags legt der Bot an, wenn er dort **Kanäle verwalten** darf – sonst
+  nutzt er nur gleichnamige Tags, die das Team selbst angelegt hat. Eigene Tags
+  des Teams bleiben am Beitrag stehen.
 - Alles aus dem Verlauf der Seite erscheint im Thread (interne Notizen mit 🔒,
   Statuswechsel als Systemzeile). Was der Support im Thread schreibt, landet als
   Antwort auf der Seite; eine Nachricht, die mit `!intern` beginnt, wird interne

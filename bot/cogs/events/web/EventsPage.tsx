@@ -57,7 +57,7 @@ export default function EventsPage() {
       <p style={muted}>
         Events der Community-Seite mit Haken „In Discord ankündigen“ erscheinen im Event-Kanal mit den Knöpfen Dabei /
         Vielleicht / Nicht dabei – die Zusagen gelten auf der Seite (nur mit verknüpftem Konto). Änderungen und Absagen
-        werden nachgezogen.
+        werden nachgezogen. In einem Ankündigungskanal veröffentlicht der Bot die Nachricht gleich mit.
       </p>
       {!data.community_enabled && (
         <p style={{ ...card, borderColor: "var(--wb-border-strong)" }}>Die Community-Seite ist nicht angebunden (Tab Community).</p>

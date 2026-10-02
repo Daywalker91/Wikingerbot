@@ -72,8 +72,16 @@ class WelcomeCog(BaseCog):
 
     @commands.Cog.listener()
     async def on_member_join(self, member: discord.Member) -> None:
-        if member.bot:
-            return
+        # Mit Discords Mitgliedschaftspruefung (Regeln/Onboarding) erst nach dem Akzeptieren
+        if not member.bot and not member.pending:
+            await self._greet(member)
+
+    @commands.Cog.listener()
+    async def on_member_update(self, before: discord.Member, after: discord.Member) -> None:
+        if before.pending and not after.pending and not after.bot:
+            await self._greet(after)
+
+    async def _greet(self, member: discord.Member) -> None:
         guild = member.guild
 
         channel = await _text_channel(guild, "welcome_channel_id")

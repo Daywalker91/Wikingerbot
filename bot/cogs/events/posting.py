@@ -19,6 +19,7 @@ import discord
 from sqlalchemy import delete, func, insert, select, update
 
 from bot.community import db as community_db
+from bot.community.announce import publish_if_announcement
 from bot.community.text import plain_excerpt
 from bot.core.entities import ensure_guild
 from bot.core.guild_config import get_config
@@ -291,6 +292,7 @@ async def sync_event(bot: discord.Client, event_id: int, view_factory=None) -> l
                 view=view,
                 allowed_mentions=discord.AllowedMentions(roles=[role] if role else False, everyone=False, users=False),
             )
+            await publish_if_announcement(sent)
             await _remember(KIND, guild, event_id, sent.channel.id, sent.id)
             done.append(f"{guild.name}: gepostet")
         if await get_config(guild.id, "events_native", "true") == "true":

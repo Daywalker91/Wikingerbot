@@ -108,7 +108,8 @@ export default function WelcomePage() {
       <p style={muted}>
         Platzhalter: <code>{"{user}"}</code> Erwähnung, <code>{"{name}"}</code> Anzeigename,{" "}
         <code>{"{server}"}</code> Servername, <code>{"{count}"}</code> Mitgliederzahl. Gepingt wird nur das neue
-        Mitglied. Die Vorschau zeigt „{sample}“ als Beispiel.
+        Mitglied. Die Vorschau zeigt „{sample}“ als Beispiel. Mit Discords Mitgliedschaftsprüfung wird erst begrüßt, wenn
+        die Regeln akzeptiert sind.
       </p>
 
       <section style={card}>

@@ -9,6 +9,7 @@ import discord
 from sqlalchemy import select
 
 from bot.community import db as community_db
+from bot.community.announce import publish_if_announcement
 from bot.community.text import plain_excerpt
 from bot.core.entities import ensure_guild
 from bot.core.guild_config import get_config
@@ -140,6 +141,7 @@ async def sync_news(bot: discord.Client, news_id: int) -> list[str]:
             embed=embed,
             allowed_mentions=discord.AllowedMentions(roles=[role] if role else False, everyone=False, users=False),
         )
+        await publish_if_announcement(message)
         await ensure_guild(guild.id, guild.name)
         async with get_db_session() as db:
             db.add(CommunityPost(kind=KIND, item_id=news_id, guild_id=guild.id, channel_id=message.channel.id, message_id=message.id))
