@@ -50,11 +50,16 @@ Phase-2-Cogs brauchen (mit `discord.Permissions(...).value` verifiziert):
 
 | Berechtigung | Wofür |
 |---|---|
-| Kick Members, Ban Members, Moderate Members (Timeout) | `moderation`-Cog |
-| Manage Roles | `whitelist`-Cog (Auto-Rollenvergabe bei Freigabe, siehe unten) |
+| Kick Members, Ban Members, Moderate Members (Timeout) | `moderation`-Cog, `automod`-Cog (Timeout) |
+| Manage Roles | `whitelist`-Cog (Rollen bei Freigabe), `roles`-Cog (Autorole, Selbstwahl-Rollen) |
 | View Channel, Send Messages, Read Message History, Embed Links, Attach Files | Konsolen-/Chat-Bridge (`amp`-Cog), Bot-Antworten allgemein |
-| Manage Messages | Aufräumen/Moderation |
-| Connect, Speak | `music`-Cog (Phase v2+) |
+| Manage Messages | Aufräumen/Moderation, `automod`-Cog (löscht Verstöße) |
+| Connect, Speak | `music`-Cog |
+
+**Nicht im Link, bewusst:** *Kanäle verwalten* braucht nur der Mitgliederzähler des
+`stats`-Cogs (`/stats zaehler`) – und nur für **diesen einen** Kanal. Darum dort in den
+Kanal-Einstellungen → Berechtigungen der Bot-Rolle *Kanal verwalten* erlauben, statt dem
+Bot das Recht serverweit zu geben.
 
 Scope `applications.commands` ist zwingend nötig, damit die Slash-Commands
 (`/bot cog ...` etc.) überhaupt in einem Server registriert werden können.

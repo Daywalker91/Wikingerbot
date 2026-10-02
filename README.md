@@ -16,11 +16,14 @@
 | Phase 2 | `amp`-Cog, `moderation`-Cog, `whitelist`-Cog | ✅ fertig |
 | — | Konsolen-Filter (Blacklist/Whitelist) + Event-Kanal für den `amp`-Cog | ✅ fertig |
 | — | `banner`-Cog (Embed/Bild-Banner, Steam-Artwork, Banner-Gruppen, Editor-UI) | ✅ fertig |
-| Phase 3 | React-WebUI | 🔜 Dashboard, Server, Moderation, Whitelist, Einstellungen fertig; Benutzer-Seite und Produktiv-Bereitstellung offen |
+| Phase 3 | React-WebUI | ✅ läuft in AMP im Bot-Prozess (https über das Edge-Gateway): Dashboard, Server, Moderation, Whitelist, Einstellungen, Musik, Begrüßung; Benutzer-Seite offen |
 | — | Betrieb in AMP: eigene Vorlage, Migrationen beim Start, MariaDB getestet ([AMP.md](AMP.md)) | ✅ fertig |
-| Phase 4 | `roles`-, `welcome`-Cog, weitere Erweiterungen | ⏳ offen |
+| Phase 4 | `welcome`, `roles`, `music`, `stats`, `automod` | ✅ fertig (Tests ohne Discord; live in Discord noch zu prüfen) |
+| Phase 5 | Kopplung mit der Community-Seite als eigene, abschaltbare Cogs (`community`, Rollen-Sync, `tickets`, `news`, `events`) | ⏳ offen |
 
-Alle fertigen Teile sind gegen einen echten AMP-Server und einen Test-Discord-Server live verifiziert (nicht nur Unit-Tests).
+Phase 1–3 sind gegen einen echten AMP-Server und einen Test-Discord-Server live verifiziert (nicht nur Unit-Tests). Die Phase-4-Cogs sind mit Unit-Tests abgesichert (Befehle laden, Regeln, Datenbank, echter FFmpeg-Lauf), aber noch nicht in Discord ausprobiert.
+
+Grundsatz: Der Bot läuft auch **ohne** die Community-Seite – alles, was mit ihr zusammenarbeitet, kommt in eigene Cogs, die man weglassen kann.
 
 ---
 
@@ -90,8 +93,7 @@ flowchart TB
 
 ## Ordnerstruktur
 
-Tatsächlicher aktueller Stand (Phase 1+2 fertig, Phase-3-Kickoff-Slice
-umgesetzt). `docker/`, `k8s/` aus der ursprünglichen Planung existieren
+Tatsächlicher aktueller Stand (Phase 1–4). `docker/`, `k8s/` aus der ursprünglichen Planung existieren
 noch nicht.
 
 Ein Cog kann optional `api.py` (FastAPI-Router) und/oder `web/` (React-
@@ -123,6 +125,11 @@ Wikingerbot/
 │       │   ├── api.py           # FastAPI-Router: GET /servers (Dashboard-Daten)
 │       │   └── web/             # React-Seite: DashboardPage.tsx, api.ts, ServerCard.tsx, types.ts
 │       ├── moderation/cog.py   # /kick /ban /timeout /warn /modlog /modconfig
+│       ├── welcome/             # /welcome ... (Begruessung, DM, Abschied) + Web-Seite
+│       ├── roles/cog.py         # /rollen auto ... /rollen panel ... (Autorole, Selbstwahl-Knoepfe)
+│       ├── music/               # /musik ... /musikconfig ... (Radio, Dateien, Podcasts) + Web-Seite
+│       ├── stats/               # /stats ... (Aktivitaet, Mitgliederzaehler)
+│       ├── automod/             # /automod ... (Regeln, die Discords AutoMod nicht kann)
 │       ├── whitelist/cog.py    # /whitelist ...
 │       └── banner/              # /banner ... /bannergroup ... (Status-Banner, Editor-UI)
 │           ├── cog.py           # Commands, Views, Posting-/Update-Loop
@@ -274,17 +281,17 @@ da `require_role` auf `app_commands.Command` zugeschnitten ist.
 | `moderation` | Red (teilweise) | Kick/Ban/Warn/Timeout, ModLog, automatische Warn-Eskalation | ✅ fertig |
 | `whitelist` | GatekeeperV2 | Anfragen über Accept/Deny-Buttons, AMP-Whitelist, Rollen-Vergabe | ✅ fertig (kein Auto-Approve, immer Mod-Freigabe) |
 | `banner` | GatekeeperV2 | Embed-/Bild-Status-Banner, Steam-Artwork, Banner-Gruppen (kombiniert/einzeln), Editor-UI | ✅ fertig |
-| `roles` | Red (teilweise) | Autorole, Rollen-Management | ⏳ offen |
-| `welcome` | Red (teilweise) | Willkommensnachrichten, Join-Events | ⏳ offen |
+| `roles` | Red (teilweise) | Autorole (nach Regel-Screening), Selbstwahl-Rollen per Knopf | ✅ fertig |
+| `welcome` | Red (teilweise) | Begrüßung mit Platzhaltern, Willkommens-DM, Abschiedsmeldung | ✅ fertig |
 
 **Spätere Cogs (v2+):**
 
-| Cog | Features |
-|---|---|
-| `music` | Musik-Wiedergabe (ersetzt Sinusbot) |
-| `stats` | Server-Statistiken, Aktivitäts-Tracking |
-| `trivia` | Quiz-System |
-| `automod` | Automatische Moderation |
+| Cog | Features | Status |
+|---|---|---|
+| `music` | Ersetzt Sinusbot: Radio-Streams (inkl. .m3u/.pls), eigene Dateien, Podcasts (RSS) – bewusst ohne YouTube, Spotify und Aufnahme | ✅ fertig |
+| `stats` | Beitritte/Austritte, Nachrichten, Voice-Zeit, Top-Mitglieder, Mitgliederzähler-Kanal – nur Anzahlen, nie Inhalte | ✅ fertig |
+| `automod` | Nur Regeln, die Discords AutoMod nicht kann: Flut, Wiederholung, Großbuchstaben, Emojis, Link-Allowlist, junge Konten | ✅ fertig |
+| `trivia` | Quiz-System | vorerst nicht geplant |
 
 ---
 
@@ -293,16 +300,18 @@ da `require_role` auf `app_commands.Command` zugeschnitten ist.
 | Seite | Inhalt |
 |---|---|
 | Dashboard | Server-Übersicht, Online-Status, Spielerzahlen |
+| Musik | Jetzt läuft, Steuerung, Radio/Podcasts/Dateien abspielen; Admin: Sender und Podcasts |
+| Begrüßung | Begrüßung, DM und Abschied mit Vorschau (Admin) |
 | Server | AMP-Instanzen verwalten, Start/Stop, Console-Log |
 | Moderation | ModLog ansehen, Verwarnungen, gebannte User |
 | Whitelist | Anfragen verwalten, genehmigen/ablehnen |
 | Benutzer | User-Datenbank, Rollen, Steam-IDs |
 | Einstellungen | Bot-Konfiguration, Cogs laden/entladen |
 
-Aktueller Stand: Auth-Flow (Login/Logout, Session-Cookie) und die
-Dashboard-Seite sind fertig und live verifiziert. Die übrigen fünf Seiten
-folgen als eigene Runden, jeweils mit eigenem `bot/cogs/<cog>/api.py` +
-`web/<Name>Page.tsx` (siehe [CREATING_A_COG.md](CREATING_A_COG.md)).
+Aktueller Stand: Alle Seiten außer „Benutzer“ sind fertig. Im Betrieb läuft die
+Oberfläche im Bot-Prozess (`api/server.py`: API unter `/api`, gebautes Frontend
+unter `/`), siehe [AMP.md](AMP.md). Discord-IDs gehen in der API immer als Text
+raus (`api/types.Snowflake`) – als Zahl würde JavaScript sie runden.
 
 ### Lokal entwickeln
 
@@ -347,7 +356,7 @@ Eigene AMP-Vorlage nach dem Vorbild von GatekeeperV2 im Repo
 [Daywalker91/AMPTemplate](https://github.com/Daywalker91/AMPTemplate): Code als ZIP von
 `main`, eigenes venv, Einstellungen als Eingabefelder in AMP (AMP schreibt daraus die
 `.env`), Datenbank-Migrationen beim Start. Anleitung: [AMP.md](AMP.md).
-Aktuell nur der Bot selbst – die WebUI (FastAPI + React) folgt später.
+Die Web-Oberfläche läuft im selben Prozess mit; das gebaute Frontend kommt per GitHub Action als `webui.zip`.
 
 ---
 
@@ -365,16 +374,17 @@ Aktuell nur der Bot selbst – die WebUI (FastAPI + React) folgt später.
 - Whitelist Cog
 - Banner Cog (Embed/Bild, Steam-Artwork, Banner-Gruppen, Editor-UI)
 
-**Phase 3 — WebUI** (offen)
-- React Dashboard
-- Server-Übersicht
-- ModLog + Whitelist Ansicht
+**Phase 3 — WebUI** ✅
+- Dashboard, Server, Moderation, Whitelist, Einstellungen, Musik, Begrüßung
+- Betrieb in AMP im Bot-Prozess, https über das Edge-Gateway
+- offen: Benutzer-Seite
 
-**Phase 4 — Erweiterungen** (offen)
-- Roles Cog
-- Welcome Cog
-- Weitere Cogs nach Bedarf
+**Phase 4 — Erweiterungen** ✅
+- welcome, roles, music, stats, automod
+
+**Phase 5 — Community-Seite** (offen)
+- `community` (Konto-Verknüpfung, Aufträge der Seite), Rollen-Sync, `tickets`, `news`, `events`
 
 ---
 
-*WikingerBot | Daywalker91 | Stand: Juli 2026*
+*WikingerBot | Daywalker91 | Stand: Oktober 2026*
