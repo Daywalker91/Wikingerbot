@@ -90,6 +90,20 @@ bot_outbox = Table(
     Column("last_error", String(500)),
 )
 
+news = Table(
+    "news",
+    metadata,
+    Column("id", Integer, primary_key=True),
+    Column("user_id", Integer),
+    Column("title", String(150)),
+    Column("body", Text),
+    Column("image", String(500)),
+    Column("is_pinned", SmallInteger, default=0),
+    Column("is_published", SmallInteger, default=1),
+    Column("announce_discord", SmallInteger, default=1),
+    Column("created_at", DateTime),
+)
+
 _engine: AsyncEngine | None = None
 _session_maker: async_sessionmaker[AsyncSession] | None = None
 _config = {"db_name": "", "url": "", "site_url": ""}

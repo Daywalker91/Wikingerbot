@@ -12,6 +12,7 @@ from db.models.config import GuildConfig
 from db.models.bot_setting import BotSetting
 from db.models.web_session import WebSession
 from db.models.stats import StatsDaily, StatsMemberDaily
+from db.models.community_post import CommunityPost
 
 __all__ = [
     "Guild",
@@ -34,4 +35,5 @@ __all__ = [
     "WebSession",
     "StatsDaily",
     "StatsMemberDaily",
+    "CommunityPost",
 ]

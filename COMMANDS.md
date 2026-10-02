@@ -317,3 +317,18 @@ die weiteren Community-Cogs: holt alle 5 Sekunden die Aufträge der Seite ab.
 | `/verknuepfung_loesen` | Löst die Verknüpfung; deine Discord-Rollen bleiben | Member |
 | `/profil mitglied:` | Link zum Profil auf der Seite und Rang (ohne Angabe: deins) | Member |
 | `/community status` | Erreichbarkeit der Seiten-Datenbank, verknüpfte Mitglieder, offene/fehlgeschlagene Aufträge | Admin |
+
+---
+
+## News der Community-Seite (`news`-Cog, Tab *News*)
+
+Veröffentlichte News mit Haken „In Discord ankündigen“ landen als Embed (Titel,
+Anrisstext, Titelbild, Link zur Seite) im News-Kanal; optional wird beim ersten
+Posten eine Rolle angepingt. Bearbeiten auf der Seite aktualisiert die Nachricht,
+Löschen, Entwurf oder Haken weg entfernt sie. Kanal und Rolle stellst du im Tab
+*News* ein – dort lassen sich ältere News auch von Hand posten. Braucht die
+angebundene Community-Seite.
+
+| Command | Beschreibung | Level |
+|---|---|---|
+| `/news` | Die fünf neuesten News mit Links | Member |
