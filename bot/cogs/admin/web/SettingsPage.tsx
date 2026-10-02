@@ -25,7 +25,7 @@ export default function SettingsPage() {
     setGuildRoles(guildRoleList);
     setCogsStatus(cogs);
     if (roles.length > 0 && !newRoleId) {
-      setNewRoleId(String(roles[0].id));
+      setNewRoleId(roles[0].id);
     }
   }
 
@@ -34,13 +34,13 @@ export default function SettingsPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  function roleName(discordRoleId: number): string {
+  function roleName(discordRoleId: string): string {
     return discordRoles.find((r) => r.id === discordRoleId)?.name ?? `Rolle ${discordRoleId}`;
   }
 
   async function handleAddRole() {
     if (!newRoleId) return;
-    await addGuildRole(Number(newRoleId), newLevel);
+    await addGuildRole(newRoleId, newLevel);
     void load();
   }
 

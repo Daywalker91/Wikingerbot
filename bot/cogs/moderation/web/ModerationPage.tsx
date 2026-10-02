@@ -364,7 +364,7 @@ export default function ModerationPage() {
                   onChange={(e) =>
                     setModConfig({
                       ...modConfig,
-                      automod_alert_channel_id: e.target.value ? Number(e.target.value) : null,
+                      automod_alert_channel_id: e.target.value || null,
                     })
                   }
                 >
@@ -437,7 +437,7 @@ export default function ModerationPage() {
             >
               Nutzer {state.user_id} — Stufe {state.tier + 1}
               <button
-                onClick={() => void handleResetEscalation(String(state.user_id))}
+                onClick={() => void handleResetEscalation(state.user_id)}
                 style={{ marginLeft: 12 }}
               >
                 Zurücksetzen

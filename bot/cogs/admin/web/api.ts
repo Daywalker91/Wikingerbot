@@ -10,7 +10,7 @@ export async function getGuildRoles(): Promise<GuildRoleItem[]> {
   return apiFetch<GuildRoleItem[]>("/admin/roles");
 }
 
-export async function addGuildRole(discordRoleId: number, level: PermissionLevel): Promise<GuildRoleItem> {
+export async function addGuildRole(discordRoleId: string, level: PermissionLevel): Promise<GuildRoleItem> {
   return apiFetch<GuildRoleItem>("/admin/roles", {
     method: "POST",
     headers: { "Content-Type": "application/json" },

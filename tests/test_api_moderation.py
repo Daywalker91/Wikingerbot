@@ -290,7 +290,7 @@ async def test_update_mod_config_persists_values(db_session):
             "harmful_link": 5,
             "member_profile": 2,
         },
-        "automod_alert_channel_id": 555,
+        "automod_alert_channel_id": "555",
     }
 
 
@@ -325,8 +325,8 @@ async def test_search_members_returns_mapped_results(db_session, monkeypatch):
 
     assert response.status_code == 200
     assert response.json() == [
-        {"id": 999, "username": "baddude", "display_name": "Der Böse"},
-        {"id": 1000, "username": "goodie", "display_name": "goodie"},
+        {"id": "999", "username": "baddude", "display_name": "Der Böse"},
+        {"id": "1000", "username": "goodie", "display_name": "goodie"},
     ]
 
 
@@ -365,7 +365,7 @@ async def test_list_escalations_returns_only_active_tiers(db_session):
         response = await client.get("/moderation/escalations")
 
     assert response.status_code == 200
-    assert response.json() == [{"user_id": 200, "tier": 2}]
+    assert response.json() == [{"user_id": "200", "tier": 2}]
 
 
 async def test_list_escalations_scoped_to_guild(db_session):
@@ -437,8 +437,8 @@ async def test_list_text_channels_filters_to_text_type(db_session, monkeypatch):
 
     assert response.status_code == 200
     assert response.json() == [
-        {"id": 10, "name": "allgemein"},
-        {"id": 12, "name": "mod-log"},
+        {"id": "10", "name": "allgemein"},
+        {"id": "12", "name": "mod-log"},
     ]
 
 

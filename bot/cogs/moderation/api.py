@@ -26,6 +26,7 @@ from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from api.types import Snowflake
 from api.middleware.auth import CurrentUser, require_level
 from bot.cogs.moderation.cog import DEFAULT_AUTOMOD_POINTS, DEFAULT_LADDER, reset_escalation_tier
 from bot.core.config import settings
@@ -41,8 +42,8 @@ DISCORD_API = "https://discord.com/api"
 
 class ModLogEntryOut(BaseModel):
     id: int
-    user_id: int
-    mod_id: int
+    user_id: Snowflake
+    mod_id: Snowflake
     action: str
     reason: str | None
     duration: int | None
@@ -51,20 +52,20 @@ class ModLogEntryOut(BaseModel):
 
 class WarningOut(BaseModel):
     id: int
-    user_id: int
-    mod_id: int
+    user_id: Snowflake
+    mod_id: Snowflake
     reason: str | None
     points: int
     created_at: datetime
 
 
 class UnbanBody(BaseModel):
-    user_id: int
+    user_id: Snowflake
     reason: str
 
 
 class BanBody(BaseModel):
-    user_id: int
+    user_id: Snowflake
     reason: str
     delete_message_days: int = 0
 
@@ -90,27 +91,27 @@ class ModConfigOut(BaseModel):
     warn_decay_days: int
     automod_warn_enabled: bool
     automod_warn_points: AutoModPointsOut
-    automod_alert_channel_id: int | None
+    automod_alert_channel_id: Snowflake | None
 
 
 class MemberSearchResult(BaseModel):
-    id: int
+    id: Snowflake
     username: str
     display_name: str
 
 
 class TextChannelOut(BaseModel):
-    id: int
+    id: Snowflake
     name: str
 
 
 class EscalationStateOut(BaseModel):
-    user_id: int
+    user_id: Snowflake
     tier: int
 
 
 class EscalationResetBody(BaseModel):
-    user_id: int
+    user_id: Snowflake
 
 
 @router.get("/mod-config", response_model=ModConfigOut)

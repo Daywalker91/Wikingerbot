@@ -28,6 +28,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.middleware.auth import CurrentUser, require_level
+from api.types import Snowflake
 from bot.core.bot import LOADED_COGS_KEY, discover_cog_names
 from bot.core.bot_settings import get_bot_setting
 from bot.core.config import settings
@@ -51,18 +52,18 @@ async def list_cogs(user: CurrentUser = Depends(require_level(Level.OWNER))) -> 
 
 
 class DiscordRoleOut(BaseModel):
-    id: int
+    id: Snowflake
     name: str
 
 
 class GuildRoleOut(BaseModel):
     id: int
-    discord_role_id: int
+    discord_role_id: Snowflake
     level: Literal["member", "mod", "admin", "owner"]
 
 
 class GuildRoleCreate(BaseModel):
-    discord_role_id: int
+    discord_role_id: Snowflake
     level: Literal["member", "mod", "admin", "owner"]
 
 

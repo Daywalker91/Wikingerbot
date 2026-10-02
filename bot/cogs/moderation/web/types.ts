@@ -1,8 +1,9 @@
 // Spiegelt bot/cogs/moderation/api.py's Pydantic-Modelle 1:1.
+// Discord-IDs sind Text (siehe api/types.py) - als Zahl wuerde JavaScript sie runden.
 export interface ModLogEntryItem {
   id: number;
-  user_id: number;
-  mod_id: number;
+  user_id: string;
+  mod_id: string;
   action: string;
   reason: string | null;
   duration: number | null;
@@ -11,8 +12,8 @@ export interface ModLogEntryItem {
 
 export interface WarningItem {
   id: number;
-  user_id: number;
-  mod_id: number;
+  user_id: string;
+  mod_id: string;
   reason: string | null;
   points: number;
   created_at: string;
@@ -41,21 +42,21 @@ export interface ModConfig {
   warn_decay_days: number;
   automod_warn_enabled: boolean;
   automod_warn_points: AutoModPoints;
-  automod_alert_channel_id: number | null;
+  automod_alert_channel_id: string | null;
 }
 
 export interface MemberSearchResult {
-  id: number;
+  id: string;
   username: string;
   display_name: string;
 }
 
 export interface EscalationState {
-  user_id: number;
+  user_id: string;
   tier: number;
 }
 
 export interface TextChannelItem {
-  id: number;
+  id: string;
   name: string;
 }

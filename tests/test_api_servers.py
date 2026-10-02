@@ -161,7 +161,7 @@ async def test_me_returns_current_user_with_valid_cookie():
         response = await client.get("/auth/me")
 
     assert response.status_code == 200
-    assert response.json() == {"user_id": 100, "guild_id": 1, "level": "mod"}
+    assert response.json() == {"user_id": "100", "guild_id": "1", "level": "mod"}
 
 
 async def _seed_server(db_session, *, guild_id: int = 1) -> Server:

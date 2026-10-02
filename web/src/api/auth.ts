@@ -3,8 +3,9 @@ import { apiFetch } from "@/api/client";
 export type Level = "member" | "mod" | "admin" | "owner";
 
 export interface CurrentUser {
-  user_id: number;
-  guild_id: number;
+  // als Text - siehe api/types.py
+  user_id: string;
+  guild_id: string;
   level: Level;
 }
 

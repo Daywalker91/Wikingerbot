@@ -63,7 +63,7 @@ async def test_list_discord_roles_returns_roles(db_session, monkeypatch):
         response = await client.get("/admin/discord-roles")
 
     assert response.status_code == 200
-    assert response.json() == [{"id": 42, "name": "Moderator"}]
+    assert response.json() == [{"id": "42", "name": "Moderator"}]
 
 
 async def test_list_discord_roles_fails_on_discord_error(db_session, monkeypatch):
@@ -113,7 +113,7 @@ async def test_add_guild_role_creates_row(db_session):
 
     assert response.status_code == 200
     body = response.json()
-    assert body["discord_role_id"] == 42
+    assert body["discord_role_id"] == "42"
     assert body["level"] == "mod"
 
     async with get_db_session() as db:
@@ -159,7 +159,7 @@ async def test_guild_roles_are_scoped_to_the_logged_in_guild(db_session):
         response = await client.get("/admin/roles")
 
     [role] = response.json()
-    assert role["discord_role_id"] == 1
+    assert role["discord_role_id"] == "1"
 
 
 async def test_list_cogs_requires_owner(db_session):
@@ -201,3 +201,19 @@ async def test_list_cogs_defaults_to_empty_loaded_list(db_session):
 
     assert response.status_code == 200
     assert response.json()["loaded"] == []
+
+
+async def test_long_discord_ids_survive_as_text(db_session):
+    """19-stellige Discord-IDs: JavaScript wuerde sie als Zahl runden - darum
+    kommen sie als Text rein und gehen als Text raus (api/types.py)."""
+    db_session.add(Guild(id=1, name="Wikinger"))
+    await db_session.commit()
+
+    async with await _client() as client:
+        client.cookies.set("session", _cookie_for(100, 1, Level.OWNER))
+        response = await client.post("/admin/roles", json={"discord_role_id": "1523404561895784448", "level": "mod"})
+
+    assert response.json()["discord_role_id"] == "1523404561895784448"
+    async with get_db_session() as db:
+        role = await db.get(GuildRole, response.json()["id"])
+    assert role.discord_role_id == 1523404561895784448

@@ -19,6 +19,7 @@ from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from api.types import Snowflake
 from api.middleware.auth import CurrentUser, require_level
 from bot.core.amp_client import amp_client
 from db.models.role import Level
@@ -31,13 +32,13 @@ router = APIRouter(prefix="/whitelist", tags=["whitelist"])
 
 class WhitelistRequestOut(BaseModel):
     id: int
-    user_id: int
+    user_id: Snowflake
     server_id: int
     server_name: str
     ign: str
     status: Literal["pending", "approved", "denied"]
     created_at: datetime
-    handled_by: int | None = None
+    handled_by: Snowflake | None = None
 
 
 class DenyBody(BaseModel):

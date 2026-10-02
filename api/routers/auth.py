@@ -165,4 +165,5 @@ async def logout(response: Response) -> dict:
 @router.get("/me")
 async def me(user: CurrentUser = Depends(get_current_user)) -> dict:
     """Session-Introspektion fuers Frontend - wer ist gerade eingeloggt, ohne Reload."""
-    return {"user_id": user.user_id, "guild_id": user.guild_id, "level": user.level.value}
+    # IDs als Text - siehe api/types.py
+    return {"user_id": str(user.user_id), "guild_id": str(user.guild_id), "level": user.level.value}

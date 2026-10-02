@@ -22,7 +22,7 @@ export async function unbanUser(userId: string, reason: string): Promise<ActionR
   return apiFetch<ActionResult>("/moderation/unban", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ user_id: Number(userId), reason }),
+    body: JSON.stringify({ user_id: userId, reason }),
   });
 }
 
@@ -35,7 +35,7 @@ export async function banUser(
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
-      user_id: Number(userId),
+      user_id: userId,
       reason,
       delete_message_days: deleteMessageDays,
     }),
@@ -67,7 +67,7 @@ export async function resetEscalation(userId: string): Promise<ActionResult> {
   return apiFetch<ActionResult>("/moderation/escalations/reset", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ user_id: Number(userId) }),
+    body: JSON.stringify({ user_id: userId }),
   });
 }
 
