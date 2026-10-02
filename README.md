@@ -19,7 +19,7 @@
 | Phase 3 | React-WebUI | ✅ läuft in AMP im Bot-Prozess (https über das Edge-Gateway): Dashboard, Server, Moderation, Whitelist, Einstellungen, Musik, Begrüßung; Benutzer-Seite offen |
 | — | Betrieb in AMP: eigene Vorlage, Migrationen beim Start, MariaDB getestet ([AMP.md](AMP.md)) | ✅ fertig |
 | Phase 4 | `welcome`, `roles`, `music`, `stats`, `automod` | ✅ fertig (Tests ohne Discord; live in Discord noch zu prüfen) |
-| Phase 5 | Kopplung mit der Community-Seite als eigene, abschaltbare Cogs | 🔜 `community` (Verknüpfen, Auftrags-Abholung), `news`, `events` und `tickets` fertig; Rang-Sync, `wiki`, AMP-Konten offen |
+| Phase 5 | Kopplung mit der Community-Seite als eigene, abschaltbare Cogs | 🔜 `community` (Verknüpfen, Auftrags-Abholung), `news`, `events`, `tickets` und `rangsync` fertig; `wiki`, AMP-Konten offen |
 
 Phase 1–3 sind gegen einen echten AMP-Server und einen Test-Discord-Server live verifiziert (nicht nur Unit-Tests). Die Phase-4-Cogs sind mit Unit-Tests abgesichert (Befehle laden, Regeln, Datenbank, echter FFmpeg-Lauf), aber noch nicht in Discord ausprobiert.
 
@@ -134,6 +134,7 @@ Wikingerbot/
 │       ├── news/                # News der Seite in Discord (+ Web-Seite)
 │       ├── events/              # Events mit Zusage-Knoepfen + natives Discord-Event (+ Web-Seite)
 │       ├── tickets/             # Tickets: Staff-Threads, DMs, /ticket (+ Web-Seite)
+│       ├── rangsync/            # Raenge der Seite <-> Discord-Rollen (+ Web-Seite)
 │       ├── whitelist/cog.py    # /whitelist ...
 │       └── banner/              # /banner ... /bannergroup ... (Status-Banner, Editor-UI)
 │           ├── cog.py           # Commands, Views, Posting-/Update-Loop
@@ -312,6 +313,7 @@ da `require_role` auf `app_commands.Command` zugeschnitten ist.
 | News | News-Kanal, Ping-Rolle, neueste News mit Discord-Stand (Admin) |
 | Events | Event-Kanal, Ping-Rolle, natives Discord-Event, nächste Events mit Discord-Stand (Admin) |
 | Tickets | Staff-Kanal, Ping-Rolle, DMs, offene Tickets mit Thread-Stand (Admin) |
+| Rang-Sync | Rang ↔ Discord-Rolle und Richtung, Ersteller für System-Tickets, alles abgleichen (Owner) |
 | Server | AMP-Instanzen verwalten, Start/Stop, Console-Log |
 | Moderation | ModLog ansehen, Verwarnungen, gebannte User |
 | Whitelist | Anfragen verwalten, genehmigen/ablehnen |

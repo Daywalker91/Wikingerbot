@@ -379,3 +379,25 @@ Voll gespiegelt zwischen Seite und Discord:
 | Command | Beschreibung | Level |
 |---|---|---|
 | `/ticket kategorie:` | Öffnet ein Formular für ein neues Ticket (nur verknüpft, max. 3 in 10 min) | Member |
+
+---
+
+## Rang-Sync (`rangsync`-Cog, Tab *Rang-Sync*, nur Owner)
+
+Keine Befehle – läuft im Hintergrund, sobald im Tab eingeschaltet. Pro Rang der
+Seite eine Discord-Rolle und eine Richtung (beide / nur Discord → Seite / nur Seite
+→ Discord / aus); vorbelegt nach der Rechte-Matrix.
+
+- **Seite → Discord**: Rang auf der Seite geändert oder neu verknüpft → das Mitglied
+  bekommt die Rolle seines Rangs, die Rollen der anderen gesyncten Ränge werden
+  entfernt (Thrall = keine Rang-Rolle). Andere Rollen bleiben.
+- **Discord → Seite**: Rollen eines verknüpften Mitglieds geändert → höchster
+  zugeordneter Rang wird auf der Seite gesetzt.
+- Der **König** wird nie automatisch vergeben oder geändert.
+- **Konflikt beim Verknüpfen** (Discord sagt anderes als die Seite) → Ticket, nichts
+  wird geändert. Ohne jede Rang-Rolle in Discord gibt es keinen Konflikt – dann
+  kommt die Rolle von der Seite.
+- **Discord-Bann** eines verknüpften Mitglieds → Ticket (im Namen des eingestellten
+  Kontos, sonst des ersten Königs). Die Sperre auf der Seite bleibt getrennt.
+- Wer Discord verlässt, behält seinen Rang. Die Bot-Rolle muss über den zugeordneten
+  Rollen stehen.
