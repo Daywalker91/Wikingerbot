@@ -1,0 +1,5 @@
+# Nicht im Download-Archiv von GitHub (AMP laedt main.zip) - nur fuer die Entwicklung
+tests/ export-ignore
+.github/ export-ignore
+.gitignore export-ignore
+.gitattributes export-ignore
