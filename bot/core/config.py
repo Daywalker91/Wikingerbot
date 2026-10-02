@@ -20,13 +20,10 @@ class Settings(BaseSettings):
     db_user: str = "wikingerbot"
     db_password: str = ""
 
-    # Community-Seite (optional, bot/community/): Datenbank der Seite auf demselben
-    # MariaDB-Server mit demselben Benutzer wie oben. Leer = keine Anbindung, die
-    # Community-Cogs laden dann nicht - der Bot laeuft allein.
-    community_db_name: str = ""
-    # Alternativ eine komplette URL (z.B. fuer Tests); hat Vorrang vor community_db_name.
+    # Community-Seite: wird in der Web-Oberflaeche eingestellt (Seite "Community",
+    # bot/community/db.py). Diese beiden gelten nur, solange dort nichts steht -
+    # fuer lokale Entwicklung und Tests.
     community_database_url: str = ""
-    # Oeffentliche Adresse der Seite, fuer Links (z.B. https://wikinger.ipv64.net)
     community_site_url: str = ""
 
     discord_client_id: str = ""
@@ -94,20 +91,6 @@ class Settings(BaseSettings):
             return int(value)
         except (TypeError, ValueError):
             return 8765
-
-    @model_validator(mode="after")
-    def _community_url_from_parts(self) -> "Settings":
-        if not self.community_database_url and self.community_db_name and self.db_host:
-            self.community_database_url = URL.create(
-                "mysql+asyncmy",
-                username=self.db_user,
-                password=self.db_password,
-                host=self.db_host,
-                port=self.db_port,
-                database=self.community_db_name,
-            ).render_as_string(hide_password=False)
-        self.community_site_url = self.community_site_url.rstrip("/")
-        return self
 
     @model_validator(mode="after")
     def _urls_from_public_url(self) -> "Settings":

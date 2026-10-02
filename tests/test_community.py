@@ -21,7 +21,7 @@ from bot.core.config import settings
 async def site(tmp_path, monkeypatch):
     monkeypatch.setattr(settings, "community_database_url", f"sqlite+aiosqlite:///{(tmp_path / 'site.db').as_posix()}")
     monkeypatch.setattr(settings, "community_site_url", "https://wikinger.example")
-    await community_db.dispose()
+    await community_db.load_config()  # nichts in der Oberflaeche eingetragen -> .env-Werte
     async with community_db.engine().begin() as conn:
         await conn.run_sync(community_db.metadata.create_all)
         await conn.execute(insert(roles), [{"id": 2, "slug": "karl", "name": "Karl", "level": 20, "color": "#c9a35c"}])
@@ -36,7 +36,9 @@ async def site(tmp_path, monkeypatch):
     yield
     for kind in outbox.registered():
         outbox.unregister(kind)
-    await community_db.dispose()
+    monkeypatch.setattr(settings, "community_database_url", "")
+    monkeypatch.setattr(settings, "community_site_url", "")
+    await community_db.load_config()
 
 
 async def add_code(user_id: int, code: str, minutes: int = 15) -> None:
@@ -143,11 +145,22 @@ async def test_site_link(site):
     assert community_db.site_link("user", id=5) == "https://wikinger.example/index.php?p=user&id=5"
 
 
-async def test_cog_skipped_without_community_db(monkeypatch):
+async def test_without_community_db_commands_point_to_web_ui(monkeypatch):
     monkeypatch.setattr(settings, "community_database_url", "")
-    bot = commands.Bot(command_prefix="!", intents=discord.Intents.default())
-    await bot.load_extension("bot.cogs.community.cog")
-    assert bot.get_cog("CommunityCog") is None and not bot.tree.get_commands()
+    await community_db.load_config()
+    assert not community_db.enabled()
+
+    from bot.cogs.community.cog import CommunityCog
+
+    sent = []
+    response = type("R", (), {"send_message": lambda self, text, **kw: _record(sent, text)})()
+    interaction = type("I", (), {"response": response})()
+    assert await CommunityCog._not_connected(None, interaction)
+    assert "Bot-Oberfläche → Community" in sent[0]
+
+
+async def _record(sent, text):
+    sent.append(text)
 
 
 async def test_cog_loads_with_community_db(site):
@@ -162,9 +175,37 @@ async def test_cog_loads_with_community_db(site):
     assert "user.unlinked" not in outbox.registered()
 
 
-def test_community_url_from_db_name():
-    from bot.core.config import Settings
+def test_url_for_uses_bot_db_server_and_user(monkeypatch):
+    monkeypatch.setattr(settings, "db_host", "10.0.0.107")
+    monkeypatch.setattr(settings, "db_user", "wikingerbot")
+    monkeypatch.setattr(settings, "db_password", "p#w")
+    assert community_db._url_for("php") == "mysql+asyncmy://wikingerbot:p%23w@10.0.0.107:3306/php"
+    assert community_db._url_for("") == ""
+    monkeypatch.setattr(settings, "db_host", "")
+    assert community_db._url_for("php") == ""  # ohne DB_HOST keine Anbindung
 
-    s = Settings(_env_file=None, db_host="10.0.0.107", db_user="wikingerbot", db_password="p#w", community_db_name="php")
-    assert s.community_database_url == "mysql+asyncmy://wikingerbot:p%23w@10.0.0.107:3306/php"
-    assert Settings(_env_file=None, community_db_name="php").community_database_url == ""  # ohne DB_HOST keine Anbindung
+
+async def test_web_ui_config_saved_and_takes_precedence(monkeypatch):
+    """Eintrag in der Oberflaeche gewinnt; leerer Name schaltet die Anbindung ab."""
+    import httpx
+
+    from api.main import app
+    from api.middleware.auth import create_access_token
+    from db.models.role import Level
+
+    monkeypatch.setattr(settings, "db_host", "127.0.0.1")
+    monkeypatch.setattr(settings, "db_port", 1)  # lehnt sofort ab - kein echter Server im Test
+    client = httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test")
+    async with client:
+        client.cookies.set("session", create_access_token(1, 1, Level.ADMIN))
+        assert (await client.get("/community/config")).status_code == 403
+        client.cookies.set("session", create_access_token(1, 1, Level.OWNER))
+        assert (await client.put("/community/config", json={"db_name": "php; DROP", "site_url": ""})).status_code == 422
+        data = (await client.put("/community/config", json={"db_name": "php", "site_url": "https://wikinger.example/"})).json()
+        assert data["db_name"] == "php" and data["site_url"] == "https://wikinger.example" and data["enabled"]
+        assert data["connected"] is False and "Nicht erreichbar" in data["message"]  # kein echter Server im Test
+        assert "password" not in str(data).lower()
+
+        data = (await client.put("/community/config", json={"db_name": "", "site_url": ""})).json()
+        assert data["enabled"] is False
+    await community_db.load_config()

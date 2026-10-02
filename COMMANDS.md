@@ -299,7 +299,7 @@ Meldung im Alarmkanal. Während einer Flut wird nur einmal pro 30 s bestraft.
 
 ## Community-Seite (`community`-Cog)
 
-Nur aktiv, wenn die Datenbank der Seite angebunden ist (siehe [AMP.md](AMP.md)). Grundlage für
+Nur aktiv, wenn die Datenbank der Seite angebunden ist (Bot-Oberfläche → *Community*, siehe [AMP.md](AMP.md)). Grundlage für
 die weiteren Community-Cogs: holt alle 5 Sekunden die Aufträge der Seite ab.
 
 | Command | Beschreibung | Level |

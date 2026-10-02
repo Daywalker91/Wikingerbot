@@ -1,8 +1,9 @@
 """Grundlage der Anbindung an die Community-Seite: Konto-Verknuepfung und das
 Abholen der Auftraege, die die Seite in bot_outbox schreibt.
 
-Laedt nur, wenn COMMUNITY_DB_NAME (bzw. COMMUNITY_DATABASE_URL) gesetzt ist -
-sonst bleibt der Bot ohne Seite lauffaehig. Die weiteren Community-Cogs (news,
+Eingestellt wird die Anbindung in der Web-Oberflaeche (Seite "Community").
+Ohne Anbindung tut der Cog nichts und die Befehle verweisen dorthin - der Bot
+bleibt ohne Seite lauffaehig. Die weiteren Community-Cogs (news,
 events, tickets, ...) melden ihre Auftragsarten selbst bei bot.community.outbox an.
 
 Ereignisse fuer andere Cogs: "community_link" (member, site_user) nach einer
@@ -45,6 +46,9 @@ class CommunityCog(BaseCog):
         self._poll_error_logged = False
 
     async def cog_load(self) -> None:
+        config = await community_db.load_config()
+        if not config["enabled"]:
+            log.info("Community-Seite nicht angebunden - einstellbar in der Web-Oberflaeche (Community).")
         outbox.register("user.unlinked", self._on_site_unlinked)
         self.poll.start()
 
@@ -56,6 +60,8 @@ class CommunityCog(BaseCog):
 
     @tasks.loop(seconds=POLL_SECONDS)
     async def poll(self) -> None:
+        if not community_db.enabled():
+            return
         try:
             await outbox.process_pending()
             if self._poll_error_logged:
@@ -79,6 +85,14 @@ class CommunityCog(BaseCog):
 
     # --- Befehle --------------------------------------------------------------------
 
+    async def _not_connected(self, interaction: discord.Interaction) -> bool:
+        if community_db.enabled():
+            return False
+        await interaction.response.send_message(
+            "Die Community-Seite ist noch nicht angebunden (Bot-Oberfläche → Community).", ephemeral=True
+        )
+        return True
+
     def _too_many_attempts(self, user_id: int) -> bool:
         now = time.monotonic()
         recent = [t for t in self._failed_links.get(user_id, []) if now - t < LINK_WINDOW]
@@ -88,6 +102,8 @@ class CommunityCog(BaseCog):
     @app_commands.command(name="verknuepfen", description="Verknuepft dein Discord-Konto mit deinem Konto auf der Seite")
     @app_commands.describe(code="Der Code aus Einstellungen -> Discord auf der Seite")
     async def link(self, interaction: discord.Interaction, code: str) -> None:
+        if await self._not_connected(interaction):
+            return
         if self._too_many_attempts(interaction.user.id):
             await interaction.response.send_message("Zu viele Versuche – probier es in ein paar Minuten noch mal.", ephemeral=True)
             return
@@ -111,6 +127,8 @@ class CommunityCog(BaseCog):
 
     @app_commands.command(name="verknuepfung_loesen", description="Loest die Verknuepfung mit der Seite")
     async def unlink(self, interaction: discord.Interaction) -> None:
+        if await self._not_connected(interaction):
+            return
         await interaction.response.defer(ephemeral=True, thinking=True)
         try:
             site_user = await unlink_discord(interaction.user.id)
@@ -130,6 +148,8 @@ class CommunityCog(BaseCog):
     @app_commands.command(name="profil", description="Link zum Profil auf der Seite")
     @app_commands.describe(mitglied="Wessen Profil (ohne Angabe: deins)")
     async def profile(self, interaction: discord.Interaction, mitglied: discord.Member | None = None) -> None:
+        if await self._not_connected(interaction):
+            return
         member = mitglied or interaction.user
         try:
             site_user = await user_for_discord(member.id)
@@ -159,6 +179,8 @@ class CommunityCog(BaseCog):
     @community_group.command(name="status", description="Zustand der Anbindung an die Seite")
     @require_role(Level.ADMIN)
     async def status(self, interaction: discord.Interaction) -> None:
+        if await self._not_connected(interaction):
+            return
         await interaction.response.defer(ephemeral=True, thinking=True)
         try:
             counts = await outbox.counts()
@@ -177,7 +199,4 @@ class CommunityCog(BaseCog):
 
 
 async def setup(bot: commands.Bot) -> None:
-    if not community_db.enabled():
-        log.info("Community-Seite nicht angebunden (COMMUNITY_DB_NAME leer) - community-Cog bleibt aus.")
-        return
     await bot.add_cog(CommunityCog(bot))

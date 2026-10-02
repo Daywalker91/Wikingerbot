@@ -1,8 +1,15 @@
 """Verbindung zur Datenbank der Community-Seite.
 
 Gemeinsam fuer alle Community-Cogs (community, news, events, tickets, ...) -
-der Bot-Kern importiert hiervon nichts. Ist COMMUNITY_DB_NAME bzw.
-COMMUNITY_DATABASE_URL nicht gesetzt, ist enabled() False und die Cogs laden nicht.
+der Bot-Kern importiert hiervon nichts.
+
+Eingestellt wird die Anbindung in der Web-Oberflaeche (Seite "Community"):
+Datenbankname und Adresse der Seite liegen in den Bot-Einstellungen (bot_settings).
+Host, Benutzer und Passwort sind dieselben wie fuer die eigene Datenbank des Bots
+(AMP-Felder DB_*). Ohne Datenbankname ist enabled() False - die Community-Cogs
+tun dann nichts, der Bot laeuft allein. COMMUNITY_DATABASE_URL/COMMUNITY_SITE_URL
+in der .env gelten nur, solange in der Oberflaeche nichts eingetragen ist
+(lokale Entwicklung, Tests).
 
 Die Tabellen gehoeren der Seite (deren Migrationen legen sie an, nicht Alembic).
 Hier stehen nur die Spalten, die der Bot braucht und lesen darf - die Rechte des
@@ -28,9 +35,14 @@ from sqlalchemy import (
     Table,
     Text,
 )
+from sqlalchemy.engine import URL
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker, create_async_engine
 
+from bot.core.bot_settings import get_bot_setting, set_bot_setting
 from bot.core.config import settings
+
+DB_NAME_KEY = "community_db_name"
+SITE_URL_KEY = "community_site_url"
 
 metadata = MetaData()
 
@@ -80,16 +92,54 @@ bot_outbox = Table(
 
 _engine: AsyncEngine | None = None
 _session_maker: async_sessionmaker[AsyncSession] | None = None
+_config = {"db_name": "", "url": "", "site_url": ""}
+
+
+def _url_for(db_name: str) -> str:
+    """Seiten-DB auf demselben Server mit demselben Benutzer wie die Bot-DB."""
+    if not db_name or not settings.db_host:
+        return ""
+    return URL.create(
+        "mysql+asyncmy",
+        username=settings.db_user,
+        password=settings.db_password,
+        host=settings.db_host,
+        port=settings.db_port,
+        database=db_name,
+    ).render_as_string(hide_password=False)
+
+
+async def load_config() -> dict:
+    """Liest die Einstellungen (Oberflaeche vor .env) und verbindet ggf. neu."""
+    db_name = await get_bot_setting(DB_NAME_KEY, "") or ""
+    site_url = (await get_bot_setting(SITE_URL_KEY, "") or settings.community_site_url).rstrip("/")
+    url = _url_for(db_name) if db_name else settings.community_database_url
+    if url != _config["url"]:
+        await dispose()
+    _config.update(db_name=db_name, url=url, site_url=site_url)
+    return current_config()
+
+
+async def save_config(db_name: str, site_url: str) -> dict:
+    await set_bot_setting(DB_NAME_KEY, db_name.strip())
+    await set_bot_setting(SITE_URL_KEY, site_url.strip().rstrip("/"))
+    return await load_config()
+
+
+def current_config() -> dict:
+    return {"db_name": _config["db_name"], "site_url": _config["site_url"], "enabled": enabled()}
 
 
 def enabled() -> bool:
-    return bool(settings.community_database_url)
+    return bool(_config["url"])
 
 
 def engine() -> AsyncEngine:
     global _engine, _session_maker
+    if not enabled():
+        raise RuntimeError("Community-Seite nicht angebunden")
     if _engine is None:
-        _engine = create_async_engine(settings.community_database_url, pool_pre_ping=True, pool_recycle=3600)
+        _engine = create_async_engine(_config["url"], pool_pre_ping=True, pool_recycle=3600)
         _session_maker = async_sessionmaker(_engine, expire_on_commit=False)
     return _engine
 
@@ -109,10 +159,30 @@ async def dispose() -> None:
 
 
 def site_link(page: str, **params) -> str | None:
-    """Link auf die Seite (index.php?p=...), None ohne COMMUNITY_SITE_URL."""
-    if not settings.community_site_url:
+    """Link auf die Seite (index.php?p=...), None ohne eingetragene Adresse."""
+    if not _config["site_url"]:
         return None
     from urllib.parse import urlencode
 
     query = urlencode({"p": page, **params})
-    return f"{settings.community_site_url}/index.php?{query}"
+    return f"{_config['site_url']}/index.php?{query}"
+
+
+async def check_connection() -> tuple[bool, str]:
+    """Fuer die Oberflaeche: erreichbar, Migration der Seite da, Rechte gesetzt?"""
+    if not enabled():
+        return False, "Nicht angebunden – Datenbankname eintragen."
+    try:
+        async with session() as db:
+            from sqlalchemy import select
+
+            await db.execute(select(bot_outbox.c.id).limit(1))
+            await db.execute(select(users.c.discord_id).limit(1))
+    except Exception as error:
+        text = str(error).splitlines()[0][:300]
+        if "1142" in text or "1143" in text or "denied" in text.lower():
+            return False, f"Keine Rechte auf die Tabellen der Seite: {text}"
+        if "1146" in text or "doesn't exist" in text:
+            return False, f"Tabellen fehlen – ist die Migration 008_discord auf der Seite gelaufen? {text}"
+        return False, f"Nicht erreichbar: {text}"
+    return True, "Verbunden"
