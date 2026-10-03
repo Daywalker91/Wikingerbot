@@ -2,9 +2,22 @@ import { useEffect, useState } from "react";
 
 import { useAuth } from "@/auth/useAuth";
 
-import { createServer, getDiscoverableInstances, getServers, startServer, stopServer } from "./api";
+import {
+  createServer,
+  getAddressSettings,
+  getDiscoverableInstances,
+  getServers,
+  saveAddressSettings,
+  startServer,
+  stopServer,
+} from "./api";
 import { ServerConsole } from "./ServerConsole";
-import type { DiscoverableInstance, ServerStatus } from "./types";
+import type { AddressSettings, DiscoverableInstance, ServerStatus } from "./types";
+
+/** "host:2456" -> true (eigener Port angegeben) */
+function hasPort(address: string): boolean {
+  return /^(\[.*\]|[^:]+):\d+$/.test(address.trim());
+}
 
 export const route = { path: "/servers", navLabel: "Server" };
 
@@ -26,6 +39,8 @@ export default function ServerPage() {
   const [newDisplayName, setNewDisplayName] = useState("");
   const [newHost, setNewHost] = useState("");
   const [showAddForm, setShowAddForm] = useState(false);
+  const [address, setAddress] = useState<AddressSettings | null>(null);
+  const [gameHost, setGameHost] = useState("");
 
   async function load() {
     setServers(await getServers());
@@ -39,6 +54,10 @@ export default function ServerPage() {
 
   useEffect(() => {
     if (isOwner && showAddForm) {
+      void getAddressSettings().then((loaded) => {
+        setAddress(loaded);
+        setGameHost(loaded.game_host);
+      });
       void getDiscoverableInstances().then((instances) => {
         setDiscoverable(instances);
         if (instances.length > 0) {
@@ -62,15 +81,49 @@ export default function ServerPage() {
     void load();
   }
 
+  const selected = discoverable.find((i) => i.instance_id === newInstanceId);
+  const previewHost = newHost.trim() || address?.effective_host || "";
+  const preview = !previewHost
+    ? null
+    : hasPort(previewHost) || !selected?.port
+      ? previewHost
+      : `${previewHost}:${selected.port}`;
+  const missing = !newInstanceId
+    ? "eine AMP-Instanz"
+    : !newDisplayName.trim()
+      ? "einen Anzeigenamen"
+      : !previewHost
+        ? "eine Adresse (oder oben eine Standard-Spieladresse)"
+        : null;
+
+  async function handleSaveGameHost() {
+    try {
+      const saved = await saveAddressSettings(gameHost);
+      setGameHost(saved.game_host);
+      setAddress(await getAddressSettings());
+      setMessage("Standard-Spieladresse gespeichert.");
+    } catch (error) {
+      setMessage((error as Error).message);
+    }
+  }
+
   async function handleCreateServer() {
-    if (!newInstanceId || !newDisplayName || !newHost) return;
-    const instance = discoverable.find((i) => i.instance_id === newInstanceId);
-    await createServer({
-      instance_name: instance?.friendly_name.replace(/\s+/g, "") ?? newInstanceId,
-      amp_instance_id: newInstanceId,
-      display_name: newDisplayName,
-      host: newHost,
-    });
+    if (missing) {
+      setMessage(`Zum Anlegen fehlt noch ${missing}.`);
+      return;
+    }
+    try {
+      await createServer({
+        instance_name: selected?.friendly_name.replace(/\s+/g, "") ?? newInstanceId,
+        amp_instance_id: newInstanceId,
+        display_name: newDisplayName.trim(),
+        host: newHost.trim(),
+      });
+    } catch (error) {
+      setMessage((error as Error).message);
+      return;
+    }
+    setMessage(`Server „${newDisplayName.trim()}“ angelegt.`);
     setNewDisplayName("");
     setNewHost("");
     setShowAddForm(false);
@@ -114,8 +167,30 @@ export default function ServerPage() {
             marginBottom: 16,
           }}
         >
+          <div style={{ marginBottom: 12, display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+            Standard-Spieladresse:
+            <input
+              placeholder={address?.public_host ?? "spiel.example.org"}
+              value={gameHost}
+              onChange={(e) => setGameHost(e.target.value)}
+            />
+            <button onClick={() => void handleSaveGameHost()}>Speichern</button>
+            <span style={{ color: "#999", fontSize: "0.9em" }}>
+              Host ohne Port – gilt für alle Server ohne eigene Adresse
+              {address?.public_host && !address.game_host ? ` (leer: ${address.public_host})` : ""}
+            </span>
+          </div>
           <div style={{ marginBottom: 8 }}>
-            <select value={newInstanceId} onChange={(e) => setNewInstanceId(e.target.value)}>
+            <select
+              value={newInstanceId}
+              onChange={(e) => {
+                const next = discoverable.find((i) => i.instance_id === e.target.value);
+                if (next && (!newDisplayName || newDisplayName === selected?.friendly_name)) {
+                  setNewDisplayName(next.friendly_name);
+                }
+                setNewInstanceId(e.target.value);
+              }}
+            >
               {discoverable.length === 0 && <option value="">Keine neuen AMP-Instanzen gefunden</option>}
               {discoverable.map((instance) => (
                 <option key={instance.instance_id} value={instance.instance_id}>
@@ -132,12 +207,19 @@ export default function ServerPage() {
               style={{ marginRight: 8 }}
             />
             <input
-              placeholder="Verbindungs-Adresse (Host)"
+              placeholder={address?.effective_host ? `Adresse (leer: ${address.effective_host})` : "Adresse, z.B. spiel.example.org"}
               value={newHost}
               onChange={(e) => setNewHost(e.target.value)}
             />
           </div>
-          <button onClick={() => void handleCreateServer()}>Anlegen</button>
+          <div style={{ color: "#999", fontSize: "0.9em", marginBottom: 8 }}>
+            {preview
+              ? `Spieler sehen: ${preview}${!hasPort(previewHost) && selected?.port ? " (Port aus AMP)" : ""}`
+              : "Ohne Port hängt der Bot den Spiel-Port aus AMP an."}
+          </div>
+          <button onClick={() => void handleCreateServer()} title={missing ? `Es fehlt noch ${missing}` : undefined}>
+            Anlegen
+          </button>
         </div>
       )}
 

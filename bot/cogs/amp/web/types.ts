@@ -26,6 +26,13 @@ export interface DiscoverableInstance {
   friendly_name: string;
   module: string;
   running: boolean;
+  port: number | null;
+}
+
+export interface AddressSettings {
+  game_host: string;
+  effective_host: string | null;
+  public_host: string | null;
 }
 
 export interface ServerCreateBody {

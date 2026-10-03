@@ -1,6 +1,7 @@
 import { apiFetch } from "@/api/client";
 
 import type {
+  AddressSettings,
   ConsoleLineItem,
   DiscoverableInstance,
   ServerActionResult,
@@ -21,6 +22,18 @@ export async function createServer(body: ServerCreateBody): Promise<ServerStatus
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
+  });
+}
+
+export async function getAddressSettings(): Promise<AddressSettings> {
+  return apiFetch<AddressSettings>("/servers/address-settings");
+}
+
+export async function saveAddressSettings(gameHost: string): Promise<{ game_host: string }> {
+  return apiFetch<{ game_host: string }>("/servers/address-settings", {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ game_host: gameHost }),
   });
 }
 

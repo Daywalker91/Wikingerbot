@@ -383,3 +383,33 @@ async def test_create_server_adds_row_with_steam_appid(db_session, monkeypatch):
     body = response.json()
     assert body["display_name"] == "Factorio"
     assert body["reachable"] is False
+
+
+async def test_create_server_without_host_uses_game_host_and_amp_port(db_session, monkeypatch):
+    from bot.core import server_address
+
+    test_client = await _client()
+    monkeypatch.setattr("bot.cogs.amp.api.httpx.AsyncClient", lambda: _FakeDiscordClient("Wikinger"))
+    endpoints = [{"DisplayName": "Application Address", "Endpoint": "0.0.0.0:7777"}]
+    monkeypatch.setattr(
+        amp_client,
+        "list_instances",
+        AsyncMock(return_value=[DiscoveredInstance("new-id", "Valguero", "GenericModule", False, "", endpoints)]),
+    )
+    monkeypatch.setattr(amp_client, "get_status", AsyncMock(side_effect=TimeoutError("gestoppt")))
+    server_address.clear_cache()
+
+    async with test_client as client:
+        client.cookies.set("session", _cookie_for(100, 1, Level.OWNER))
+        assert (await client.get("/servers/discoverable")).json()[0]["port"] == 7777
+        saved = await client.put("/servers/address-settings", json={"game_host": "https://spiel.example.org:1234/"})
+        assert saved.json()["game_host"] == "spiel.example.org"  # nur der Host
+        response = await client.post(
+            "/servers", json={"instance_name": "valguero", "amp_instance_id": "new-id", "display_name": "Valguero"}
+        )
+        again = await client.post(
+            "/servers", json={"instance_name": "valguero2", "amp_instance_id": "new-id", "display_name": "Valguero"}
+        )
+
+    assert response.status_code == 200 and response.json()["host"] == "spiel.example.org:7777"
+    assert again.status_code == 409 and "schon als `valguero`" in again.json()["detail"]

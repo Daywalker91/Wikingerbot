@@ -1,5 +1,5 @@
 import asyncio
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Awaitable, TypeVar
 
@@ -85,6 +85,9 @@ class DiscoveredInstance:
     # Steam-basierte Spiele-Server - treibt den automatischen Steam-Artwork-Abruf
     # im banner-Cog (siehe bot/core/steam_art.py).
     display_image_source: str
+    # AMPs ApplicationEndpoints (DisplayName/Endpoint/Uri) - liefert den Spiel-Port
+    # fuer die Verbindungsadresse (bot/core/server_address.py)
+    endpoints: list = field(default_factory=list)
 
 
 @dataclass
@@ -160,6 +163,7 @@ class AMPClient:
                         module=instance.Module,
                         running=instance.Running,
                         display_image_source=instance.DisplayImageSource,
+                        endpoints=list(getattr(instance, "ApplicationEndpoints", None) or []),
                     )
                 )
         return discovered

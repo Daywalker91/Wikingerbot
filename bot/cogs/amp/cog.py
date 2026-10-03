@@ -19,6 +19,7 @@ from bot.core.console_filters import (
 from bot.core.discord_utils import MESSAGE_TIMEOUT, send_temp_followup as _followup_temp
 from bot.core.entities import ensure_guild
 from bot.core.permissions import Level, require_role
+from bot.core.server_address import connect_address
 from bot.core.steam_art import parse_steam_appid
 from db.models.console_pattern import ConsolePattern, ConsolePatternKind, ConsolePatternOverride
 from db.models.server import ConsoleFilterMode, Server
@@ -301,7 +302,9 @@ class AMPCog(BaseCog):
         embed = discord.Embed(title=server.display_name)
         embed.add_field(name="Status", value=status.State.name)
         embed.add_field(name="Uptime", value=status.Uptime)
-        embed.add_field(name="Verbinden unter", value=server.host, inline=False)
+        address = await connect_address(server)
+        if address:
+            embed.add_field(name="Verbinden unter", value=address, inline=False)
         await _followup_temp(interaction, embed=embed)
 
     @server_group.command(name="start", description="Startet einen Server")
@@ -386,7 +389,7 @@ class AMPCog(BaseCog):
         name="Interner Servername (instance_name)",
         amp_instance_id="AMP-Instanz-ID (siehe /server discover)",
         display_name="Anzeigename",
-        host="Verbindungs-Adresse fuer Spieler (Autocomplete schlaegt bereits genutzte Adressen vor)",
+        host="Adresse fuer Spieler - leer = Standard-Spieladresse; ohne Port haengt der Bot den Spiel-Port aus AMP an",
     )
     @app_commands.autocomplete(amp_instance_id=_autocomplete_amp_instance_id, host=_autocomplete_host)
     @require_role(Level.OWNER)
@@ -396,7 +399,7 @@ class AMPCog(BaseCog):
         name: str,
         amp_instance_id: str,
         display_name: str,
-        host: str,
+        host: str = "",
     ) -> None:
         await interaction.response.defer(ephemeral=True)
         await ensure_guild(interaction.guild_id, interaction.guild.name)

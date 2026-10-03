@@ -18,6 +18,7 @@ from bot.core.base_cog import BaseCog
 from bot.core.discord_utils import send_temp_followup as _followup_temp
 from bot.core.entities import ensure_guild
 from bot.core.permissions import Level, check_level_interaction, require_role
+from bot.core.server_address import connect_address
 from bot.core.steam_art import fetch_header_image
 from db.models.banner_group import BannerGroup, BannerGroupLayout
 from db.models.server import BannerType, Server
@@ -329,12 +330,13 @@ class BannerCog(BaseCog):
 
         # Adresse steht einheitlich als eigener, kopierbarer Inline-Code-Text ueber der
         # Nachricht - egal ob Embed oder Bild, nicht nochmal im Embed/Bild dupliziert.
-        content = f"Verbinden: `{server.host}`"
+        address = await connect_address(server)
+        content = f"Verbinden: `{address}`" if address else None
 
         if server.banner_type == BannerType.EMBED:
             embed = build_embed(
                 server.display_name,
-                server.host,
+                address,
                 status,
                 players,
                 whitelist_count=whitelist_count,
@@ -345,7 +347,7 @@ class BannerCog(BaseCog):
         background_path = await self._resolve_background(server)
         buffer = render_banner(
             server.display_name,
-            server.host,
+            address,
             status,
             players,
             theme=server.banner_theme,
@@ -414,11 +416,11 @@ class BannerCog(BaseCog):
                 status = _OFFLINE_STATUS_FACTORY()
             players = extract_players(status)
             whitelist_count, has_donator = await self._whitelist_badge(member.id)
-            entries.append((member.display_name, member.host, status, players, whitelist_count, has_donator))
+            entries.append((member.display_name, await connect_address(member), status, players, whitelist_count, has_donator))
 
         # Adressen stehen einheitlich als eigener Text ueber der Nachricht, nicht
         # nochmal im Embed/Bild dupliziert.
-        content = "\n".join(f"{name}: `{host}`" for name, host, *_ in entries)
+        content = "\n".join(f"{name}: `{host}`" for name, host, *_ in entries if host) or None
 
         if group.banner_type == BannerType.EMBED:
             return [build_group_embed(group.name, entries)], [], content
@@ -686,7 +688,7 @@ class BannerCog(BaseCog):
             background_path=background_path,
             has_background_image=has_background_image,
             preview_name=server.display_name,
-            preview_host=server.host,
+            preview_host=await connect_address(server),
         )
         buffer = view._render_preview()
         file = discord.File(buffer, filename="preview.png")

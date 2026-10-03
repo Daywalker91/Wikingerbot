@@ -23,3 +23,14 @@ async def _reset_schema():
 async def db_session():
     async with async_session_maker() as session:
         yield session
+
+
+@pytest_asyncio.fixture(autouse=True)
+async def _no_amp_ports(monkeypatch):
+    """Spiel-Ports nicht bei einem echten AMP abfragen (sonst 10 s Timeout pro Test);
+    Tests, die das brauchen, rufen server_address.clear_cache() und patchen amp_client."""
+    from bot.core import server_address
+
+    monkeypatch.setattr(server_address, "_ports", {})
+    monkeypatch.setattr(server_address, "_ports_at", float("inf"))
+    yield

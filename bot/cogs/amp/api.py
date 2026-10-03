@@ -10,7 +10,7 @@ import logging
 
 import httpx
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -20,6 +20,8 @@ from bot.core import runtime
 from bot.core.amp_client import amp_client
 from bot.core.config import settings
 from bot.core.entities import ensure_guild
+from bot.core.guild_config import get_config, set_config
+from bot.core.server_address import GAME_HOST_KEY, connect_address, default_host, game_port, public_host, split_port
 from bot.core.steam_art import parse_steam_appid
 from db.models.role import Level
 from db.models.server import Server
@@ -51,7 +53,7 @@ async def _status_for(server: Server) -> ServerStatusOut:
             id=server.id,
             instance_name=server.instance_name,
             display_name=server.display_name,
-            host=server.host,
+            host=await connect_address(server),
             reachable=False,
         )
 
@@ -66,7 +68,7 @@ async def _status_for(server: Server) -> ServerStatusOut:
         id=server.id,
         instance_name=server.instance_name,
         display_name=server.display_name,
-        host=server.host,
+        host=await connect_address(server),
         reachable=True,
         state=status.State.name,
         uptime=status.Uptime,
@@ -91,13 +93,18 @@ class DiscoverableInstanceOut(BaseModel):
     friendly_name: str
     module: str
     running: bool
+    port: int | None = None  # Spiel-Port laut AMP
 
 
 class ServerCreate(BaseModel):
     instance_name: str
     amp_instance_id: str
     display_name: str
-    host: str
+    host: str = ""  # leer = Standard-Spieladresse; ohne Port = Spiel-Port aus AMP
+
+
+class AddressSettings(BaseModel):
+    game_host: str = Field("", max_length=255)
 
 
 @router.get("/discoverable", response_model=list[DiscoverableInstanceOut])
@@ -111,11 +118,33 @@ async def list_discoverable_instances(
     known_ids = await known_instance_ids(_active_guild_ids())
     return [
         DiscoverableInstanceOut(
-            instance_id=i.instance_id, friendly_name=i.friendly_name, module=i.module, running=i.running
+            instance_id=i.instance_id,
+            friendly_name=i.friendly_name,
+            module=i.module,
+            running=i.running,
+            port=game_port(i.endpoints),
         )
         for i in instances
         if i.instance_id not in known_ids
     ]
+
+
+@router.get("/address-settings")
+async def get_address_settings(user: CurrentUser = Depends(require_level(Level.OWNER))) -> dict:
+    """Standard-Spieladresse (Host ohne Port) fuer Server ohne eigene Adresse."""
+    return {
+        "game_host": await get_config(user.guild_id, GAME_HOST_KEY) or "",
+        "effective_host": await default_host(user.guild_id),
+        "public_host": public_host(),
+    }
+
+
+@router.put("/address-settings")
+async def put_address_settings(body: AddressSettings, user: CurrentUser = Depends(require_level(Level.OWNER))) -> dict:
+    host = split_port(body.game_host.strip().removeprefix("https://").removeprefix("http://").rstrip("/"))[0]
+    await _ensure_guild_from_discord(user.guild_id)
+    await set_config(user.guild_id, GAME_HOST_KEY, host)
+    return {"ok": True, "game_host": host}
 
 
 def _active_guild_ids() -> set[int] | None:
