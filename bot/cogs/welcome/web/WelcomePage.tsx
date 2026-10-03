@@ -33,9 +33,11 @@ const preview: CSSProperties = {
 };
 
 function render(text: string, data: WelcomeData, name: string): string {
+  const channelName = (id: string) => data.text_channels.find((c) => c.id === id)?.name ?? "unbekannter-kanal";
   return text
-    .split("\n")
+    .split("\\n") // "\n" als zwei Zeichen = Zeilenumbruch, wie im Bot
     .join("\n")
+    .replace(/<#(\d+)>/g, (_, id: string) => `#${channelName(id)}`) // Kanal-Erwaehnung wie in Discord
     .split("{user}")
     .join(`@${name}`)
     .split("{name}")
