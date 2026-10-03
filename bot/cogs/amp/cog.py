@@ -7,7 +7,7 @@ from discord.app_commands import Choice
 from discord.ext import commands, tasks
 from sqlalchemy import select
 
-from bot.cogs.amp.registry import add_server, known_instance_ids
+from bot.cogs.amp.registry import add_server, delete_banner_message, known_instance_ids, remove_server
 from bot.core.amp_client import amp_client
 from bot.core.base_cog import BaseCog
 from bot.core.console_filters import (
@@ -131,6 +131,29 @@ async def _autocomplete_builtin_key(
         for key, pattern in builtins.items()
         if current_lower in key.lower()
     ][:25]
+
+
+class _ConfirmRemove(discord.ui.View):
+    """Ja/Nein vor /server remove - nur fuer den, der den Befehl ausgefuehrt hat."""
+
+    def __init__(self, user_id: int) -> None:
+        super().__init__(timeout=60)
+        self.user_id = user_id
+        self.confirmed = False
+
+    async def interaction_check(self, interaction: discord.Interaction) -> bool:
+        return interaction.user.id == self.user_id
+
+    @discord.ui.button(label="Entfernen", style=discord.ButtonStyle.danger)
+    async def confirm(self, interaction: discord.Interaction, button: discord.ui.Button) -> None:
+        self.confirmed = True
+        await interaction.response.defer()
+        self.stop()
+
+    @discord.ui.button(label="Abbrechen", style=discord.ButtonStyle.secondary)
+    async def cancel(self, interaction: discord.Interaction, button: discord.ui.Button) -> None:
+        await interaction.response.defer()
+        self.stop()
 
 
 class AMPCog(BaseCog):
@@ -423,6 +446,33 @@ class AMPCog(BaseCog):
             steam_app_id=steam_app_id,
         )
         await _followup_temp(interaction, result.message)
+
+    @server_group.command(name="remove", description="Entfernt einen Server-Eintrag (die AMP-Instanz bleibt)")
+    @app_commands.describe(name="Interner Servername (instance_name)")
+    @app_commands.autocomplete(name=_autocomplete_instance_name)
+    @require_role(Level.OWNER)
+    async def server_remove(self, interaction: discord.Interaction, name: str) -> None:
+        server = await _get_server(interaction.guild_id, name)
+        if server is None:
+            await interaction.response.send_message(f"Server `{name}` nicht gefunden.", ephemeral=True, delete_after=MESSAGE_TIMEOUT)
+            return
+        view = _ConfirmRemove(interaction.user.id)
+        await interaction.response.send_message(
+            f"`{server.display_name}` wirklich entfernen? Eigene Konsolenmuster und Whitelist-Anfragen dieses Servers "
+            "werden mit geloescht, der Banner verschwindet. Die AMP-Instanz selbst bleibt bestehen.",
+            view=view,
+            ephemeral=True,
+        )
+        await view.wait()
+        if not view.confirmed:
+            await interaction.edit_original_response(content="Abgebrochen.", view=None)
+            return
+        removed = await remove_server(interaction.guild_id, server.id)
+        if removed is None:
+            await interaction.edit_original_response(content=f"Server `{name}` nicht gefunden.", view=None)
+            return
+        await delete_banner_message(self.bot, removed)
+        await interaction.edit_original_response(content=f"Server `{removed.display_name}` entfernt.", view=None)
 
     async def _set_channel(
         self,

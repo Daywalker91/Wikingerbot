@@ -413,3 +413,23 @@ async def test_create_server_without_host_uses_game_host_and_amp_port(db_session
 
     assert response.status_code == 200 and response.json()["host"] == "spiel.example.org:7777"
     assert again.status_code == 409 and "schon als `valguero`" in again.json()["detail"]
+
+
+async def test_delete_server_requires_owner_and_guild(db_session):
+    db_session.add_all([Guild(id=1, name="Wikinger"), Guild(id=2, name="Andere")])
+    await db_session.commit()
+    db_session.add(Server(guild_id=1, instance_name="v", amp_instance_id="v-id", display_name="Valguero", host=""))
+    await db_session.commit()
+    server_id = (await db_session.execute(Server.__table__.select())).first().id
+
+    async with await _client() as client:
+        client.cookies.set("session", _cookie_for(100, 1, Level.ADMIN))
+        assert (await client.delete(f"/servers/{server_id}")).status_code == 403
+        client.cookies.set("session", _cookie_for(100, 2, Level.OWNER))
+        assert (await client.delete(f"/servers/{server_id}")).status_code == 404  # anderer Discord-Server
+        client.cookies.set("session", _cookie_for(100, 1, Level.OWNER))
+        response = await client.delete(f"/servers/{server_id}")
+
+    assert response.status_code == 200 and "Valguero" in response.json()["message"]
+    db_session.expire_all()
+    assert await db_session.get(Server, server_id) is None

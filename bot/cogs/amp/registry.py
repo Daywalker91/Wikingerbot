@@ -13,9 +13,11 @@ zeigt, wird geleert.
 
 from dataclasses import dataclass
 
-from sqlalchemy import select
+from sqlalchemy import delete, select
 
+from db.models.console_pattern import ConsolePattern, ConsolePatternOverride
 from db.models.server import Server
+from db.models.whitelist import WhitelistRequest
 from db.session import get_db_session
 
 # Felder, die auf den alten Discord-Server zeigen
@@ -94,3 +96,40 @@ async def add_server(
         db.add(server)
         await db.commit()
         return AddResult(True, f"Server `{display_name}` angelegt.", server.id)
+
+
+@dataclass
+class RemovedServer:
+    display_name: str
+    banner_channel: int | None
+    banner_message_id: int | None
+
+
+async def remove_server(guild_id: int, server_id: int) -> RemovedServer | None:
+    """Loescht einen Server-Eintrag dieses Discord-Servers samt eigener Muster,
+    Filter-Ausnahmen und Whitelist-Anfragen. Die AMP-Instanz selbst bleibt unberuehrt.
+    Gibt zurueck, wo ein eigener Banner stand (zum Aufraeumen in Discord)."""
+    async with get_db_session() as db:
+        server = await db.get(Server, server_id)
+        if server is None or server.guild_id != guild_id:
+            return None
+        removed = RemovedServer(server.display_name, server.banner_channel, server.banner_message_id)
+        for model in (ConsolePattern, ConsolePatternOverride, WhitelistRequest):
+            await db.execute(delete(model).where(model.server_id == server_id))
+        await db.delete(server)
+        await db.commit()
+        return removed
+
+
+async def delete_banner_message(bot, removed: RemovedServer) -> None:
+    """Eigenen Banner des entfernten Servers in Discord loeschen (falls noch da)."""
+    if bot is None or not removed.banner_channel or not removed.banner_message_id:
+        return
+    channel = bot.get_channel(removed.banner_channel)
+    if channel is None:
+        return
+    try:
+        message = await channel.fetch_message(removed.banner_message_id)
+        await message.delete()
+    except Exception:  # schon weg oder keine Rechte - nicht schlimm
+        pass

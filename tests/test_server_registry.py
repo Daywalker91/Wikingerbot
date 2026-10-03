@@ -70,3 +70,16 @@ async def test_orphan_only_blocking_the_name_is_renamed(db_session):
     db_session.expire_all()
     assert (await db_session.get(Server, server_id)).instance_name == f"valheim-alt-{server_id}"
     assert (await db_session.get(Server, result.server_id)).instance_name == "valheim"
+
+
+async def test_remove_server_deletes_children_and_only_own_guild(db_session):
+    from bot.cogs.amp.registry import remove_server
+
+    server_id = await seed(db_session)
+    assert await remove_server(NEW, server_id) is None  # fremder Discord-Server
+    removed = await remove_server(OLD, server_id)
+    assert removed.display_name == "Valheim" and (removed.banner_channel, removed.banner_message_id) == (13, 14)
+    db_session.expire_all()
+    assert await db_session.get(Server, server_id) is None
+    assert (await db_session.execute(select(ConsolePattern))).all() == []
+    assert await remove_server(OLD, server_id) is None

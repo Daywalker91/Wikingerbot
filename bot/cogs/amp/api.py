@@ -15,7 +15,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.middleware.auth import CurrentUser, get_current_user, require_level
-from bot.cogs.amp.registry import add_server, known_instance_ids
+from bot.cogs.amp.registry import add_server, delete_banner_message, known_instance_ids, remove_server
 from bot.core import runtime
 from bot.core.amp_client import amp_client
 from bot.core.config import settings
@@ -221,6 +221,16 @@ async def _get_scoped_server(db: AsyncSession, server_id: int, guild_id: int) ->
     if server is None:
         raise HTTPException(status_code=404, detail="Server nicht gefunden")
     return server
+
+
+@router.delete("/{server_id}", response_model=ServerActionResult)
+async def delete_server(server_id: int, user: CurrentUser = Depends(require_level(Level.OWNER))) -> ServerActionResult:
+    """Entfernt den Server-Eintrag (nicht die AMP-Instanz) - wie /server remove."""
+    removed = await remove_server(user.guild_id, server_id)
+    if removed is None:
+        raise HTTPException(404, "Server nicht gefunden.")
+    await delete_banner_message(runtime.bot, removed)
+    return ServerActionResult(ok=True, message=f"Server „{removed.display_name}“ entfernt. Die AMP-Instanz bleibt bestehen.")
 
 
 @router.post("/{server_id}/start", response_model=ServerActionResult)

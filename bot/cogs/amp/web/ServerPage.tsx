@@ -4,6 +4,7 @@ import { useAuth } from "@/auth/useAuth";
 
 import {
   createServer,
+  deleteServer,
   getAddressSettings,
   getDiscoverableInstances,
   getServers,
@@ -53,11 +54,15 @@ export default function ServerPage() {
   }, []);
 
   useEffect(() => {
+    if (!isOwner) return;
+    void getAddressSettings().then((loaded) => {
+      setAddress(loaded);
+      setGameHost(loaded.game_host);
+    });
+  }, [isOwner]);
+
+  useEffect(() => {
     if (isOwner && showAddForm) {
-      void getAddressSettings().then((loaded) => {
-        setAddress(loaded);
-        setGameHost(loaded.game_host);
-      });
       void getDiscoverableInstances().then((instances) => {
         setDiscoverable(instances);
         if (instances.length > 0) {
@@ -81,6 +86,21 @@ export default function ServerPage() {
     void load();
   }
 
+  async function handleDelete(server: ServerStatus) {
+    const ok = window.confirm(
+      `„${server.display_name}“ wirklich entfernen?\n\nEigene Konsolenmuster und Whitelist-Anfragen dieses Servers ` +
+        "werden mit gelöscht, der Banner verschwindet. Die AMP-Instanz selbst bleibt bestehen.",
+    );
+    if (!ok) return;
+    try {
+      setMessage((await deleteServer(server.id)).message);
+    } catch (error) {
+      setMessage((error as Error).message);
+    }
+    if (expanded === server.id) setExpanded(null);
+    void load();
+  }
+
   const selected = discoverable.find((i) => i.instance_id === newInstanceId);
   const previewHost = newHost.trim() || address?.effective_host || "";
   const preview = !previewHost
@@ -93,7 +113,7 @@ export default function ServerPage() {
     : !newDisplayName.trim()
       ? "einen Anzeigenamen"
       : !previewHost
-        ? "eine Adresse (oder oben eine Standard-Spieladresse)"
+        ? "eine Adresse (oder eine Standard-Spieladresse)"
         : null;
 
   async function handleSaveGameHost() {
@@ -144,6 +164,22 @@ export default function ServerPage() {
       <h1>Server</h1>
       {message && <p>{message}</p>}
 
+      {isOwner && (
+        <div style={{ marginBottom: 12, display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+          Standard-Spieladresse:
+          <input
+            placeholder={address?.public_host ?? "spiel.example.org"}
+            value={gameHost}
+            onChange={(e) => setGameHost(e.target.value)}
+          />
+          <button onClick={() => void handleSaveGameHost()}>Speichern</button>
+          <span style={{ color: "#999", fontSize: "0.9em" }}>
+            Host ohne Port – gilt für alle Server ohne eigene Adresse
+            {address?.public_host && !address.game_host ? ` (leer: ${address.public_host})` : ""}
+          </span>
+        </div>
+      )}
+
       <div style={{ marginBottom: 16, display: "flex", gap: 12, alignItems: "center" }}>
         <input
           placeholder="Suche nach Name oder Adresse…"
@@ -167,19 +203,6 @@ export default function ServerPage() {
             marginBottom: 16,
           }}
         >
-          <div style={{ marginBottom: 12, display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
-            Standard-Spieladresse:
-            <input
-              placeholder={address?.public_host ?? "spiel.example.org"}
-              value={gameHost}
-              onChange={(e) => setGameHost(e.target.value)}
-            />
-            <button onClick={() => void handleSaveGameHost()}>Speichern</button>
-            <span style={{ color: "#999", fontSize: "0.9em" }}>
-              Host ohne Port – gilt für alle Server ohne eigene Adresse
-              {address?.public_host && !address.game_host ? ` (leer: ${address.public_host})` : ""}
-            </span>
-          </div>
           <div style={{ marginBottom: 8 }}>
             <select
               value={newInstanceId}
@@ -257,6 +280,11 @@ export default function ServerPage() {
                 <button onClick={() => setExpanded(expanded === server.id ? null : server.id)}>
                   {expanded === server.id ? "Konsole schließen" : "Konsole"}
                 </button>
+                {isOwner && (
+                  <button onClick={() => void handleDelete(server)} style={{ marginLeft: 8 }} title="Server-Eintrag entfernen">
+                    Entfernen
+                  </button>
+                )}
               </div>
             )}
 

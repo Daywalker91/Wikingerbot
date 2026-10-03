@@ -45,6 +45,10 @@ export async function stopServer(id: number): Promise<ServerActionResult> {
   return apiFetch<ServerActionResult>(`/servers/${id}/stop`, { method: "POST" });
 }
 
+export async function deleteServer(id: number): Promise<ServerActionResult> {
+  return apiFetch<ServerActionResult>(`/servers/${id}`, { method: "DELETE" });
+}
+
 export async function getConsole(id: number): Promise<ConsoleLineItem[]> {
   return apiFetch<ConsoleLineItem[]>(`/servers/${id}/console`);
 }
