@@ -52,8 +52,15 @@ Rangfolge (die höchste greift, wenn mehrere gleichzeitig "gesetzt" sind):
    (blau/violett). Standard, falls nichts anderes gesetzt ist: `midnight`.
 
 `/banner theme` und `/banner background` löschen sich beim Setzen
-gegenseitig (immer nur eine der beiden Quellen aktiv), Steam-Artwork bleibt
-davon unberührt, da es aus dem separaten `steam_app_id`-Feld kommt.
+gegenseitig (immer nur eine der beiden Quellen aktiv). `/banner theme` schaltet
+außerdem das Steam-Artwork für diesen Server ab, damit das Theme auch bei
+Steam-Spielen sichtbar wird.
+
+**Tab *Banner* in der Weboberfläche:** Dort wählst du den Hintergrund direkt
+(Steam-Artwork, eigenes Bild, Theme oder eigener Verlauf mit freien Farben),
+dazu Schriftfarbe, Unschärfe, Kanal und Darstellung – mit Live-Vorschau des
+Bildes. Gruppen lassen sich dort anlegen, mit Servern füllen und auflösen.
+Wechselst du weg von „Eigenes Bild“, wird das hochgeladene Bild gelöscht.
 
 ---
 

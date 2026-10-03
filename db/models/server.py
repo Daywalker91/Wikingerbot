@@ -2,6 +2,7 @@ import enum
 from datetime import datetime
 
 from sqlalchemy import BigInteger, Boolean, DateTime, Enum, ForeignKey, Integer, String, func
+from sqlalchemy import true as sa_true
 from sqlalchemy.orm import Mapped, mapped_column
 
 from db.base import Base
@@ -62,6 +63,8 @@ class Server(Base):
     # Aus AMPs DisplayImageSource ("steam:<appid>") automatisch erkannt, manuell
     # per /server steam_appid ueberschreibbar - treibt den Steam-Artwork-Abruf.
     steam_app_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    # False = Steam-Artwork nicht als Banner-Hintergrund nutzen (dann gelten Theme/Farben)
+    banner_steam_art: Mapped[bool] = mapped_column(Boolean, default=True, server_default=sa_true())
     # Gehoert dieser Server zu einer Banner-Gruppe, hat die Gruppe Vorrang vor
     # seinem eigenen banner_enabled (siehe banner-Cog).
     banner_group_id: Mapped[int | None] = mapped_column(

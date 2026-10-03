@@ -311,7 +311,7 @@ class BannerCog(BaseCog):
     async def _resolve_background(self, server: Server) -> str | None:
         if server.banner_background_path:
             return server.banner_background_path
-        if server.steam_app_id:
+        if server.steam_app_id and server.banner_steam_art:
             cached = await fetch_header_image(server.steam_app_id)
             if cached is not None:
                 return str(cached)
@@ -623,6 +623,7 @@ class BannerCog(BaseCog):
             db_server.banner_background_path = None
             db_server.banner_color_start = None
             db_server.banner_color_end = None
+            db_server.banner_steam_art = False  # sonst gewinnt das Steam-Artwork
             await db.commit()
 
         await _followup_temp(interaction, f"Theme `{theme.name}` fuer `{server.display_name}` gesetzt.")

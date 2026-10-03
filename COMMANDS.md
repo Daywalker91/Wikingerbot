@@ -121,6 +121,7 @@ Auto-Approve — jede Anfrage braucht eine explizite Mod-Entscheidung.
 ## `/banner` — Status-Banner pro Server (`banner`-Cog)
 
 Ausführliche Erklärung (Hintergrund-Priorität, Editor, Badges): [BANNER.md](BANNER.md).
+Alles hier geht auch im Tab *Banner* der Weboberfläche, mit Live-Vorschau.
 
 | Command | Beschreibung | Level |
 |---|---|---|
