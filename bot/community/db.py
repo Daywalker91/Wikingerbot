@@ -21,8 +21,9 @@ den Ablauf der Verknuepfungs-Codes). Event-Zeiten (events.starts_at) schreibt
 die Seite dagegen in Europe/Berlin.
 """
 
+import logging
 from contextlib import asynccontextmanager
-from typing import AsyncIterator
+from typing import AsyncIterator, Callable
 
 from sqlalchemy import (
     BigInteger,
@@ -35,7 +36,9 @@ from sqlalchemy import (
     Table,
     Text,
 )
+from sqlalchemy import select, union
 from sqlalchemy.engine import URL
+from sqlalchemy.exc import OperationalError, ProgrammingError
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker, create_async_engine
 
 from bot.core.bot_settings import get_bot_setting, set_bot_setting
@@ -72,7 +75,18 @@ roles = Table(
     Column("slug", String(32)),
     Column("name", String(50)),
     Column("level", SmallInteger),
+    # Migration 010 der Seite: 'rank' (genau einer pro Mitglied) oder 'extra' (Zusatzrolle)
+    Column("kind", String(10), server_default="rank"),
     Column("color", String(7)),
+)
+
+# Zusatzrollen der Mitglieder (Migration 010 der Seite)
+user_extra_roles = Table(
+    "user_extra_roles",
+    metadata,
+    Column("user_id", Integer, primary_key=True),
+    Column("role_id", Integer, primary_key=True),
+    Column("assigned_by", Integer),
 )
 
 discord_link_codes = Table(
@@ -240,10 +254,72 @@ async def session() -> AsyncIterator[AsyncSession]:
 
 
 async def dispose() -> None:
-    global _engine, _session_maker
+    global _engine, _session_maker, _extras
     if _engine is not None:
         await _engine.dispose()
     _engine = _session_maker = None
+    _extras = None
+
+
+# --- Rechte: Rang + Zusatzrollen ------------------------------------------------------
+#
+# Seit Migration 010 der Seite haben Mitglieder neben dem Rang (users.role_id)
+# beliebig viele Zusatzrollen (user_extra_roles). Rechte = beide zusammen. Fehlt
+# die Tabelle (aeltere Seite) oder das Leserecht darauf, rechnet der Bot nur mit
+# dem Rang - einmal geloggt, damit nichts ausfaellt.
+
+_log = logging.getLogger("wikingerbot.community")
+_extras: bool | None = None  # None = noch nicht geprueft
+
+
+async def extras_available() -> bool:
+    """Gibt es Zusatzrollen (Spalte roles.kind + Tabelle user_extra_roles) und darf der Bot sie lesen?"""
+    global _extras
+    if _extras is None:
+        try:
+            async with session() as db:
+                await db.execute(select(roles.c.kind).limit(1))
+                await db.execute(select(user_extra_roles.c.user_id).limit(1))
+            _extras = True
+        except (OperationalError, ProgrammingError) as error:
+            _log.warning(
+                "Zusatzrollen der Seite nicht lesbar (Migration 010 / Datenbank-Rechte, siehe docs/community-grants.sql) "
+                "– es zaehlt nur der Rang: %s",
+                str(error).splitlines()[0][:200],
+            )
+            _extras = False
+    return _extras
+
+
+def permissions_subquery(with_extras: bool):
+    """(user_id, permission) aller Mitglieder aus Rang und - falls vorhanden - Zusatzrollen."""
+    rp = role_permissions
+    by_rank = select(users.c.id.label("user_id"), rp.c.permission).select_from(users.join(rp, rp.c.role_id == users.c.role_id))
+    if not with_extras:
+        return by_rank.subquery("up")
+    by_extra = select(user_extra_roles.c.user_id, rp.c.permission).select_from(
+        user_extra_roles.join(rp, rp.c.role_id == user_extra_roles.c.role_id)
+    )
+    return union(by_rank, by_extra).subquery("up")
+
+
+async def query_permissions(build: Callable) -> list:
+    """Fuehrt build(up) aus - up ist die Unterabfrage (user_id, permission)."""
+    sub = permissions_subquery(await extras_available())
+    async with session() as db:
+        return (await db.execute(build(sub))).all()
+
+
+async def has_permission(site_user_id: int, permission: str) -> bool:
+    rows = await query_permissions(
+        lambda up: select(up.c.permission).where(up.c.user_id == site_user_id, up.c.permission.in_([permission, "*"])).limit(1)
+    )
+    return bool(rows)
+
+
+async def ranks_only(statement):
+    """Nur Raenge (keine Zusatzrollen) - fuer Abfragen auf roles. Ohne Migration 010 gibt es nur Raenge."""
+    return statement.where(roles.c.kind == "rank") if await extras_available() else statement
 
 
 def site_link(page: str, **params) -> str | None:

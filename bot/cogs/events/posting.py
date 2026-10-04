@@ -123,17 +123,7 @@ async def fetch_participants(event_id: int) -> Participants:
 
 
 async def can_join(site_user_id: int) -> bool:
-    u, rp = community_db.users, community_db.role_permissions
-    async with community_db.session() as db:
-        row = (
-            await db.execute(
-                select(rp.c.permission)
-                .select_from(u.join(rp, rp.c.role_id == u.c.role_id))
-                .where(u.c.id == site_user_id, rp.c.permission.in_(["events.join", "*"]))
-                .limit(1)
-            )
-        ).first()
-    return row is not None
+    return await community_db.has_permission(site_user_id, "events.join")
 
 
 async def set_participation(event_id: int, site_user_id: int, answer: str) -> str:

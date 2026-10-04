@@ -65,17 +65,8 @@ class TicketMessage:
 
 
 async def has_permission(site_user_id: int, permission: str) -> bool:
-    u, rp = community_db.users, community_db.role_permissions
-    async with community_db.session() as db:
-        row = (
-            await db.execute(
-                select(rp.c.permission)
-                .select_from(u.join(rp, rp.c.role_id == u.c.role_id))
-                .where(u.c.id == site_user_id, rp.c.permission.in_([permission, "*"]))
-                .limit(1)
-            )
-        ).first()
-    return row is not None
+    """Rang oder Zusatzrolle (z.B. Support) hat das Recht."""
+    return await community_db.has_permission(site_user_id, permission)
 
 
 async def is_staff(site_user_id: int) -> bool:

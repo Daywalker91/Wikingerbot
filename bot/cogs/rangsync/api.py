@@ -24,17 +24,14 @@ async def _staff_candidates() -> list[dict]:
     """Konten, die System-Tickets besitzen koennen (alle Rechte oder Tickets verwalten)."""
     from sqlalchemy import select
 
-    u, rp = community_db.users, community_db.role_permissions
-    async with community_db.session() as db:
-        rows = (
-            await db.execute(
-                select(u.c.id, u.c.username)
-                .select_from(u.join(rp, rp.c.role_id == u.c.role_id))
-                .where(rp.c.permission.in_(["*", "ticket.manage"]), u.c.deleted_at.is_(None))
-                .distinct()
-                .order_by(u.c.username)
-            )
-        ).all()
+    u = community_db.users
+    rows = await community_db.query_permissions(
+        lambda up: select(u.c.id, u.c.username)
+        .select_from(u.join(up, up.c.user_id == u.c.id))
+        .where(up.c.permission.in_(["*", "ticket.manage"]), u.c.deleted_at.is_(None))
+        .distinct()
+        .order_by(u.c.username)
+    )
     return [{"id": r[0], "name": r[1]} for r in rows]
 
 

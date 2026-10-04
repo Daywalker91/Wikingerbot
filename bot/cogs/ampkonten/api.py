@@ -21,8 +21,9 @@ router = APIRouter(prefix="/ampkonten", tags=["ampkonten"])
 
 async def _ranks_and_names(user_ids: list[int]) -> tuple[list[dict], dict[int, str]]:
     r, u = community_db.roles, community_db.users
+    rank_query = await community_db.ranks_only(select(r.c.slug, r.c.name, r.c.level).order_by(r.c.level.desc()))
     async with community_db.session() as db:
-        ranks = (await db.execute(select(r.c.slug, r.c.name, r.c.level).order_by(r.c.level.desc()))).all()
+        ranks = (await db.execute(rank_query)).all()
         names = dict((await db.execute(select(u.c.id, u.c.username).where(u.c.id.in_(user_ids or [0])))).all())
     return [{"slug": s, "name": n, "level": lvl} for s, n, lvl in ranks], names
 

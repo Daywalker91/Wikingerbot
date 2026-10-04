@@ -17,18 +17,15 @@ log = logging.getLogger("wikingerbot.community")
 
 async def default_owner_id() -> int | None:
     """Fallback-Ersteller fuer System-Tickets: das erste Konto mit allen Rechten (*)."""
-    u, rp = community_db.users, community_db.role_permissions
-    async with community_db.session() as db:
-        row = (
-            await db.execute(
-                select(u.c.id)
-                .select_from(u.join(rp, rp.c.role_id == u.c.role_id))
-                .where(rp.c.permission == "*", u.c.deleted_at.is_(None))
-                .order_by(u.c.id)
-                .limit(1)
-            )
-        ).first()
-    return row[0] if row else None
+    u = community_db.users
+    rows = await community_db.query_permissions(
+        lambda up: select(u.c.id)
+        .select_from(u.join(up, up.c.user_id == u.c.id))
+        .where(up.c.permission == "*", u.c.deleted_at.is_(None))
+        .order_by(u.c.id)
+        .limit(1)
+    )
+    return rows[0][0] if rows else None
 
 
 async def open_system_ticket(bot, owner_id: int, subject: str, body: str, category: str = "konto") -> int:

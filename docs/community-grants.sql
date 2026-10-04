@@ -1,7 +1,7 @@
 -- Rechte des WikingerBot auf die Datenbank einer Community-Seite.
 --
 -- Als Administrator (z.B. root) in MariaDB/MySQL ausfuehren, NACHDEM die Seite ihre
--- Migrationen 008_discord und 009_amp_zugang ausgefuehrt hat.
+-- Migrationen 008_discord, 009_amp_zugang und 010_zusatzrollen ausgefuehrt hat.
 --
 -- Vorher ersetzen:
 --   <SITE_DB>   Datenbank der Community-Seite, z.B. community
@@ -21,9 +21,13 @@ GRANT UPDATE (discord_id, discord_name, discord_linked_at, role_id,
               amp_username, amp_status, amp_note, amp_updated_at)
     ON <SITE_DB>.users TO '<BOT_USER>'@'<BOT_HOST>';
 
--- Raenge und ihre Rechte (nur lesen)
+-- Raenge, Zusatzrollen und ihre Rechte (nur lesen)
 GRANT SELECT ON <SITE_DB>.roles            TO '<BOT_USER>'@'<BOT_HOST>';
 GRANT SELECT ON <SITE_DB>.role_permissions TO '<BOT_USER>'@'<BOT_HOST>';
+
+-- Zusatzrollen der Mitglieder (Migration 010): lesen; aendern nur, wenn im Rang-Sync
+-- eine Zusatzrolle die Richtung "Discord -> Seite" oder "beide" bekommt
+GRANT SELECT, INSERT, DELETE ON <SITE_DB>.user_extra_roles TO '<BOT_USER>'@'<BOT_HOST>';
 
 -- Verknuepfungs-Codes: pruefen und nach Gebrauch loeschen
 GRANT SELECT, DELETE ON <SITE_DB>.discord_link_codes TO '<BOT_USER>'@'<BOT_HOST>';

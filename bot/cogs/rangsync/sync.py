@@ -61,8 +61,9 @@ class Rank:
 
 async def site_ranks() -> list[Rank]:
     r = community_db.roles
+    query = await community_db.ranks_only(select(r.c.id, r.c.slug, r.c.name, r.c.level).order_by(r.c.level))
     async with community_db.session() as db:
-        rows = (await db.execute(select(r.c.id, r.c.slug, r.c.name, r.c.level).order_by(r.c.level))).all()
+        rows = (await db.execute(query)).all()
     return [Rank(*row) for row in rows]
 
 
