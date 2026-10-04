@@ -3,7 +3,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Awaitable, TypeVar
 
-from ampapi.auth import RefreshingAuthProviderAsync
+from ampapi.auth import BasicAuthProviderAsync, RefreshingAuthProviderAsync
 from ampapi.modules import ADSAsync, MinecraftAsync
 
 from bot.core.config import settings
@@ -281,12 +281,22 @@ class AMPClient:
             return result["result"]
         return result
 
-    def fresh_calls(self):
-        """(controller_call, instance_call) mit FRISCHER Anmeldung - fuer Aufgaben, die gerade
-        erst vergebene Rechte brauchen (z.B. kurz Super Admins zum Einrichten von Rollen).
-        AMP legt die Rechte einer Sitzung beim Anmelden fest; die laufenden Sitzungen des
-        Bots (Konsole, Status) bleiben so unberuehrt und ohne die erhoehten Rechte."""
-        controller = ADSAsync(self._auth(settings.amp_url))
+    def fresh_calls(self, username: str = "", password: str = "", token: str = ""):
+        """(controller_call, instance_call) mit FRISCHER Anmeldung - fuer Aufgaben mit mehr
+        Rechten als der Bot sonst hat (z.B. Rollen einrichten).
+
+        Ohne Zugangsdaten: der Bot-Benutzer (gerade vergebene Super Admins gelten so sofort -
+        AMP legt die Rechte einer Sitzung beim Anmelden fest). Mit Zugangsdaten: ein Konto
+        eines Admins, einmalig fuer diese Aufgabe - nichts davon wird gespeichert oder
+        geloggt, keine "angemeldet bleiben"-Sitzung. Die laufenden Sitzungen des Bots
+        (Konsole, Status) bleiben in beiden Faellen unberuehrt."""
+
+        def auth(panel_url: str):
+            if not username:
+                return self._auth(panel_url)
+            return BasicAuthProviderAsync(panelUrl=panel_url, username=username, password=password, token=token, rememberMe=False)
+
+        controller = ADSAsync(auth(settings.amp_url))
         instances: dict[str, MinecraftAsync] = {}
 
         def unwrap(result):
@@ -299,7 +309,7 @@ class AMPClient:
 
         async def instance_call(instance_id: str, endpoint: str, args: dict | None = None):
             if instance_id not in instances:
-                instances[instance_id] = MinecraftAsync(self._auth(f"{settings.amp_url}/API/ADSModule/Servers/{instance_id}"))
+                instances[instance_id] = MinecraftAsync(auth(f"{settings.amp_url}/API/ADSModule/Servers/{instance_id}"))
             client = instances[instance_id]
             return unwrap(await _with_timeout(client.Core.api_call(f"Core/{endpoint}", args or {}), DEFAULT_TIMEOUT))
 

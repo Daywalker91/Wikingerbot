@@ -155,7 +155,7 @@ async def run(
     try:
         spec = await controller_call("GetPermissionsSpec", {})
     except Exception as error:
-        report.errors.append(f"Rechte-Liste des Controllers nicht lesbar ({str(error)[:150]}) – dem Bot kurz Super Admins geben.")
+        report.errors.append(f"Rechte-Liste des Controllers nicht lesbar ({str(error)[:150]}) – mit einem Super-Admin-Konto anmelden oder dem Bot kurz Super Admins geben.")
         return report
     report.controller = controller_plan(spec, instances)
 
@@ -175,7 +175,7 @@ async def run(
                     await controller_call("SetAMPRolePermission", {"RoleId": rid, "PermissionNode": node, "Enabled": True})
                     report.changed += 1
         except Exception as error:
-            report.errors.append(f"Am Controller abgebrochen: {str(error)[:200]} – hat der Bot gerade Super Admins?")
+            report.errors.append(f"Am Controller abgebrochen: {str(error)[:200]} – fehlen Super-Admin-Rechte?")
             return report
 
     for iid, name in instances.items():

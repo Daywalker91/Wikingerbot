@@ -483,10 +483,12 @@ Einstellungen, Dateien, Zeitpläne, Backups löschen) und setzt ihre Rechte am C
 (Anmelden, „Manage“ nur für die Spiel-Instanzen aus dem Tab Server) und in jeder
 Spiel-Instanz. Benutzer- und Rollenverwaltung sowie Audit-Log sind immer verboten. Die
 Rechte-Namen sucht er in der Rechte-Liste des jeweiligen AMP; **Prüfen** zeigt das ohne
-etwas zu ändern, **Einrichten** braucht kurz „Super Admins“ für den AMP-Benutzer des
-Bots – bei jedem neuen Gameserver einmal, der Tab zeigt, welche noch fehlen. Ein
-Neustart ist dafür nicht nötig: Für Prüfen und Einrichten meldet sich der Bot jedes Mal
-frisch bei AMP an, die laufenden Verbindungen behalten ihre normalen Rechte.
+etwas zu ändern, **Einrichten** braucht Super-Admin-Rechte – bei jedem neuen Gameserver
+einmal, der Tab zeigt, welche noch fehlen. Zwei Wege: **mit dem eigenen AMP-Admin-Konto**
+anmelden (Benutzer/Passwort im Tab, nur für diesen Vorgang, nie gespeichert; mit
+Zwei-Faktor kann es bei mehreren Gameservern scheitern) oder dem AMP-Benutzer des Bots
+kurz „Super Admins“ geben. Ein Neustart ist nicht nötig: Für Prüfen und Einrichten meldet
+sich der Bot jedes Mal frisch an, die laufenden Verbindungen behalten ihre normalen Rechte.
 
 Optional eine **Voraussetzung**: eine Zusatzrolle der Seite (z.B. für Gameserver-Betreuer).
 Ohne sie gibt es keinen Zugang – wer sie verliert, wird gesperrt –, mit ihr bestimmt

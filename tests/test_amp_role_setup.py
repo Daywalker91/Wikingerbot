@@ -139,14 +139,23 @@ async def test_api_uses_fresh_login_and_remembers_done_servers(db_session, monke
     await db_session.commit()
     amp = FakeAMP()
     logins = []
-    monkeypatch.setattr(amp_client, "fresh_calls", lambda: logins.append(1) or (amp.controller, amp.instance))
+    monkeypatch.setattr(amp_client, "fresh_calls", lambda *login: logins.append(login) or (amp.controller, amp.instance))
 
     async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
         client.cookies.set("session", create_access_token(100, 1, Level.OWNER))
         assert (await client.get("/ampkonten/roles/status")).json()["pending"] == ["Vein"]
         assert (await client.post("/ampkonten/roles/check")).status_code == 200 and amp.set == []
-        applied = (await client.post("/ampkonten/roles/apply")).json()
+        applied = (
+            await client.post("/ampkonten/roles/apply", json={"username": "daywalker", "password": "geheim-123", "token": "123456"})
+        ).json()
         assert applied["changed"] > 0 and not applied["errors"]
         status = (await client.get("/ampkonten/roles/status")).json()
         assert status["done"] == ["Vein"] and status["pending"] == []
-    assert len(logins) == 2  # jede Aktion meldet sich frisch an
+    assert logins == [("", "", ""), ("daywalker", "geheim-123", "123456")]  # jede Aktion frisch, Admin-Daten nur durchgereicht
+
+    from sqlalchemy import select
+
+    from db.models.bot_setting import BotSetting
+
+    stored = " ".join(str(v) for (v,) in (await db_session.execute(select(BotSetting.value))).all())
+    assert "geheim-123" not in stored  # Passwort nirgends gespeichert

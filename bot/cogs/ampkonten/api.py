@@ -141,13 +141,28 @@ async def roles_status(user: CurrentUser = Depends(require_level(Level.OWNER))) 
     }
 
 
-async def _run_setup(guild_id: int, apply: bool) -> dict:
+class AdminLogin(BaseModel):
+    """Optional: Zugangsdaten eines AMP-Super-Admins, nur fuer diesen einen Vorgang.
+    Werden weder gespeichert noch geloggt."""
+
+    username: str = Field(default="", max_length=100)
+    password: str = Field(default="", max_length=200)
+    token: str = Field(default="", max_length=20)  # Zwei-Faktor-Code, falls aktiv
+
+
+async def _run_setup(guild_id: int, apply: bool, login: AdminLogin | None) -> dict:
     instances = await _game_instances(guild_id)
     if not instances:
         raise HTTPException(400, "Noch keine Gameserver angelegt (Tab Server).")
-    # frische Anmeldung: gerade vergebene Super Admins gelten sofort, ohne Bot-Neustart
-    controller_call, instance_call = amp_client.fresh_calls()
-    report = await role_setup.run(controller_call, instance_call, instances, apply=apply)
+    # frische Anmeldung: mit Admin-Zugangsdaten oder als Bot (gerade vergebene Super Admins gelten sofort)
+    login = login or AdminLogin()
+    controller_call, instance_call = amp_client.fresh_calls(login.username.strip(), login.password, login.token.strip())
+    try:
+        report = await role_setup.run(controller_call, instance_call, instances, apply=apply)
+    except Exception as error:  # z.B. Anmeldung abgelehnt - ohne die Zugangsdaten zu nennen
+        raise HTTPException(400, "Anmeldung bei AMP fehlgeschlagen – Benutzername, Passwort oder Zwei-Faktor-Code prüfen.") from None
+    finally:
+        login.password = ""
     if apply:
         ok = [iid for iid, name in instances.items() if not report.instances.get(name, {}).get("error")
               and not any(isinstance(v, dict) and v.get("error") for v in report.instances.get(name, {}).values())]
@@ -158,15 +173,16 @@ async def _run_setup(guild_id: int, apply: bool) -> dict:
 
 
 @router.post("/roles/check")
-async def roles_check(user: CurrentUser = Depends(require_level(Level.OWNER))) -> dict:
+async def roles_check(login: AdminLogin | None = None, user: CurrentUser = Depends(require_level(Level.OWNER))) -> dict:
     """Zeigt, welche Rechte gesetzt wuerden - aendert nichts."""
-    return await _run_setup(user.guild_id, apply=False)
+    return await _run_setup(user.guild_id, apply=False, login=login)
 
 
 @router.post("/roles/apply")
-async def roles_apply(user: CurrentUser = Depends(require_level(Level.OWNER))) -> dict:
-    """Legt die Gameserver-Rollen an und setzt die Rechte (braucht kurz Super Admins)."""
-    return await _run_setup(user.guild_id, apply=True)
+async def roles_apply(login: AdminLogin | None = None, user: CurrentUser = Depends(require_level(Level.OWNER))) -> dict:
+    """Legt die Gameserver-Rollen an und setzt die Rechte - mit den Zugangsdaten eines
+    AMP-Super-Admins (einmalig) oder wenn der Bot-Benutzer gerade Super Admins hat."""
+    return await _run_setup(user.guild_id, apply=True, login=login)
 
 
 @router.post("/refresh-roles")

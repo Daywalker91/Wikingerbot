@@ -9,6 +9,7 @@ import {
   getRolesStatus,
   refreshRoles,
   saveAmpKonten,
+  type AdminLogin,
   type AmpKontenData,
   type RolesStatus,
   type SetupReport,
@@ -33,6 +34,8 @@ function RoleSetup({ onDone }: { onDone: () => void }) {
   const [applied, setApplied] = useState(false);
   const [busy, setBusy] = useState(false);
   const [note, setNote] = useState<string | null>(null);
+  const [useAdmin, setUseAdmin] = useState(true);
+  const [login, setLogin] = useState<AdminLogin>({ username: "", password: "", token: "" });
 
   const loadStatus = useCallback(() => {
     getRolesStatus()
@@ -42,11 +45,17 @@ function RoleSetup({ onDone }: { onDone: () => void }) {
   useEffect(loadStatus, [loadStatus]);
 
   async function run(apply: boolean) {
-    if (apply && !window.confirm("Hat der AMP-Benutzer des Bots gerade die Rolle „Super Admins“? Ohne sie lehnt AMP das Einrichten ab.")) return;
+    if (useAdmin && (!login.username.trim() || !login.password)) {
+      setNote("Benutzername und Passwort eines AMP-Super-Admins eingeben.");
+      return;
+    }
+    if (apply && !useAdmin && !window.confirm("Hat der AMP-Benutzer des Bots gerade die Rolle „Super Admins“? Ohne sie lehnt AMP das Einrichten ab.")) return;
     setBusy(true);
     setNote(null);
+    const credentials = useAdmin ? login : null;
     try {
-      setReport(await (apply ? applyRoles() : checkRoles()));
+      setReport(await (apply ? applyRoles(credentials) : checkRoles(credentials)));
+      setLogin({ ...login, password: "", token: "" }); // nichts im Browser liegen lassen
       setApplied(apply);
       if (apply) {
         loadStatus();
@@ -64,9 +73,27 @@ function RoleSetup({ onDone }: { onDone: () => void }) {
       <p style={muted}>
         Der Bot legt drei Rollen an und setzt ihre Rechte am Controller (Anmelden, nur die Spiel-Instanzen) und in jeder
         Spiel-Instanz. Nie: Benutzer- und Rollenverwaltung, Audit-Log, die Instanz des Bots. Erst <strong>Prüfen</strong>{" "}
-        (ändert nichts), dann <strong>Einrichten</strong> – dafür braucht der AMP-Benutzer des Bots kurz „Super Admins“
-        (danach wieder wegnehmen). Bei jedem neuen Gameserver erneut einrichten.
+        (ändert nichts), dann <strong>Einrichten</strong>. Bei jedem neuen Gameserver erneut einrichten.
       </p>
+      <div style={{ margin: "8px 0" }}>
+        <label>
+          <input type="radio" checked={useAdmin} onChange={() => setUseAdmin(true)} /> Mit meinem AMP-Admin-Konto anmelden
+        </label>{" "}
+        <label>
+          <input type="radio" checked={!useAdmin} onChange={() => setUseAdmin(false)} /> Der Bot hat gerade „Super Admins“
+        </label>
+      </div>
+      {useAdmin && (
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center", margin: "8px 0" }}>
+          <input placeholder="AMP-Benutzer" autoComplete="off" value={login.username} onChange={(e) => setLogin({ ...login, username: e.target.value })} />
+          <input type="password" placeholder="Passwort" autoComplete="off" value={login.password} onChange={(e) => setLogin({ ...login, password: e.target.value })} />
+          <input placeholder="2FA-Code (falls aktiv)" autoComplete="one-time-code" style={{ width: 150 }} value={login.token} onChange={(e) => setLogin({ ...login, token: e.target.value })} />
+          <span style={muted}>
+            Nur für diesen Vorgang – wird nicht gespeichert. Mit Zwei-Faktor kann es bei mehreren Gameservern scheitern (der Code
+            gilt nur kurz); dann den anderen Weg nehmen.
+          </span>
+        </div>
+      )}
       {status && (
         <>
           <ul style={{ margin: "8px 0", paddingLeft: 20 }}>

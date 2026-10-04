@@ -53,5 +53,17 @@ export interface RolesStatus {
 }
 
 export const getRolesStatus = () => apiFetch<RolesStatus>("/ampkonten/roles/status");
-export const checkRoles = () => apiFetch<SetupReport>("/ampkonten/roles/check", { method: "POST" });
-export const applyRoles = () => apiFetch<SetupReport>("/ampkonten/roles/apply", { method: "POST" });
+export interface AdminLogin {
+  username: string;
+  password: string;
+  token: string;
+}
+
+const withLogin = (login: AdminLogin | null): RequestInit => ({
+  method: "POST",
+  headers: { "Content-Type": "application/json" },
+  body: JSON.stringify(login ?? {}),
+});
+
+export const checkRoles = (login: AdminLogin | null) => apiFetch<SetupReport>("/ampkonten/roles/check", withLogin(login));
+export const applyRoles = (login: AdminLogin | null) => apiFetch<SetupReport>("/ampkonten/roles/apply", withLogin(login));
