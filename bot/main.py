@@ -51,10 +51,10 @@ def setup_logging() -> None:
     # uvicorn meldet Start/Stopp ueber den Logger "uvicorn.error" - AMP faerbt das
     # rot, obwohl es keine Fehler sind. Die Port-Zeile kommt von api/server.py.
     logging.getLogger("uvicorn").setLevel(logging.WARNING)
-    # Sprachkanaele nutzt der Bot nicht - die Warnungen zu PyNaCl/davey sind Rauschen.
-    voice_log = logging.getLogger("discord.client")
-    voice_log.filters.clear()
-    voice_log.addFilter(lambda r: "voice will NOT be supported" not in r.getMessage())
+    # "Invalid HTTP request received" (uvicorn.error) bleibt bewusst sichtbar: haeufen sich
+    # die Meldungen, ist der Web-Port wahrscheinlich direkt aus dem Internet erreichbar.
+    # Die Warnung "voice will NOT be supported" (PyNaCl/davey fehlen) bleibt sichtbar -
+    # ohne die beiden Pakete spielt der music-Cog nichts.
 
 
 async def main() -> None:
