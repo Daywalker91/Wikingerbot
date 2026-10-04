@@ -148,6 +148,12 @@ function SetupResult({ report, applied }: { report: SetupReport; applied: boolea
               {name}: {nodes.join(", ")}
             </div>
           ))}
+          {(c.other_nodes ?? []).length > 0 && (
+            <details style={{ marginLeft: 16 }}>
+              <summary style={muted}>Alle Controller-Rechte außerhalb der Instanzen ({c.other_nodes!.length})</summary>
+              <pre style={{ ...muted, whiteSpace: "pre-wrap", fontSize: "0.8em" }}>{c.other_nodes!.join("\n")}</pre>
+            </details>
+          )}
           {(c.missing_instances ?? []).length > 0 && (
             <div style={{ color: "var(--wb-accent-strong)" }}>Keine „Manage“-Berechtigung gefunden für: {c.missing_instances!.join(", ")}</div>
           )}

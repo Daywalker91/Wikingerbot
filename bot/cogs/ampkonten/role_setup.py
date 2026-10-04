@@ -117,7 +117,9 @@ def controller_plan(spec, instance_ids: dict[str, str]) -> dict:
             per_instance[name] = manage
         else:
             missing.append(name)
-    return {"login": login, "instances": per_instance, "missing_instances": missing}
+    # Zur Fehlersuche: alle Controller-Rechte ausserhalb der Instanzen (Knoten = Anzeigename)
+    other = [f"{n} = {name}" for n, name in leaves(spec) if not n.lower().startswith("instances.")]
+    return {"login": login, "instances": per_instance, "missing_instances": missing, "other_nodes": other}
 
 
 # --- Ausfuehren ----------------------------------------------------------------------------
@@ -130,6 +132,11 @@ class SetupReport:
     created_roles: list[str] = field(default_factory=list)
     changed: int = 0
     errors: list[str] = field(default_factory=list)
+
+
+def _short(error: Exception) -> str:
+    """Erste Zeile der Fehlermeldung (AMP haengt sonst Stacktrace/"None" an)."""
+    return (str(error).strip().splitlines() or [type(error).__name__])[0][:200]
 
 
 def _role_ids(result) -> dict[str, str]:
@@ -155,7 +162,7 @@ async def run(
     try:
         spec = await controller_call("GetPermissionsSpec", {})
     except Exception as error:
-        report.errors.append(f"Rechte-Liste des Controllers nicht lesbar ({str(error)[:150]}) – mit einem Super-Admin-Konto anmelden oder dem Bot kurz Super Admins geben.")
+        report.errors.append(f"Rechte-Liste des Controllers nicht lesbar ({_short(error)}) – mit einem Super-Admin-Konto anmelden oder dem Bot kurz Super Admins geben.")
         return report
     report.controller = controller_plan(spec, instances)
 
@@ -175,14 +182,14 @@ async def run(
                     await controller_call("SetAMPRolePermission", {"RoleId": rid, "PermissionNode": node, "Enabled": True})
                     report.changed += 1
         except Exception as error:
-            report.errors.append(f"Am Controller abgebrochen: {str(error)[:200]} – fehlen Super-Admin-Rechte?")
+            report.errors.append(f"Am Controller abgebrochen: {_short(error)} – fehlen Super-Admin-Rechte?")
             return report
 
     for iid, name in instances.items():
         try:
             plan = instance_plan(await instance_call(iid, "GetPermissionsSpec", {}))
         except Exception as error:
-            report.instances[name] = {"error": f"Rechte-Liste nicht lesbar: {str(error)[:150]}"}
+            report.instances[name] = {"error": f"Rechte-Liste nicht lesbar: {_short(error)}"}
             continue
         report.instances[name] = plan
         if not apply:
@@ -202,5 +209,5 @@ async def run(
                     await instance_call(iid, "SetAMPRolePermission", {"RoleId": rid, "PermissionNode": node, "Enabled": enabled})
                     report.changed += 1
         except Exception as error:
-            report.instances[name]["error"] = f"abgebrochen: {str(error)[:200]}"
+            report.instances[name]["error"] = f"abgebrochen: {_short(error)}"
     return report

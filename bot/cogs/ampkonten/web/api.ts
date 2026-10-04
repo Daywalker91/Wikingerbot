@@ -39,7 +39,7 @@ export interface TierPlan {
 }
 
 export interface SetupReport {
-  controller: { login?: string[]; instances?: Record<string, string[]>; missing_instances?: string[] };
+  controller: { login?: string[]; instances?: Record<string, string[]>; missing_instances?: string[]; other_nodes?: string[] };
   instances: Record<string, Record<string, TierPlan> & { error?: string }>;
   created_roles: string[];
   changed: number;

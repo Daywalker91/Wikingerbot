@@ -159,3 +159,8 @@ async def test_api_uses_fresh_login_and_remembers_done_servers(db_session, monke
 
     stored = " ".join(str(v) for (v,) in (await db_session.execute(select(BotSetting.value))).all())
     assert "geheim-123" not in stored  # Passwort nirgends gespeichert
+
+
+def test_controller_plan_lists_other_nodes_for_diagnosis():
+    plan = controller_plan(CONTROLLER_SPEC, {"game-1": "Vein"})
+    assert plan["other_nodes"] == ["ADS.Manage = Manage"]
