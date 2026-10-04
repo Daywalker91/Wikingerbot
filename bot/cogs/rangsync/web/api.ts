@@ -12,6 +12,14 @@ export interface RankRow {
   is_king: boolean;
 }
 
+export interface ExtraRow {
+  slug: string;
+  name: string;
+  role_id: string | null;
+  suggested_role_id: string | null;
+  direction: Direction;
+}
+
 export interface RangsyncData {
   enabled: boolean;
   community_enabled: boolean;
@@ -19,6 +27,8 @@ export interface RangsyncData {
   ranks: RankRow[];
   ticket_owner: number | null;
   owners: { id: number; name: string }[];
+  extras: ExtraRow[];
+  extras_available: boolean;
   error: string | null;
 }
 
@@ -27,6 +37,7 @@ export const getRangsync = () => apiFetch<RangsyncData>("/rangsync/config");
 export const saveRangsync = (body: {
   enabled: boolean;
   ranks: Record<string, { role_id: string | null; direction: Direction }>;
+  extras: Record<string, { role_id: string | null; direction: Direction }>;
   ticket_owner: number | null;
 }) =>
   apiFetch<{ ok: boolean }>("/rangsync/config", {

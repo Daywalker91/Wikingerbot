@@ -423,6 +423,15 @@ Seite eine Discord-Rolle und eine Richtung (beide / nur Discord → Seite / nur 
   Discord-Rolle zuordnen – die vergibt und entzieht der Bot nie, erkennt daran aber
   Konflikte beim Verknüpfen. Wer in Discord die König-Rolle hat, dessen Rang auf der
   Seite ändert der Bot ebenfalls nicht.
+- **Zusatzrollen** (Migration 010 der Seite, z.B. Support oder Wiki): eigener
+  Abschnitt im Tab. Nicht exklusiv – jede Zusatzrolle für sich, „hat sie auf der
+  Seite ⇔ hat die Discord-Rolle“. Standard ist **nur Seite → Discord**, weil die
+  andere Richtung Rechte auf der Seite vergibt. Beim Verknüpfen nimmt „beide“ nur
+  dazu und nie weg. Rang und Zusatzrollen setzt der Bot in einem Schritt. Rechte
+  auf der Seite gelten für Rang und Zusatzrollen zusammen – z.B. darf jemand mit
+  einer Support-Zusatzrolle Tickets in Discord bearbeiten, ohne den passenden Rang.
+  Ändern auf der Seite braucht `INSERT, DELETE` auf `user_extra_roles`
+  (docs/community-grants.sql).
 - **Konflikt beim Verknüpfen** (Discord sagt anderes als die Seite) → Ticket, nichts
   wird geändert. Ohne jede Rang-Rolle in Discord gibt es keinen Konflikt – dann
   kommt die Rolle von der Seite.

@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState, type CSSProperties } from "react";
 
 import { useAuth } from "@/auth/useAuth";
 
-import { getRangsync, saveRangsync, syncAll, type Direction, type RangsyncData, type RankRow } from "./api";
+import { getRangsync, saveRangsync, syncAll, type Direction, type ExtraRow, type RangsyncData, type RankRow } from "./api";
 
 export const route = { path: "/rangsync", navLabel: "Rang-Sync" };
 
@@ -22,11 +22,14 @@ const DIRECTION_LABELS: Record<Direction, string> = {
   to_discord: "nur Seite → Discord",
   off: "aus",
 };
+// Zusatzrollen: Seite -> Discord zuerst, weil Discord -> Seite Rechte auf der Seite vergibt
+const EXTRA_DIRECTIONS: Direction[] = ["to_discord", "both", "to_site", "off"];
 
 export default function RangsyncPage() {
   const { user } = useAuth();
   const [data, setData] = useState<RangsyncData | null>(null);
   const [ranks, setRanks] = useState<RankRow[]>([]);
+  const [extras, setExtras] = useState<ExtraRow[]>([]);
   const [enabled, setEnabled] = useState(false);
   const [owner, setOwner] = useState<number | null>(null);
   const [note, setNote] = useState<string | null>(null);
@@ -36,6 +39,7 @@ export default function RangsyncPage() {
     setData(loaded);
     // Vorschlag (gleichnamige Discord-Rolle) uebernehmen, solange nichts gewaehlt ist
     setRanks(loaded.ranks.map((r) => ({ ...r, role_id: r.role_id ?? r.suggested_role_id })));
+    setExtras(loaded.extras.map((x) => ({ ...x, role_id: x.role_id ?? x.suggested_role_id })));
     setEnabled(loaded.enabled);
     setOwner(loaded.ticket_owner);
   }, []);
@@ -49,6 +53,8 @@ export default function RangsyncPage() {
 
   const setRank = (slug: string, change: Partial<RankRow>) =>
     setRanks(ranks.map((r) => (r.slug === slug ? { ...r, ...change } : r)));
+  const setExtra = (slug: string, change: Partial<ExtraRow>) =>
+    setExtras(extras.map((x) => (x.slug === slug ? { ...x, ...change } : x)));
 
   async function act(action: () => Promise<unknown>, success: (r: unknown) => string) {
     setNote(null);
@@ -67,6 +73,7 @@ export default function RangsyncPage() {
           enabled,
           ticket_owner: owner,
           ranks: Object.fromEntries(ranks.map((r) => [r.slug, { role_id: r.role_id, direction: r.direction }])),
+          extras: Object.fromEntries(extras.map((x) => [x.slug, { role_id: x.role_id, direction: x.direction }])),
         }),
       () => "Gespeichert.",
     );
@@ -138,6 +145,64 @@ export default function RangsyncPage() {
           </tbody>
         </table>
         <p style={muted}>Vorbelegt mit der gleichnamigen Discord-Rolle (oder Member/Mod/Admin), falls vorhanden – bitte prüfen und speichern.</p>
+
+        <h2 style={{ marginTop: 24 }}>Zusatzrollen</h2>
+        {!data.extras_available ? (
+          <p style={muted}>
+            Die Seite hat noch keine Zusatzrollen – oder der Bot darf sie nicht lesen (Migration 010 der Seite und die Rechte
+            aus docs/community-grants.sql).
+          </p>
+        ) : extras.length === 0 ? (
+          <p style={muted}>Auf der Seite sind keine Zusatzrollen angelegt.</p>
+        ) : (
+          <>
+            <p style={muted}>
+              Nicht exklusiv: Jede Zusatzrolle für sich, „hat sie auf der Seite ⇔ hat die Discord-Rolle“. „Discord → Seite“
+              vergibt Rechte auf der Seite – darum ist „nur Seite → Discord“ der Standard.
+            </p>
+            <table style={{ width: "100%", borderCollapse: "collapse" }}>
+              <thead>
+                <tr style={{ textAlign: "left" }}>
+                  <th style={cell}>Zusatzrolle (Seite)</th>
+                  <th style={cell}>Discord-Rolle</th>
+                  <th style={cell}>Richtung</th>
+                </tr>
+              </thead>
+              <tbody>
+                {extras.map((x) => {
+                  const role = data.roles.find((r) => r.id === x.role_id);
+                  return (
+                    <tr key={x.slug}>
+                      <td style={cell}>{x.name}</td>
+                      <td style={cell}>
+                        <select value={x.role_id ?? ""} onChange={(e) => setExtra(x.slug, { role_id: e.target.value || null })}>
+                          <option value="">– keine –</option>
+                          {data.roles.map((r) => (
+                            <option key={r.id} value={r.id}>
+                              @{r.name}
+                            </option>
+                          ))}
+                        </select>
+                        {role?.above_bot && (
+                          <div style={{ ...muted, color: "var(--wb-accent-strong)" }}>liegt über der Bot-Rolle – kann der Bot nicht vergeben</div>
+                        )}
+                      </td>
+                      <td style={cell}>
+                        <select value={x.direction} onChange={(e) => setExtra(x.slug, { direction: e.target.value as Direction })}>
+                          {EXTRA_DIRECTIONS.map((d) => (
+                            <option key={d} value={d}>
+                              {DIRECTION_LABELS[d]}
+                            </option>
+                          ))}
+                        </select>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </>
+        )}
 
         <div style={{ margin: "12px 0" }}>
           System-Tickets (z.B. Discord-Bann) eröffnen im Namen von:{" "}

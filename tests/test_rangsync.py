@@ -246,3 +246,68 @@ async def test_rejoin_takes_rank_from_site(site, db_session, monkeypatch):  # no
     accepted.pending = False
     await cog.on_member_update(waiting, accepted)
     assert waiting.edits == [{MEMBER, GAME}]
+
+
+HEILER = 300
+
+
+async def add_extra_role(direction="to_discord", holder=1):
+    async with community_db.session() as db:
+        await db.execute(insert(community_db.roles).values(id=9, slug="heiler", name="Heiler", level=60, kind="extra", color="#d00"))
+        if holder:
+            await db.execute(insert(community_db.user_extra_roles).values(user_id=holder, role_id=9))
+        await db.commit()
+    await set_config(1, "rangsync_extra_map", json.dumps({"heiler": {"role_id": str(HEILER), "direction": direction}}))
+
+
+async def site_extras(user_id):
+    x = community_db.user_extra_roles
+    async with community_db.session() as db:
+        return {r[0] for r in (await db.execute(select(x.c.role_id).where(x.c.user_id == user_id))).all()}
+
+
+async def test_extra_role_site_to_discord_in_one_step(site, db_session):  # noqa: F811
+    db_session.add(Guild(id=1, name="Wikinger"))
+    await db_session.commit()
+    await seed_site()
+    await add_extra_role()
+    members = {}
+    cog, guild, _ = make(members)
+    members[4242] = FakeMember(guild, 4242, [GAME])
+
+    await cog._on_site_role({"user_id": 1})  # Rang Karl + Zusatzrolle Heiler
+    assert members[4242].edits == [{MEMBER, HEILER, GAME}]  # ein einziger Schritt
+
+    async with community_db.session() as db:  # Zusatzrolle auf der Seite weg
+        await db.execute(community_db.user_extra_roles.delete())
+        await db.commit()
+    await cog._on_site_role({"user_id": 1})
+    assert members[4242].edits[-1] == {MEMBER, GAME}
+
+
+async def test_extra_role_discord_to_site_only_with_direction(site, db_session):  # noqa: F811
+    db_session.add(Guild(id=1, name="Wikinger"))
+    await db_session.commit()
+    await seed_site()
+    await add_extra_role(direction="to_discord", holder=None)
+    cog, guild, _ = make({})
+    await cog.on_member_update(FakeMember(guild, 4242, [MEMBER]), FakeMember(guild, 4242, [MEMBER, HEILER]))
+    assert await site_extras(1) == set()  # nur Seite -> Discord: Discord-Rolle vergibt keine Rechte
+
+    await set_config(1, "rangsync_extra_map", json.dumps({"heiler": {"role_id": str(HEILER), "direction": "both"}}))
+    await cog.on_member_update(FakeMember(guild, 4242, [MEMBER]), FakeMember(guild, 4242, [MEMBER, HEILER]))
+    assert await site_extras(1) == {9}
+    await cog.on_member_update(FakeMember(guild, 4242, [MEMBER, HEILER]), FakeMember(guild, 4242, [MEMBER]))
+    assert await site_extras(1) == set()
+
+
+async def test_link_with_both_only_adds(site, db_session):  # noqa: F811
+    db_session.add(Guild(id=1, name="Wikinger"))
+    await db_session.commit()
+    await seed_site()
+    await add_extra_role(direction="both", holder=1)
+    cog, guild, _ = make({})
+    member = FakeMember(guild, 4242, [MEMBER])  # Discord ohne Heiler-Rolle
+    await cog.on_community_link(member, SimpleNamespace(id=1, username="Ragnar"))
+    assert await site_extras(1) == {9}  # beim Verknuepfen nicht weggenommen
+    assert member.edits == [{MEMBER, HEILER}]  # stattdessen Discord-Rolle dazu

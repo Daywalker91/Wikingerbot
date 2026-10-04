@@ -24,7 +24,7 @@ Regeln:
 import json
 from dataclasses import dataclass
 
-from sqlalchemy import select, update
+from sqlalchemy import delete, insert, select, update
 
 from bot.community import db as community_db
 from bot.core.guild_config import get_config, set_config
@@ -152,3 +152,110 @@ async def linked_members() -> list[tuple[int, int, int]]:
             )
         ).all()
     return [(r[0], r[1], r[2]) for r in rows]
+
+
+# --- Zusatzrollen <-> Discord-Rollen -------------------------------------------------
+#
+# Anders als beim Rang nicht exklusiv: jede Zusatzrolle fuer sich, "hat sie auf der
+# Seite <=> hat die Discord-Rolle". Standard-Richtung nur Seite -> Discord, weil
+# Discord -> Seite Rechte auf der Seite vergibt.
+
+EXTRA_CONFIG_KEY = "rangsync_extra_map"
+EXTRA_DIRECTIONS = ("both", "to_site", "to_discord", "off")
+
+
+@dataclass
+class ExtraRole:
+    id: int
+    slug: str
+    name: str
+    role_id: int | None = None
+    direction: str = "to_discord"
+
+    @property
+    def to_discord(self) -> bool:
+        return self.direction in ("both", "to_discord") and self.role_id is not None
+
+    @property
+    def to_site(self) -> bool:
+        return self.direction in ("both", "to_site") and self.role_id is not None
+
+
+async def site_extra_roles() -> list[ExtraRole]:
+    if not await community_db.extras_available():
+        return []
+    r = community_db.roles
+    async with community_db.session() as db:
+        rows = (await db.execute(select(r.c.id, r.c.slug, r.c.name).where(r.c.kind == "extra").order_by(r.c.name))).all()
+    return [ExtraRole(*row) for row in rows]
+
+
+async def load_extra_mapping(guild_id: int) -> list[ExtraRole]:
+    try:
+        stored = json.loads(await get_config(guild_id, EXTRA_CONFIG_KEY, "{}") or "{}")
+    except json.JSONDecodeError:
+        stored = {}
+    extras = await site_extra_roles()
+    for extra in extras:
+        entry = stored.get(extra.slug, {})
+        extra.role_id = int(entry["role_id"]) if entry.get("role_id") else None
+        direction = entry.get("direction", "to_discord")
+        extra.direction = direction if direction in EXTRA_DIRECTIONS else "to_discord"
+    return extras
+
+
+async def save_extra_mapping(guild_id: int, guild_name: str, mapping: dict[str, dict]) -> None:
+    clean = {
+        slug: {
+            "role_id": str(v["role_id"]) if v.get("role_id") else None,
+            "direction": v.get("direction") if v.get("direction") in EXTRA_DIRECTIONS else "to_discord",
+        }
+        for slug, v in mapping.items()
+    }
+    await set_config(guild_id, EXTRA_CONFIG_KEY, json.dumps(clean), guild_name)
+
+
+def target_extra_roles(extras: list[ExtraRole], held: set[int], member_role_ids: set[int]) -> set[int]:
+    """Discord-Rollen nach den Zusatzrollen der Seite (held = IDs der Zusatzrollen des Mitglieds)."""
+    result = set(member_role_ids)
+    for extra in extras:
+        if not extra.to_discord:
+            continue
+        if extra.id in held:
+            result.add(extra.role_id)
+        else:
+            result.discard(extra.role_id)
+    return result
+
+
+def extras_from_discord(extras: list[ExtraRole], held: set[int], member_role_ids: set[int]) -> tuple[set[int], set[int]]:
+    """(hinzufuegen, entfernen) auf der Seite nach den Discord-Rollen - nur Richtung to_site/both."""
+    add, remove = set(), set()
+    for extra in extras:
+        if not extra.to_site:
+            continue
+        has_role = extra.role_id in member_role_ids
+        if has_role and extra.id not in held:
+            add.add(extra.id)
+        elif not has_role and extra.id in held:
+            remove.add(extra.id)
+    return add, remove
+
+
+async def site_extras_of(site_user_id: int) -> set[int]:
+    if not await community_db.extras_available():
+        return set()
+    x = community_db.user_extra_roles
+    async with community_db.session() as db:
+        rows = (await db.execute(select(x.c.role_id).where(x.c.user_id == site_user_id))).all()
+    return {row[0] for row in rows}
+
+
+async def change_site_extras(site_user_id: int, add: set[int], remove: set[int]) -> None:
+    x = community_db.user_extra_roles
+    async with community_db.session() as db:
+        for role_id in add:
+            await db.execute(insert(x).values(user_id=site_user_id, role_id=role_id))
+        if remove:
+            await db.execute(delete(x).where(x.c.user_id == site_user_id, x.c.role_id.in_(remove)))
+        await db.commit()

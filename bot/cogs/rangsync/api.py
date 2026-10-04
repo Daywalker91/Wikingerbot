@@ -6,7 +6,14 @@ from pydantic import BaseModel, Field
 
 from api.middleware.auth import CurrentUser, require_level
 from api.types import Snowflake
-from bot.cogs.rangsync.sync import DIRECTIONS, load_mapping, save_mapping
+from bot.cogs.rangsync.sync import (
+    DIRECTIONS,
+    EXTRA_DIRECTIONS,
+    load_extra_mapping,
+    load_mapping,
+    save_extra_mapping,
+    save_mapping,
+)
 from bot.community import db as community_db
 from bot.community.system_tickets import default_owner_id
 from bot.core import runtime
@@ -54,6 +61,8 @@ async def get_rangsync(user: CurrentUser = Depends(require_level(Level.OWNER))) 
         "ranks": [],
         "ticket_owner": None,
         "owners": [],
+        "extras": [],
+        "extras_available": False,
         "error": None,
     }
     if not community_db.enabled():
@@ -74,6 +83,17 @@ async def get_rangsync(user: CurrentUser = Depends(require_level(Level.OWNER))) 
             }
             for r in reversed(ranks)
         ]
+        data["extras_available"] = await community_db.extras_available()
+        data["extras"] = [
+            {
+                "slug": e.slug,
+                "name": e.name,
+                "role_id": str(e.role_id) if e.role_id else None,
+                "suggested_role_id": by_name.get(e.name.lower()),
+                "direction": e.direction,
+            }
+            for e in await load_extra_mapping(gid)
+        ]
         owner = await get_config(gid, "rangsync_ticket_owner")
         data["ticket_owner"] = int(owner) if owner else await default_owner_id()
         data["owners"] = await _staff_candidates()
@@ -87,9 +107,15 @@ class RankMapping(BaseModel):
     direction: str = Field(pattern="^(" + "|".join(DIRECTIONS) + ")$")
 
 
+class ExtraMapping(BaseModel):
+    role_id: Snowflake | None = None
+    direction: str = Field(pattern="^(" + "|".join(EXTRA_DIRECTIONS) + ")$")
+
+
 class RangsyncConfig(BaseModel):
     enabled: bool
     ranks: dict[str, RankMapping]
+    extras: dict[str, ExtraMapping] = Field(default_factory=dict)
     ticket_owner: int | None = None
 
 
@@ -98,6 +124,7 @@ async def put_rangsync(body: RangsyncConfig, user: CurrentUser = Depends(require
     guild = runtime.bot.get_guild(user.guild_id) if runtime.bot else None
     name = guild.name if guild else str(user.guild_id)
     await save_mapping(user.guild_id, name, {slug: m.model_dump() for slug, m in body.ranks.items()})
+    await save_extra_mapping(user.guild_id, name, {slug: m.model_dump() for slug, m in body.extras.items()})
     await set_config(user.guild_id, "rangsync_enabled", "true" if body.enabled else "false", name)
     await set_config(user.guild_id, "rangsync_ticket_owner", str(body.ticket_owner) if body.ticket_owner else "", name)
     return {"ok": True}
