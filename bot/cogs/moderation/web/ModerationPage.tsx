@@ -5,6 +5,7 @@ import {
   getEscalations,
   getModConfig,
   getModLog,
+  getRoles,
   getTextChannels,
   getWarnings,
   resetEscalation,
@@ -33,7 +34,7 @@ const PRESET_REASONS = [
   "NSFW-Inhalte",
 ];
 
-const LADDER_ACTIONS: LadderAction[] = ["timeout", "kick", "ban"];
+const LADDER_ACTIONS: LadderAction[] = ["timeout", "strafrolle", "kick", "ban"];
 const MEMBER_SEARCH_DEBOUNCE_MS = 300;
 
 export default function ModerationPage() {
@@ -48,6 +49,7 @@ export default function ModerationPage() {
 
   const [modConfig, setModConfig] = useState<ModConfig | null>(null);
   const [textChannels, setTextChannels] = useState<TextChannelItem[]>([]);
+  const [roles, setRoles] = useState<TextChannelItem[]>([]);
 
   const [escalations, setEscalations] = useState<EscalationState[] | null>(null);
   const [resetUserId, setResetUserId] = useState("");
@@ -58,18 +60,20 @@ export default function ModerationPage() {
   const [message, setMessage] = useState<string | null>(null);
 
   async function load() {
-    const [modlogResult, warningsResult, config, escalationsResult, channels] = await Promise.all([
+    const [modlogResult, warningsResult, config, escalationsResult, channels, roleList] = await Promise.all([
       getModLog(),
       getWarnings(),
       getModConfig(),
       getEscalations(),
       getTextChannels(),
+      getRoles().catch(() => [] as TextChannelItem[]),
     ]);
     setModlog(modlogResult);
     setWarnings(warningsResult);
     setModConfig(config);
     setEscalations(escalationsResult);
     setTextChannels(channels);
+    setRoles(roleList);
   }
 
   useEffect(() => {
@@ -240,7 +244,8 @@ export default function ModerationPage() {
           eines Mitglieds die <strong>Warn-Schwelle</strong>, ruckt die Eskalation eine Stufe in der{" "}
           <strong>Eskalations-Leiter</strong> weiter (bleibt an der letzten Stufe stehen, wenn das Ende
           erreicht ist): <em>Timeout</em> (befristete Stummschaltung fuer die eingestellte{" "}
-          <strong>Timeout-Dauer</strong>), <em>Ban</em> (sofortiger, dauerhafter Bann) oder{" "}
+          <strong>Timeout-Dauer</strong>), <em>strafrolle</em> (Strafrolle statt Autorole, siehe unten),{" "}
+          <em>Ban</em> (sofortiger, dauerhafter Bann) oder{" "}
           <em>Kick (Vorschlag)</em> (schlägt einen Kick per Button im Moderations-Kanal vor, wird nicht
           automatisch ausgeführt). Timeout und Ban erzeugen zusätzlich eine Bestätigen/Aufheben-Nachricht
           in Discord. Warnpunkte verfallen automatisch nach der eingestellten Anzahl Tage - das betrifft
@@ -335,6 +340,27 @@ export default function ModerationPage() {
                 </select>
               </label>
               <div style={{ color: "#999", fontSize: "0.9em" }}>AutoMod-Einstellungen stehen im Tab AutoMod.</div>
+            </div>
+            <div style={{ marginBottom: 8 }}>
+              <label>
+                Strafrolle:{" "}
+                <select
+                  value={modConfig.punish_role_id ?? ""}
+                  onChange={(e) => setModConfig({ ...modConfig, punish_role_id: e.target.value || null })}
+                >
+                  <option value="">– keine –</option>
+                  {roles.map((role) => (
+                    <option key={role.id} value={role.id}>
+                      @{role.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <div style={{ color: "#999", fontSize: "0.9em", maxWidth: 640 }}>
+                Einschränken statt kicken: <code>/strafrolle geben</code> (oder die Stufe „strafrolle“ in der Leiter) nimmt
+                die Autorole und gibt diese Rolle. Wer damit den Server verlässt und wiederkommt, bekommt sie wieder statt der
+                Autorole. Was die Rolle darf, stellst du in Discord ein.
+              </div>
             </div>
             <button onClick={() => void handleSaveModConfig()}>Speichern</button>
           </div>

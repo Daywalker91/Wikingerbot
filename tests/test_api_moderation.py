@@ -227,6 +227,7 @@ async def test_get_mod_config_returns_defaults(db_session):
         "warn_timeout_minutes": 60,
         "warn_decay_days": 30,
         "modlog_channel_id": None,
+        "punish_role_id": None,
     }
 
 
@@ -253,6 +254,7 @@ async def test_update_mod_config_persists_values(db_session):
                 "warn_timeout_minutes": 30,
                 "warn_decay_days": 14,
                 "modlog_channel_id": 555,
+                "punish_role_id": "777",
             },
         )
         get_response = await client.get("/moderation/mod-config")
@@ -264,6 +266,7 @@ async def test_update_mod_config_persists_values(db_session):
         "warn_timeout_minutes": 30,
         "warn_decay_days": 14,
         "modlog_channel_id": "555",
+        "punish_role_id": "777",
     }
 
 

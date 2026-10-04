@@ -6,6 +6,7 @@ from discord import app_commands
 from discord.ext import commands, tasks
 from sqlalchemy import func, select, update
 
+from bot.core import punishment
 from bot.core.base_cog import BaseCog
 from bot.core.entities import ensure_guild, ensure_user
 from bot.core.guild_config import get_config, set_config
@@ -14,7 +15,8 @@ from db.models.modlog import ModAction, ModLogEntry, Warning, WarnEscalationStat
 from db.session import get_db_session
 
 DEFAULT_LADDER = ["timeout", "kick", "ban"]
-ALLOWED_LADDER_ACTIONS = {"timeout", "kick", "ban"}
+# "strafrolle" = Strafrolle statt Kick/Bann (bot/core/punishment.py)
+ALLOWED_LADDER_ACTIONS = {"timeout", "kick", "ban", "strafrolle"}
 
 
 async def _get_ladder(guild_id: int) -> list[str]:
@@ -312,6 +314,23 @@ async def _trigger_escalation(
         await channel.send(embed=embed, view=view)
         return
 
+    if action == "strafrolle":
+        if error := await punishment.apply(user, reason):
+            await channel.send(f"Warn-Eskalation fuer {user.mention}: {error}")
+            return
+        await _add_modlog(guild.id, user.id, bot_user_id, ModAction.PUNISH, reason)
+        role = await punishment.punish_role(guild)
+        await channel.send(
+            embed=discord.Embed(
+                title="Automatische Eskalation: Strafrolle",
+                description=f"{user.mention} hat jetzt {role.mention if role else 'die Strafrolle'} ({total_points} Warn-Punkte). "
+                "Aufheben mit `/strafrolle aufheben`.",
+            ),
+            allowed_mentions=discord.AllowedMentions.none(),
+        )
+        await _dm(user, f"Du wurdest in **{guild.name}** eingeschränkt.\nGrund: {reason}")
+        return
+
     if action == "ban":
         try:
             await user.ban(reason=reason)
@@ -404,6 +423,7 @@ class ModerationCog(BaseCog):
     __author__ = "Daywalker91"
 
     modconfig_group = app_commands.Group(name="modconfig", description="Moderations-Konfiguration")
+    punish_group = app_commands.Group(name="strafrolle", description="Einschraenken statt kicken (Strafrolle)")
 
     async def cog_load(self) -> None:
         async with get_db_session() as db:
@@ -426,6 +446,58 @@ class ModerationCog(BaseCog):
 
     async def cog_unload(self) -> None:
         self.warn_decay.cancel()
+
+    # --- Strafrolle ----------------------------------------------------------------
+
+    @commands.Cog.listener()
+    async def on_member_update(self, before: discord.Member, after: discord.Member) -> None:
+        """Merkt sich die Strafrolle, egal wie sie vergeben wurde (Befehl, Rang-Sync, von Hand)."""
+        if before.roles == after.roles:
+            return
+        role = await punishment.punish_role(after.guild)
+        if role is None:
+            return
+        if role in after.roles and role not in before.roles:
+            await punishment.remember(after.guild, after.id)
+        elif role in before.roles and role not in after.roles:
+            await punishment.forget(after.guild, after.id)
+
+    @punish_group.command(name="geben", description="Gibt die Strafrolle und nimmt die Autorole")
+    @app_commands.describe(mitglied="Mitglied", grund="Begruendung (bekommt das Mitglied per DM)")
+    @require_role(Level.MOD)
+    async def punish_cmd(self, interaction: discord.Interaction, mitglied: discord.Member, grund: str) -> None:
+        await interaction.response.defer(ephemeral=True)
+        if blocked := _guild_block_reason(interaction, mitglied):
+            await interaction.followup.send(blocked)
+            return
+        if error := await punishment.apply(mitglied, f"{grund} (von {interaction.user})"):
+            await interaction.followup.send(error)
+            return
+        await ensure_guild(interaction.guild_id, interaction.guild.name)
+        await ensure_user(mitglied.id, str(mitglied))
+        await _add_modlog(interaction.guild_id, mitglied.id, interaction.user.id, ModAction.PUNISH, grund)
+        await _post_modlog(self.bot, interaction.guild_id, "Strafrolle", mitglied.id, interaction.user, grund,
+                           footer="Aufheben mit /strafrolle aufheben")
+        await _dm(mitglied, f"Du wurdest in **{interaction.guild.name}** eingeschränkt.\nGrund: {grund}")
+        await interaction.followup.send(f"{mitglied.mention} hat jetzt die Strafrolle. Grund: {grund}")
+
+    @punish_group.command(name="aufheben", description="Nimmt die Strafrolle und gibt die Autorole zurueck")
+    @app_commands.describe(mitglied="Mitglied", grund="Optional eine Notiz fuers Modlog")
+    @require_role(Level.MOD)
+    async def unpunish_cmd(self, interaction: discord.Interaction, mitglied: discord.Member, grund: str | None = None) -> None:
+        await interaction.response.defer(ephemeral=True)
+        if blocked := _guild_block_reason(interaction, mitglied):
+            await interaction.followup.send(blocked)
+            return
+        if error := await punishment.lift(mitglied, f"Strafe aufgehoben von {interaction.user}"):
+            await interaction.followup.send(error)
+            return
+        await ensure_guild(interaction.guild_id, interaction.guild.name)
+        await ensure_user(mitglied.id, str(mitglied))
+        await _add_modlog(interaction.guild_id, mitglied.id, interaction.user.id, ModAction.UNPUNISH, grund)
+        await _post_modlog(self.bot, interaction.guild_id, "Strafrolle aufgehoben", mitglied.id, interaction.user, grund)
+        await _dm(mitglied, f"Deine Einschränkung in **{interaction.guild.name}** wurde aufgehoben.")
+        await interaction.followup.send(f"Strafrolle von {mitglied.mention} aufgehoben.")
 
     @tasks.loop(hours=1)
     async def warn_decay(self) -> None:
@@ -668,14 +740,14 @@ class ModerationCog(BaseCog):
     @modconfig_group.command(
         name="ladder", description="Setzt die Eskalations-Leiter (Reihenfolge der Aktionen)"
     )
-    @app_commands.describe(actions="Kommagetrennt, z.B. 'timeout,kick,ban' (erlaubt: timeout/kick/ban)")
+    @app_commands.describe(actions="Kommagetrennt, z.B. 'timeout,strafrolle,kick,ban' (erlaubt: timeout/strafrolle/kick/ban)")
     @require_role(Level.OWNER)
     async def modconfig_ladder(self, interaction: discord.Interaction, actions: str) -> None:
         tokens = [token.strip().lower() for token in actions.split(",") if token.strip()]
         invalid = [token for token in tokens if token not in ALLOWED_LADDER_ACTIONS]
         if not tokens or invalid:
             await interaction.response.send_message(
-                f"Ungueltig: `{', '.join(invalid) or actions}`. Erlaubt sind nur timeout/kick/ban.",
+                f"Ungueltig: `{', '.join(invalid) or actions}`. Erlaubt sind nur timeout/strafrolle/kick/ban.",
                 ephemeral=True,
             )
             return

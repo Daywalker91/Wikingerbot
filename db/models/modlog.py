@@ -15,6 +15,8 @@ class ModAction(str, enum.Enum):
     MUTE = "mute"
     UNMUTE = "unmute"
     TIMEOUT = "timeout"
+    PUNISH = "punish"  # Strafrolle gegeben (bot/core/punishment.py)
+    UNPUNISH = "unpunish"
 
 
 class ModLogEntry(Base):

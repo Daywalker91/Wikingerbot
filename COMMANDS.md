@@ -76,8 +76,10 @@ Minecraft; vanilla Valheim z.B. nicht).
 | `/warn user: reason: points:` | 📍 Verwarnt ein Mitglied (Default 1 Punkt), siehe Warn-Eskalation unten | Mod |
 | `/warnings user:` | Zeigt aktive (nicht abgelaufene) Verwarnungen eines Mitglieds | Mod |
 | `/modlog user:` | Zeigt die komplette Moderationshistorie eines Mitglieds | Mod |
+| `/strafrolle geben mitglied: grund:` | Einschränken statt kicken: nimmt die Autorole, gibt die Strafrolle (Tab Moderation), DM mit Grund, Modlog-Eintrag | Mod |
+| `/strafrolle aufheben mitglied: grund:` | Nimmt die Strafrolle, gibt die Autorole zurück | Mod |
 | `/modconfig threshold value:` | Setzt die Warn-Punkte-Schwelle für automatische Eskalation (Default 3) | Owner |
-| `/modconfig action action:` | Setzt die Eskalations-Aktion: `timeout` / `ban` / `kick` (Default `timeout`) | Owner |
+| `/modconfig ladder actions:` | Eskalations-Leiter, z.B. `timeout,strafrolle,kick,ban` | Owner |
 | `/modconfig timeout minutes:` | Setzt die Timeout-Dauer für Eskalationen in Minuten (Default 60) | Owner |
 | `/modconfig log_channel channel:` | Kanal, in dem jeder Bann, Kick und Timeout gemeldet wird (Mod, Grund, bei Bann der `/unban`-Befehl). Auch im Moderations-Tab einstellbar. Wer bisher keinen eigenen hatte, behält einmalig den bisherigen AutoMod-Kanal | Owner |
 
@@ -93,7 +95,15 @@ der Betroffene dann eine Korrektur-DM).
 werden `timeout`/`ban` **sofort automatisch ausgeführt** und danach per
 "Bestätigen"/"Aufheben"-Buttons nachträglich geprüft (neustart-sicher).
 `kick` wird **nie automatisch** ausgeführt — nur als Vorschlag mit
-"Ausführen"-Button gepostet, ein Mod muss aktiv bestätigen.
+"Ausführen"-Button gepostet, ein Mod muss aktiv bestätigen. `strafrolle` gibt
+automatisch die Strafrolle.
+
+**Strafrolle**: Eine Discord-Rolle, die weniger darf (die Rechte stellt man in
+Discord ein, z.B. nur lesen). Der Bot merkt sich jeden, der sie hat – egal ob per
+Befehl, Eskalation, Rang-Sync oder von Hand vergeben. Wer damit den Server
+verlässt und wiederkommt, bekommt beim Beitritt wieder die Strafrolle statt der
+Autorole. Ist die Community-Seite angebunden und das Mitglied verknüpft, bekommt
+es beim (Wieder-)Beitritt außerdem den Rang der Seite.
 
 ---
 

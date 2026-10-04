@@ -76,6 +76,7 @@ class FakeRole(SimpleNamespace):
 class FakeMember:
     def __init__(self, guild, member_id, role_ids):
         self.guild, self.id, self.bot = guild, member_id, False
+        self.pending = False
         self.roles = [FakeRole(id=i) for i in role_ids]
         self.edits = []
 
@@ -217,3 +218,31 @@ async def test_discord_ban_opens_ticket_for_king(site, db_session):  # noqa: F81
     await cog.on_member_ban(guild, SimpleNamespace(id=4242, __str__=lambda self: "ragnar"))
     [(owner, subject, category)] = await tickets()
     assert owner == 2 and subject == "Discord-Bann: Ragnar" and category == "melden"  # Lagertha ist hier Koenig
+
+
+async def test_rejoin_takes_rank_from_site(site, db_session, monkeypatch):  # noqa: F811
+    """Wer verknuepft ist und (wieder) beitritt, bekommt den Rang der Seite - auch nach dem Regel-Screening."""
+    import bot.cogs.rangsync.cog as rangsync_cog
+
+    monkeypatch.setattr(rangsync_cog, "JOIN_DELAY_SECONDS", 0)
+    db_session.add(Guild(id=1, name="Wikinger"))
+    await db_session.commit()
+    await seed_site()
+    members = {}
+    cog, guild, _ = make(members)
+
+    member = FakeMember(guild, 4242, [GAME])
+    member.pending = False
+    members[4242] = member
+    await cog.on_member_join(member)
+    assert member.edits == [{MEMBER, GAME}]  # Seite sagt Karl
+
+    waiting = FakeMember(guild, 4242, [GAME])
+    waiting.pending = True
+    members[4242] = waiting
+    await cog.on_member_join(waiting)
+    assert waiting.edits == []  # erst nach den Regeln
+    accepted = FakeMember(guild, 4242, [GAME])
+    accepted.pending = False
+    await cog.on_member_update(waiting, accepted)
+    assert waiting.edits == [{MEMBER, GAME}]

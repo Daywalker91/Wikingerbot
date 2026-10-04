@@ -23,6 +23,7 @@ from discord import app_commands
 from discord.ext import commands
 from sqlalchemy import select
 
+from bot.core import punishment
 from bot.core.base_cog import BaseCog
 from bot.core.guild_config import get_config, set_config
 from bot.core.permissions import Level, require_role
@@ -220,6 +221,15 @@ class RolesCog(BaseCog):
     # --- Autorole --------------------------------------------------------------
 
     async def _give_autoroles(self, member: discord.Member) -> None:
+        # Mit Strafrolle gegangen und wiedergekommen: Strafrolle statt Autorole
+        if await punishment.is_remembered(member.guild.id, member.id):
+            role = await punishment.punish_role(member.guild)
+            if role is not None and role_block_reason(role, member.guild.me.top_role.position) is None:
+                try:
+                    await member.add_roles(role, reason="Strafrolle beim Wiederbeitritt")
+                except discord.HTTPException as error:
+                    log.warning("Strafrolle fuer %s beim Wiederbeitritt fehlgeschlagen: %s", member, error)
+                return
         role_ids = await get_autoroles(member.guild.id)
         roles = [r for r in (member.guild.get_role(i) for i in role_ids) if r is not None and r not in member.roles]
         roles = [r for r in roles if role_block_reason(r, member.guild.me.top_role.position) is None]

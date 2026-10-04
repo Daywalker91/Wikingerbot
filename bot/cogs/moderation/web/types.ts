@@ -24,7 +24,7 @@ export interface ActionResult {
   message: string;
 }
 
-export type LadderAction = "timeout" | "ban" | "kick";
+export type LadderAction = "timeout" | "strafrolle" | "ban" | "kick";
 
 export interface ModConfig {
   warn_threshold: number;
@@ -32,6 +32,7 @@ export interface ModConfig {
   warn_timeout_minutes: number;
   warn_decay_days: number;
   modlog_channel_id: string | null;
+  punish_role_id: string | null;
 }
 
 export interface MemberSearchResult {

@@ -77,10 +77,11 @@ class ActionResult(BaseModel):
 
 class ModConfigOut(BaseModel):
     warn_threshold: int
-    warn_ladder: list[Literal["timeout", "ban", "kick"]]
+    warn_ladder: list[Literal["timeout", "strafrolle", "ban", "kick"]]
     warn_timeout_minutes: int
     warn_decay_days: int
     modlog_channel_id: Snowflake | None = None
+    punish_role_id: Snowflake | None = None  # Strafrolle (bot/core/punishment.py)
 
 
 class MemberSearchResult(BaseModel):
@@ -111,6 +112,7 @@ async def get_mod_config(user: CurrentUser = Depends(require_level(Level.OWNER))
         warn_timeout_minutes=int(await get_config(user.guild_id, "warn_timeout_minutes", "60")),
         warn_decay_days=int(await get_config(user.guild_id, "warn_decay_days", "30")),
         modlog_channel_id=int(modlog) if (modlog := await get_config(user.guild_id, "modlog_channel_id", None)) else None,
+        punish_role_id=int(punish) if (punish := await get_config(user.guild_id, "punish_role_id", None)) else None,
     )
 
 
@@ -123,6 +125,7 @@ async def update_mod_config(
     await set_config(user.guild_id, "warn_timeout_minutes", str(body.warn_timeout_minutes))
     await set_config(user.guild_id, "warn_decay_days", str(body.warn_decay_days))
     await set_config(user.guild_id, "modlog_channel_id", str(body.modlog_channel_id) if body.modlog_channel_id else "")
+    await set_config(user.guild_id, "punish_role_id", str(body.punish_role_id) if body.punish_role_id else "")
     return body
 
 
@@ -141,6 +144,24 @@ async def list_text_channels(
         TextChannelOut(id=int(channel["id"]), name=channel["name"])
         for channel in response.json()
         if channel["type"] == 0
+    ]
+
+
+@router.get("/roles", response_model=list[TextChannelOut])
+async def list_roles(user: CurrentUser = Depends(require_level(Level.OWNER))) -> list[TextChannelOut]:
+    """Discord-Rollen fuer die Auswahl der Strafrolle (ohne @everyone und verwaltete Rollen)."""
+    async with httpx.AsyncClient() as client:
+        response = await client.get(
+            f"{DISCORD_API}/guilds/{user.guild_id}/roles",
+            headers={"Authorization": f"Bot {settings.discord_token}"},
+        )
+    if response.status_code != 200:
+        raise HTTPException(status_code=502, detail="Discord-Rollen konnten nicht geladen werden")
+    roles = sorted(response.json(), key=lambda r: -r.get("position", 0))
+    return [
+        TextChannelOut(id=int(r["id"]), name=r["name"])
+        for r in roles
+        if str(r["id"]) != str(user.guild_id) and not r.get("managed")
     ]
 
 

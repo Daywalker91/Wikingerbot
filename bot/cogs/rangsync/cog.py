@@ -12,6 +12,7 @@ wenn der Bot einen Rang auf der Seite aendert - solche Aenderungen kommen nicht
 ueber die Auftraege der Seite.
 """
 
+import asyncio
 import logging
 
 import discord
@@ -35,6 +36,8 @@ from bot.core.base_cog import BaseCog
 from bot.core.guild_config import get_config
 
 log = logging.getLogger("wikingerbot.rangsync")
+
+JOIN_DELAY_SECONDS = 3  # nach dem Beitritt: Autorole zuerst, dann der Rang der Seite
 
 
 class RangsyncCog(BaseCog):
@@ -107,10 +110,36 @@ class RangsyncCog(BaseCog):
             result["fehlgeschlagen" if outcome.startswith("fehlgeschlagen") else outcome] += 1
         return result
 
+    # --- (Wieder-)Beitritt: Rang der Seite statt nur Autorole ------------------------
+
+    @commands.Cog.listener()
+    async def on_member_join(self, member: discord.Member) -> None:
+        if not member.bot and not member.pending:
+            await self._apply_on_join(member)
+
+    async def _apply_on_join(self, member: discord.Member) -> None:
+        """Wer schon verknuepft ist (z.B. nach Verlassen und Wiederkommen), bekommt
+        seinen Rang von der Seite. Kurz warten, damit die Autorole (roles-Cog)
+        vorher durch ist und hier nicht wieder dazukommt."""
+        if not await self._enabled(member.guild):
+            return
+        site_user = await user_for_discord(member.id)
+        if site_user is None:
+            return
+        await asyncio.sleep(JOIN_DELAY_SECONDS)
+        fresh = member.guild.get_member(member.id)
+        rank_id = await site_rank_of(site_user.id)
+        if fresh is not None and rank_id is not None:
+            result = await self.apply_site_rank(member.guild, fresh, rank_id)
+            log.info("Rang-Sync beim Beitritt von %s: %s", site_user.username, result)
+
     # --- Discord -> Seite ----------------------------------------------------------
 
     @commands.Cog.listener()
     async def on_member_update(self, before: discord.Member, after: discord.Member) -> None:
+        if before.pending and not after.pending and not after.bot:
+            await self._apply_on_join(after)  # Regeln gerade akzeptiert
+            return
         if before.roles == after.roles or after.bot or not await self._enabled(after.guild):
             return
         if after.id in self._own_changes:  # unsere eigene Aenderung kommt hier wieder an

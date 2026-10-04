@@ -71,6 +71,10 @@ export async function resetEscalation(userId: string): Promise<ActionResult> {
   });
 }
 
+export async function getRoles(): Promise<TextChannelItem[]> {
+  return apiFetch<TextChannelItem[]>("/moderation/roles");
+}
+
 export async function getTextChannels(): Promise<TextChannelItem[]> {
   return apiFetch<TextChannelItem[]>("/moderation/text-channels");
 }
