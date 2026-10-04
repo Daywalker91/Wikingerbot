@@ -1,6 +1,11 @@
 # Plan: Zusatzrollen auf der Community-Seite und Sync mit Discord
 
-Stand: Plan, noch nicht umgesetzt.
+Stand: **umgesetzt** (Oktober 2026). Abweichung vom Plan: statt einer Datenbank-View
+`user_permissions` gibt es eine gemeinsame Unterabfrage (Seite: `user_permissions_sql()`,
+Bot: `community_db.permissions_subquery()`) – so braucht weder die Seite das Recht
+CREATE VIEW noch der Bot Rechte auf eine View. Ohne Leserecht auf `user_extra_roles`
+rechnet der Bot nur mit dem Rang. Die Strafrolle (Thrall-Punkte unten) heißt im Bot
+allgemein `/strafrolle`; welche Rolle es ist, steht im Tab Moderation.
 
 ## Ziel
 
