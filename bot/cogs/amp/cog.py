@@ -500,6 +500,38 @@ class AMPCog(BaseCog):
             interaction, f"{label} fuer `{server.display_name}` gesetzt auf {mention}."
         )
 
+    @server_group.command(name="whitelist", description="Whitelist an/aus und Discord-Rolle eines Servers")
+    @app_commands.describe(
+        name="Interner Servername (instance_name)",
+        aktiv="An = die Rolle gibt es nur per Freigabe (/whitelist request)",
+        rolle="Discord-Rolle des Servers (z.B. fuer den Spiel-Chat); leer = keine",
+    )
+    @app_commands.autocomplete(name=_autocomplete_instance_name)
+    @require_role(Level.OWNER)
+    async def server_whitelist(
+        self, interaction: discord.Interaction, name: str, aktiv: bool, rolle: discord.Role | None = None
+    ) -> None:
+        await interaction.response.defer(ephemeral=True)
+        server = await _get_server(interaction.guild_id, name)
+        if server is None:
+            await _followup_temp(interaction, f"Server `{name}` nicht gefunden.")
+            return
+        if aktiv and rolle is None:
+            await _followup_temp(interaction, "Mit Whitelist braucht der Server eine Rolle – die kommt mit der Freigabe.")
+            return
+        async with get_db_session() as db:
+            db_server = await db.get(Server, server.id)
+            db_server.whitelist_enabled = aktiv
+            db_server.discord_role_id = rolle.id if rolle else None
+            await db.commit()
+        text = (
+            f"Whitelist für `{server.display_name}` an – {rolle.mention} gibt es nur noch per Freigabe. "
+            "Im Discord-Onboarding darf diese Rolle nicht mehr als Antwort vergeben werden."
+            if aktiv
+            else f"Whitelist für `{server.display_name}` aus" + (f" – {rolle.mention} ist frei wählbar." if rolle else ".")
+        )
+        await _followup_temp(interaction, text)
+
     @server_group.command(name="console_channel", description="Setzt den Konsolen-Kanal eines Servers")
     @app_commands.describe(name="Interner Servername (instance_name)", channel="Zielkanal (leer = deaktivieren)")
     @app_commands.autocomplete(name=_autocomplete_instance_name)

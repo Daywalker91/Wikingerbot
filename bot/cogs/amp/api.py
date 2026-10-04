@@ -15,6 +15,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.middleware.auth import CurrentUser, get_current_user, require_capability, require_level
+from api.types import Snowflake
 from bot.cogs.amp.registry import add_server, delete_banner_message, known_instance_ids, remove_server
 from bot.core import runtime
 from bot.core.amp_client import amp_client
@@ -42,6 +43,8 @@ class ServerStatusOut(BaseModel):
     state: str | None = None
     uptime: str | None = None
     players: tuple[int, int] | None = None
+    whitelist_enabled: bool = False
+    role_id: Snowflake | None = None  # Discord-Rolle des Servers (kommt mit der Whitelist-Freigabe)
 
 
 async def _status_for(server: Server) -> ServerStatusOut:
@@ -55,6 +58,8 @@ async def _status_for(server: Server) -> ServerStatusOut:
             display_name=server.display_name,
             host=await connect_address(server),
             reachable=False,
+            whitelist_enabled=server.whitelist_enabled,
+            role_id=server.discord_role_id,
         )
 
     # Gleiche Feld-Extraktion wie bot/cogs/banner/image.py:extract_players und
@@ -70,6 +75,8 @@ async def _status_for(server: Server) -> ServerStatusOut:
         display_name=server.display_name,
         host=await connect_address(server),
         reachable=True,
+        whitelist_enabled=server.whitelist_enabled,
+        role_id=server.discord_role_id,
         state=status.State.name,
         uptime=status.Uptime,
         players=players,
@@ -221,6 +228,42 @@ async def _get_scoped_server(db: AsyncSession, server_id: int, guild_id: int) ->
     if server is None:
         raise HTTPException(status_code=404, detail="Server nicht gefunden")
     return server
+
+
+@router.get("/discord-roles")
+async def list_discord_roles(user: CurrentUser = Depends(require_level(Level.OWNER))) -> list[dict]:
+    """Rollen fuer "Discord-Rolle des Servers" (ohne @everyone und verwaltete Rollen)."""
+    guild = runtime.bot.get_guild(user.guild_id) if runtime.bot else None
+    if guild is None:
+        return []
+    top = guild.me.top_role.position
+    return [
+        {"id": str(r.id), "name": r.name, "above_bot": r.position >= top}
+        for r in sorted(guild.roles, key=lambda r: -r.position)
+        if not r.is_default() and not r.managed
+    ]
+
+
+class WhitelistSettings(BaseModel):
+    enabled: bool
+    role_id: Snowflake | None = None
+
+
+@router.put("/{server_id}/whitelist", response_model=ServerActionResult)
+async def put_whitelist(
+    server_id: int, body: WhitelistSettings, user: CurrentUser = Depends(require_level(Level.OWNER)), db: AsyncSession = Depends(get_db)
+) -> ServerActionResult:
+    """Whitelist an/aus und Discord-Rolle des Servers - wie /server whitelist."""
+    server = await db.get(Server, server_id)
+    if server is None or server.guild_id != user.guild_id:
+        raise HTTPException(404, "Server nicht gefunden.")
+    if body.enabled and not body.role_id:
+        raise HTTPException(400, "Mit Whitelist braucht der Server eine Discord-Rolle – die kommt mit der Freigabe.")
+    server.whitelist_enabled = body.enabled
+    server.discord_role_id = body.role_id
+    await db.commit()
+    text = "Whitelist an – die Rolle gibt es nur noch per Freigabe." if body.enabled else "Whitelist aus – die Rolle ist frei wählbar."
+    return ServerActionResult(ok=True, message=f"{server.display_name}: {text}")
 
 
 @router.delete("/{server_id}", response_model=ServerActionResult)

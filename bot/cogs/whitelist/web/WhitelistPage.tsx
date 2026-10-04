@@ -1,11 +1,17 @@
 import { useEffect, useState } from "react";
 
-import { approveRequest, denyRequest, getRequests } from "./api";
+import { approveRequest, denyRequest, getRequests, revokeRequest } from "./api";
 import type { WhitelistRequestItem, WhitelistStatus } from "./types";
 
 export const route = { path: "/whitelist", navLabel: "Whitelist" };
 
-const STATUS_OPTIONS: WhitelistStatus[] = ["pending", "approved", "denied"];
+const STATUS_OPTIONS: WhitelistStatus[] = ["pending", "approved", "denied", "revoked"];
+const STATUS_LABELS: Record<WhitelistStatus, string> = {
+  pending: "Offen",
+  approved: "Genehmigt",
+  denied: "Abgelehnt",
+  revoked: "Entzogen",
+};
 
 export default function WhitelistPage() {
   const [status, setStatus] = useState<WhitelistStatus>("pending");
@@ -23,6 +29,17 @@ export default function WhitelistPage() {
   async function handleApprove(id: number) {
     const result = await approveRequest(id);
     setMessage(result.message);
+    void load(status);
+  }
+
+  async function handleRevoke(id: number) {
+    const reason = window.prompt("Freigabe entziehen – Begründung (optional, bekommt das Mitglied per DM):");
+    if (reason === null) return;
+    try {
+      setMessage((await revokeRequest(id, reason || undefined)).message);
+    } catch (error) {
+      setMessage((error as Error).message);
+    }
     void load(status);
   }
 
@@ -45,14 +62,14 @@ export default function WhitelistPage() {
             disabled={option === status}
             style={{ marginRight: 8 }}
           >
-            {option}
+            {STATUS_LABELS[option]}
           </button>
         ))}
       </div>
 
       {message && <p>{message}</p>}
       {requests === null && <p>Lädt…</p>}
-      {requests !== null && requests.length === 0 && <p>Keine Anfragen mit Status "{status}".</p>}
+      {requests !== null && requests.length === 0 && <p>Keine Anfragen mit Status „{STATUS_LABELS[status]}“.</p>}
 
       <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
         {requests?.map((request) => (
@@ -67,6 +84,11 @@ export default function WhitelistPage() {
                   Annehmen
                 </button>
                 <button onClick={() => void handleDeny(request.id)}>Ablehnen</button>
+              </div>
+            )}
+            {request.status === "approved" && (
+              <div style={{ marginTop: 8 }}>
+                <button onClick={() => void handleRevoke(request.id)}>Entziehen</button>
               </div>
             )}
           </div>

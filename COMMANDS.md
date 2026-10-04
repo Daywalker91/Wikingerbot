@@ -47,6 +47,7 @@ für die Konsolen-Filter/Event-Muster inkl. Regex-Grundlagen.
 | `/server discover` | Listet AMP-Instanzen, die am Controller bekannt, aber noch nicht angelegt sind. Instanzen von Discord-Servern, auf denen der Bot nicht mehr ist, gelten als frei; `/server add` übernimmt sie samt eigener Muster (Kanäle, Banner und Whitelist-Rolle neu setzen) | Owner |
 | `/server add name: amp_instance_id: display_name: [host:]` | Legt einen neuen Server-Eintrag an. `host` ist nur die Anzeige-Adresse für Spieler und optional: leer = Standard-Spieladresse (Tab *Server*, sonst der Host aus `PUBLIC_URL`); ohne Port hängt der Bot den Spiel-Port an, den AMP für die Instanz meldet – bei jeder Anzeige frisch, Port-Änderungen in AMP kommen also mit. Ein eigener Port im Eintrag hat Vorrang. Erkennt die Steam-App-ID automatisch aus AMPs `DisplayImageSource`, falls vorhanden (siehe `/server steam_appid` für manuelle Korrektur) | Owner |
 | `/server remove name:` | Entfernt einen Server-Eintrag nach Rückfrage – mit eigenen Mustern, Filter-Ausnahmen und Whitelist-Anfragen; der Banner wird gelöscht. Die AMP-Instanz bleibt bestehen. Auch im Tab *Server* (Knopf *Entfernen*) | Owner |
+| `/server whitelist name: aktiv: rolle:` | Whitelist an/aus und Discord-Rolle des Servers (siehe Whitelist) | Owner |
 | `/server console_channel name: channel:` | Setzt/entfernt den Kanal für die Konsolen-Bridge | Owner |
 | `/server chat_channel name: channel:` | Setzt/entfernt den Kanal für die Chat-Bridge (Discord → Spiel) | Owner |
 | `/server event_channel name: channel:` | Setzt/entfernt den Kanal für erkannte Join/Leave-Events | Owner |
@@ -117,10 +118,11 @@ es beim (Wieder-)Beitritt außerdem den Rang der Seite.
 | Command | Beschreibung | Level |
 |---|---|---|
 | `/whitelist channel channel:` | Setzt den Kanal, in dem Anfragen zur Freigabe erscheinen (Mods/Admins) | Owner |
-| `/whitelist request server: ign:` | Beantragt Whitelist-Zugang; `ign` weglassen, um den zuletzt genutzten In-Game-Namen wiederzuverwenden | Member |
+| `/whitelist request server: ign:` | Beantragt Whitelist-Zugang (nur Server mit eingeschalteter Whitelist); `ign` weglassen, um den zuletzt genutzten In-Game-Namen wiederzuverwenden | Member |
 | `/whitelist list status:` | Listet Anfragen nach Status (Default: `pending`) | Mod\* |
 | `/whitelist approve request_id:` | Genehmigt eine Anfrage (Fallback zum Accept-Button) | Mod\* |
 | `/whitelist deny request_id: reason:` | Lehnt eine Anfrage ab (Fallback zum Deny-Button) | Mod\* |
+| `/whitelist entziehen mitglied: server: grund:` | Entzieht eine Freigabe: AMP-Eintrag und Discord-Rolle weg, DM mit Grund. Die Rolle bleibt, solange eine Freigabe für einen anderen Server mit derselben Rolle besteht. Auch im Tab *Whitelist* (Knopf *Entziehen*) | Mod\* |
 | `/whitelist donator user: enabled:` | Setzt/entfernt den Donator-Status eines Nutzers (zeigt sich als Stern-Badge auf Bannern von Servern, bei denen dieser Nutzer freigeschaltet ist) | Owner |
 
 Anfragen erscheinen im konfigurierten Kanal als Embed mit **Annehmen**/
@@ -128,8 +130,18 @@ Anfragen erscheinen im konfigurierten Kanal als Embed mit **Annehmen**/
 AMP-Whitelist-Aufruf (`MinecraftModule.AddToWhitelist` — funktioniert nur
 bei Minecraft-Instanzen, schlägt bei anderen Spielen erwartungsgemäß fehl
 und wird nur im Ergebnis vermerkt), automatische Rollen-Vergabe falls
-`Server.discord_role_id` gesetzt ist, DM an den Antragsteller. Es gibt kein
-Auto-Approve — jede Anfrage braucht eine explizite Mod-Entscheidung.
+beim Server eine Rolle eingestellt ist, DM an den Antragsteller. Es gibt kein
+Auto-Approve — jede Anfrage braucht eine explizite Mod-Entscheidung. Dasselbe
+passiert beim Genehmigen in der Weboberfläche.
+
+**Whitelist pro Server** (`/server whitelist name: aktiv: rolle:` oder Tab *Server*):
+Jeder Server hat eine Discord-Rolle (z.B. für seinen Chat) und eine Whitelist an/aus.
+- **An:** Die Rolle gibt es nur per Freigabe. `/whitelist request` bietet nur diese
+  Server an; Selbstwahl-Knöpfe und Autorole verweigern die Rolle. **Im Discord-Onboarding
+  darf die Rolle dann nicht als Antwort vergeben werden** – das kann der Bot nicht sperren.
+- **Aus:** Die Rolle ist frei wählbar (Knöpfe, Onboarding), eine Whitelist-Anfrage gibt
+  es nicht.
+Mehrere Server können dieselbe Rolle haben (z.B. ein ARK-Cluster).
 
 ---
 

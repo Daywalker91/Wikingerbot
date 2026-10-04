@@ -109,7 +109,7 @@ async def test_approve_request_survives_amp_failure(db_session, monkeypatch):
         response = await client.post(f"/whitelist/requests/{request.id}/approve")
 
     assert response.status_code == 200
-    assert "fehlgeschlagen" in response.json()["message"]
+    assert "nicht gesetzt" in response.json()["message"]
 
     await db_session.refresh(request)
     assert request.status == WhitelistStatus.APPROVED

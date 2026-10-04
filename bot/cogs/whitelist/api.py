@@ -21,7 +21,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.types import Snowflake
 from api.middleware.auth import CurrentUser, require_capability, require_level
-from bot.core.amp_client import amp_client
+from bot.cogs.whitelist.actions import grant, revoke
+from bot.core import runtime
 from db.models.role import Level
 from db.models.server import Server
 from db.models.whitelist import WhitelistRequest, WhitelistStatus
@@ -36,7 +37,7 @@ class WhitelistRequestOut(BaseModel):
     server_id: int
     server_name: str
     ign: str
-    status: Literal["pending", "approved", "denied"]
+    status: Literal["pending", "approved", "denied", "revoked"]
     created_at: datetime
     handled_by: Snowflake | None = None
 
@@ -105,11 +106,28 @@ async def approve_request(
     request.handled_by = user.user_id
     await db.commit()
 
-    try:
-        await amp_client.add_whitelist(server.amp_instance_id, request.ign)
-        return ActionResult(ok=True, message="Genehmigt, AMP-Whitelist: OK")
-    except Exception as exc:
-        return ActionResult(ok=True, message=f"Genehmigt, AMP-Whitelist fehlgeschlagen: {exc}")
+    # wie der Knopf in Discord: AMP-Whitelist, Rolle des Servers, DM
+    guild = runtime.bot.get_guild(user.guild_id) if runtime.bot else None
+    lines = await grant(guild, request, server)
+    return ActionResult(ok=True, message="Genehmigt. " + " · ".join(lines))
+
+
+@router.post("/requests/{request_id}/revoke", response_model=ActionResult)
+async def revoke_request(
+    request_id: int,
+    body: DenyBody,
+    user: CurrentUser = Depends(require_capability("whitelist.review")),
+    db: AsyncSession = Depends(get_db),
+) -> ActionResult:
+    """Freigabe entziehen - wie /whitelist entziehen."""
+    request, server = await _get_scoped_request(db, request_id, user.guild_id)
+    if request.status != WhitelistStatus.APPROVED:
+        raise HTTPException(status_code=409, detail="Nur genehmigte Anfragen lassen sich entziehen")
+    guild = runtime.bot.get_guild(user.guild_id) if runtime.bot else None
+    if guild is None:
+        raise HTTPException(status_code=503, detail="Der Bot ist gerade nicht mit Discord verbunden.")
+    _, summary = await revoke(guild, request.user_id, server, user.user_id, body.reason)
+    return ActionResult(ok=True, message=summary)
 
 
 @router.post("/requests/{request_id}/deny", response_model=ActionResult)

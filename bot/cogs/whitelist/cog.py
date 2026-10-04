@@ -3,7 +3,7 @@ from discord import app_commands
 from discord.ext import commands
 from sqlalchemy import select
 
-from bot.core.amp_client import amp_client
+from bot.cogs.whitelist.actions import grant, revoke
 from bot.core.base_cog import BaseCog
 from bot.core.capabilities import check_capability_interaction, require_capability
 from bot.core.discord_utils import send_temp_followup
@@ -25,16 +25,12 @@ async def _dm(member: discord.Member, message: str) -> None:
         pass
 
 
-async def _autocomplete_server(
-    interaction: discord.Interaction, current: str
-) -> list[app_commands.Choice[str]]:
+async def _server_choices(interaction: discord.Interaction, current: str, *, only_whitelist: bool) -> list[app_commands.Choice[str]]:
+    query = select(Server.instance_name, Server.display_name).where(Server.guild_id == interaction.guild_id)
+    if only_whitelist:
+        query = query.where(Server.whitelist_enabled.is_(True))
     async with get_db_session() as db:
-        result = await db.execute(
-            select(Server.instance_name, Server.display_name).where(
-                Server.guild_id == interaction.guild_id
-            )
-        )
-        rows = result.all()
+        rows = (await db.execute(query)).all()
 
     current_lower = current.lower()
     return [
@@ -42,6 +38,15 @@ async def _autocomplete_server(
         for instance_name, display_name in rows
         if current_lower in instance_name.lower() or current_lower in display_name.lower()
     ][:25]
+
+
+async def _autocomplete_server(interaction: discord.Interaction, current: str) -> list[app_commands.Choice[str]]:
+    """Fuer /whitelist request: nur Server mit eingeschalteter Whitelist."""
+    return await _server_choices(interaction, current, only_whitelist=True)
+
+
+async def _autocomplete_any_server(interaction: discord.Interaction, current: str) -> list[app_commands.Choice[str]]:
+    return await _server_choices(interaction, current, only_whitelist=False)
 
 
 async def _autocomplete_pending_request(
@@ -86,23 +91,7 @@ async def _resolve_request(
     result_lines: list[str] = []
 
     if approved:
-        try:
-            await amp_client.add_whitelist(server.amp_instance_id, request.ign)
-            result_lines.append("AMP-Whitelist: OK")
-        except Exception as exc:
-            result_lines.append(f"AMP-Whitelist fehlgeschlagen (evtl. kein Minecraft-Server): {exc}")
-
-        if server.discord_role_id is not None and member is not None:
-            role = guild.get_role(server.discord_role_id)
-            if role is not None:
-                try:
-                    await member.add_roles(role, reason="Whitelist freigegeben")
-                    result_lines.append(f"Rolle {role.name} vergeben")
-                except discord.HTTPException:
-                    result_lines.append("Rollen-Vergabe fehlgeschlagen")
-
-        if member is not None:
-            await _dm(member, f"Deine Whitelist-Anfrage fuer **{server.display_name}** wurde genehmigt.")
+        result_lines = await grant(guild, request, server)
     elif member is not None:
         reason_text = f"\nGrund: {reason}" if reason else ""
         await _dm(
@@ -213,6 +202,25 @@ class WhitelistCog(BaseCog):
         if server_row is None:
             await send_temp_followup(interaction, f"Server `{server}` nicht gefunden.")
             return
+        if not server_row.whitelist_enabled:
+            await send_temp_followup(
+                interaction, f"Für `{server_row.display_name}` gibt es keine Whitelist – der Zugang ist frei (z.B. über die Rollen)."
+            )
+            return
+        async with get_db_session() as db:
+            open_status = (
+                await db.execute(
+                    select(WhitelistRequest.status).where(
+                        WhitelistRequest.user_id == interaction.user.id,
+                        WhitelistRequest.server_id == server_row.id,
+                        WhitelistRequest.status.in_([WhitelistStatus.PENDING, WhitelistStatus.APPROVED]),
+                    )
+                )
+            ).scalars().first()
+        if open_status is not None:
+            text = "Du bist dort schon freigeschaltet." if open_status == WhitelistStatus.APPROVED else "Deine Anfrage läuft schon."
+            await send_temp_followup(interaction, text)
+            return
 
         channel_id_raw = await get_config(interaction.guild_id, WHITELIST_CHANNEL_KEY)
         channel = self.bot.get_channel(int(channel_id_raw)) if channel_id_raw else None
@@ -266,6 +274,7 @@ class WhitelistCog(BaseCog):
             app_commands.Choice(name="Ausstehend", value="pending"),
             app_commands.Choice(name="Genehmigt", value="approved"),
             app_commands.Choice(name="Abgelehnt", value="denied"),
+            app_commands.Choice(name="Entzogen", value="revoked"),
         ]
     )
     @require_capability("whitelist.review")
@@ -312,6 +321,24 @@ class WhitelistCog(BaseCog):
     ) -> None:
         await interaction.response.defer(ephemeral=True)
         _, summary = await _resolve_request(request_id, False, interaction.user, reason)
+        await send_temp_followup(interaction, summary)
+
+    @whitelist_group.command(name="entziehen", description="Entzieht eine Freigabe samt Discord-Rolle des Servers")
+    @app_commands.describe(mitglied="Mitglied", server="Server (instance_name)", grund="Begruendung (bekommt das Mitglied per DM)")
+    @app_commands.autocomplete(server=_autocomplete_any_server)
+    @require_capability("whitelist.review")
+    async def whitelist_revoke_cmd(
+        self, interaction: discord.Interaction, mitglied: discord.Member, server: str, grund: str | None = None
+    ) -> None:
+        await interaction.response.defer(ephemeral=True)
+        async with get_db_session() as db:
+            server_row = (
+                await db.execute(select(Server).where(Server.guild_id == interaction.guild_id, Server.instance_name == server))
+            ).scalar_one_or_none()
+        if server_row is None:
+            await send_temp_followup(interaction, f"Server `{server}` nicht gefunden.")
+            return
+        _, summary = await revoke(interaction.guild, mitglied.id, server_row, interaction.user.id, grund)
         await send_temp_followup(interaction, summary)
 
     @whitelist_group.command(name="donator", description="Setzt/entfernt den Donator-Status eines Nutzers")

@@ -1,6 +1,6 @@
 // Spiegelt bot/cogs/whitelist/api.py's WhitelistRequestOut 1:1.
 // Discord-IDs sind Text (siehe api/types.py) - als Zahl wuerde JavaScript sie runden.
-export type WhitelistStatus = "pending" | "approved" | "denied";
+export type WhitelistStatus = "pending" | "approved" | "denied" | "revoked";
 
 export interface WhitelistRequestItem {
   id: number;

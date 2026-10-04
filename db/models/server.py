@@ -2,6 +2,7 @@ import enum
 from datetime import datetime
 
 from sqlalchemy import BigInteger, Boolean, DateTime, Enum, ForeignKey, Integer, String, func
+from sqlalchemy import false as sa_false
 from sqlalchemy import true as sa_true
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -43,6 +44,9 @@ class Server(Base):
     )
     # Rolle, die bei Whitelist-Freigabe fuer diesen Server automatisch vergeben wird.
     discord_role_id: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
+    # Whitelist an: Zugang (die Rolle oben) nur nach Freigabe - /whitelist request bietet
+    # nur solche Server an, Selbstwahl-Knoepfe fuer die Rolle verweigern sich.
+    whitelist_enabled: Mapped[bool] = mapped_column(Boolean, default=False, server_default=sa_false())
     hidden: Mapped[bool] = mapped_column(Boolean, default=False)
     banner_enabled: Mapped[bool] = mapped_column(Boolean, default=False)
     banner_channel: Mapped[int | None] = mapped_column(BigInteger, nullable=True)

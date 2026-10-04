@@ -11,6 +11,7 @@ class WhitelistStatus(str, enum.Enum):
     PENDING = "pending"
     APPROVED = "approved"
     DENIED = "denied"
+    REVOKED = "revoked"  # Freigabe wieder entzogen
 
 
 class WhitelistRequest(Base):

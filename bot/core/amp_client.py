@@ -259,6 +259,13 @@ class AMPClient:
             DEFAULT_TIMEOUT,
         )
 
+    async def remove_whitelist(self, instance_id: str, ign: str) -> None:
+        """Gegenstueck zu add_whitelist (nur Minecraft-Instanzen, best-effort)."""
+        await _with_timeout(
+            self._instance_client(instance_id).MinecraftModule.RemoveWhitelistEntry(UserOrUUID=ign),
+            DEFAULT_TIMEOUT,
+        )
+
     # --- Rollen und Rechte am Controller (fuer bot/core/amp_role.py) ---------------
     # Bewusst roh per api_call: ampapis Deserialisierung ist bei diesen Typen
     # unzuverlaessig (siehe _raw_call), und wir brauchen nur einfache JSON-Werte.

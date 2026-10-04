@@ -24,6 +24,7 @@ from discord.ext import commands
 from sqlalchemy import select
 
 from bot.core import punishment
+from bot.core.whitelist_gate import gated_reason, gated_roles
 from bot.core.base_cog import BaseCog
 from bot.core.guild_config import get_config, set_config
 from bot.core.permissions import Level, require_role
@@ -101,6 +102,15 @@ async def rank_role_ids(guild_id: int) -> set[int]:
         return {row[0] for row in result.all()}
 
 
+async def block_reason(role: discord.Role, guild: discord.Guild) -> str | None:
+    """role_block_reason plus: Rollen von Servern mit Whitelist gibt es nur per Freigabe."""
+    reason = role_block_reason(role, guild.me.top_role.position, await rank_role_ids(guild.id))
+    if reason:
+        return reason
+    servers = (await gated_roles(guild.id)).get(role.id)
+    return gated_reason(role.name, servers) if servers else None
+
+
 async def get_autoroles(guild_id: int) -> list[int]:
     return [int(r) for r in json.loads(await get_config(guild_id, "autorole_ids", "[]") or "[]")]
 
@@ -169,9 +179,9 @@ class RoleToggleButton(discord.ui.DynamicItem[discord.ui.Button], template=r"wb:
             return
         # Bei jedem Klick neu pruefen - die Rolle koennte seit dem Anlegen des
         # Knopfs Verwaltungsrechte bekommen haben.
-        reason = role_block_reason(role, guild.me.top_role.position, await rank_role_ids(guild.id))
+        reason = await block_reason(role, guild)
         if reason:
-            await interaction.response.send_message(reason, ephemeral=True, delete_after=20)
+            await interaction.response.send_message(reason, ephemeral=True, delete_after=30)
             return
         try:
             if role in member.roles:
@@ -236,7 +246,8 @@ class RolesCog(BaseCog):
                 return
         role_ids = await get_autoroles(member.guild.id)
         roles = [r for r in (member.guild.get_role(i) for i in role_ids) if r is not None and r not in member.roles]
-        roles = [r for r in roles if role_block_reason(r, member.guild.me.top_role.position) is None]
+        gated = await gated_roles(member.guild.id)
+        roles = [r for r in roles if role_block_reason(r, member.guild.me.top_role.position) is None and r.id not in gated]
         if not roles:
             return
         try:
@@ -260,6 +271,8 @@ class RolesCog(BaseCog):
     async def auto_add(self, interaction: discord.Interaction, rolle: discord.Role) -> None:
         guild = interaction.guild
         reason = role_block_reason(rolle, guild.me.top_role.position)
+        if not reason and (servers := (await gated_roles(guild.id)).get(rolle.id)):
+            reason = gated_reason(rolle.name, servers)
         if reason:
             await interaction.response.send_message(reason, ephemeral=True, delete_after=20)
             return
@@ -364,7 +377,7 @@ class RolesCog(BaseCog):
         emoji: str | None = None,
     ) -> None:
         guild = interaction.guild
-        reason = role_block_reason(rolle, guild.me.top_role.position, await rank_role_ids(guild.id))
+        reason = await block_reason(rolle, guild)
         if reason:
             await interaction.response.send_message(reason, ephemeral=True, delete_after=20)
             return

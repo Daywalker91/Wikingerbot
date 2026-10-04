@@ -26,6 +26,7 @@ from bot.cogs.roles.cog import (
     set_autoroles,
 )
 from bot.core import runtime
+from bot.core.whitelist_gate import gated_reason, gated_roles
 from db.models.role import Level
 
 router = APIRouter(prefix="/roles", tags=["roles"])
@@ -41,7 +42,11 @@ def _guild(guild_id: int) -> discord.Guild:
 async def _blocked(guild: discord.Guild) -> dict[int, str | None]:
     ranks = await rank_role_ids(guild.id)
     top = guild.me.top_role.position
-    return {r.id: role_block_reason(r, top, ranks) for r in guild.roles}
+    gated = await gated_roles(guild.id)
+    return {
+        r.id: role_block_reason(r, top, ranks) or (gated_reason(r.name, gated[r.id]) if r.id in gated else None)
+        for r in guild.roles
+    }
 
 
 async def _read_panel(guild: discord.Guild, channel_id: int, message_id: int) -> dict:

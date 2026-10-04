@@ -10,6 +10,14 @@ export async function approveRequest(id: number): Promise<ActionResult> {
   return apiFetch<ActionResult>(`/whitelist/requests/${id}/approve`, { method: "POST" });
 }
 
+export async function revokeRequest(id: number, reason?: string): Promise<ActionResult> {
+  return apiFetch<ActionResult>(`/whitelist/requests/${id}/revoke`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ reason: reason ?? null }),
+  });
+}
+
 export async function denyRequest(id: number, reason?: string): Promise<ActionResult> {
   return apiFetch<ActionResult>(`/whitelist/requests/${id}/deny`, {
     method: "POST",

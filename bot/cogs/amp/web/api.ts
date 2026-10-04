@@ -13,6 +13,24 @@ export async function getServers(): Promise<ServerStatus[]> {
   return apiFetch<ServerStatus[]>("/servers");
 }
 
+export interface DiscordRole {
+  id: string;
+  name: string;
+  above_bot: boolean;
+}
+
+export async function getDiscordRoles(): Promise<DiscordRole[]> {
+  return apiFetch<DiscordRole[]>("/servers/discord-roles");
+}
+
+export async function saveWhitelist(id: number, enabled: boolean, roleId: string | null): Promise<ServerActionResult> {
+  return apiFetch<ServerActionResult>(`/servers/${id}/whitelist`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ enabled, role_id: roleId }),
+  });
+}
+
 export async function getDiscoverableInstances(): Promise<DiscoverableInstance[]> {
   return apiFetch<DiscoverableInstance[]>("/servers/discoverable");
 }

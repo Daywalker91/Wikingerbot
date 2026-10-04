@@ -8,6 +8,8 @@ export interface ServerStatus {
   state: string | null;
   uptime: string | null;
   players: [number, number] | null;
+  whitelist_enabled: boolean;
+  role_id: string | null;
 }
 
 export interface ServerActionResult {

@@ -6,14 +6,17 @@ import {
   createServer,
   deleteServer,
   getAddressSettings,
+  getDiscordRoles,
   getDiscoverableInstances,
   getServers,
   saveAddressSettings,
+  saveWhitelist,
   startServer,
   stopServer,
 } from "./api";
 import { ServerConsole } from "./ServerConsole";
 import type { AddressSettings, DiscoverableInstance, ServerStatus } from "./types";
+import type { DiscordRole } from "./api";
 
 /** "host:2456" -> true (eigener Port angegeben) */
 function hasPort(address: string): boolean {
@@ -24,6 +27,47 @@ export const route = { path: "/servers", navLabel: "Server" };
 
 const REFRESH_INTERVAL_MS = 15_000;
 const CAN_MANAGE_LEVELS = ["mod", "admin", "owner"];
+
+/** Whitelist pro Server: an = Discord-Rolle nur per Freigabe, aus = Rolle frei waehlbar. */
+function WhitelistControl({ server, roles, onDone }: { server: ServerStatus; roles: DiscordRole[]; onDone: (msg: string) => void }) {
+  const [enabled, setEnabled] = useState(server.whitelist_enabled);
+  const [roleId, setRoleId] = useState(server.role_id);
+  const changed = enabled !== server.whitelist_enabled || roleId !== server.role_id;
+  const role = roles.find((r) => r.id === roleId);
+
+  async function save() {
+    try {
+      onDone((await saveWhitelist(server.id, enabled, roleId)).message);
+    } catch (error) {
+      onDone((error as Error).message);
+    }
+  }
+
+  return (
+    <div style={{ marginTop: 8, display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap", fontSize: "0.9em" }}>
+      <label>
+        <input type="checkbox" checked={enabled} onChange={(e) => setEnabled(e.target.checked)} /> Whitelist
+      </label>
+      Rolle:
+      <select value={roleId ?? ""} onChange={(e) => setRoleId(e.target.value || null)}>
+        <option value="">– keine –</option>
+        {roles.map((r) => (
+          <option key={r.id} value={r.id}>
+            @{r.name}
+          </option>
+        ))}
+      </select>
+      {changed && <button onClick={() => void save()}>Speichern</button>}
+      {role?.above_bot && <span style={{ color: "#e74c3c" }}>liegt über der Bot-Rolle</span>}
+      {enabled && (
+        <span style={{ color: "#999", width: "100%" }}>
+          Rolle nur per Freigabe – im Discord-Onboarding darf diese Rolle nicht als Antwort vergeben werden, Knöpfe im
+          Rollen-Panel verweigern sie.
+        </span>
+      )}
+    </div>
+  );
+}
 
 export default function ServerPage() {
   const { user } = useAuth();
@@ -42,6 +86,7 @@ export default function ServerPage() {
   const [newHost, setNewHost] = useState("");
   const [showAddForm, setShowAddForm] = useState(false);
   const [address, setAddress] = useState<AddressSettings | null>(null);
+  const [discordRoles, setDiscordRoles] = useState<DiscordRole[]>([]);
   const [gameHost, setGameHost] = useState("");
 
   async function load() {
@@ -56,6 +101,7 @@ export default function ServerPage() {
 
   useEffect(() => {
     if (!isOwner) return;
+    void getDiscordRoles().then(setDiscordRoles);
     void getAddressSettings().then((loaded) => {
       setAddress(loaded);
       setGameHost(loaded.game_host);
@@ -269,6 +315,7 @@ export default function ServerPage() {
               )}
             </div>
             <div style={{ color: "#999", fontSize: "0.9em" }}>Verbinden: {server.host}</div>
+            {isOwner && <WhitelistControl server={server} roles={discordRoles} onDone={(msg) => { setMessage(msg); void load(); }} />}
 
             {canManage && (
               <div style={{ marginTop: 8 }}>
