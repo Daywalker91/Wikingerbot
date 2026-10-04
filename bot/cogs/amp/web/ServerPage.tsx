@@ -311,7 +311,7 @@ export default function ServerPage() {
                   {server.uptime && ` · Uptime: ${server.uptime}`}
                 </>
               ) : (
-                <span style={{ color: "#e74c3c" }}>Nicht erreichbar</span>
+                <span style={{ color: server.state ? "#999" : "#e74c3c" }}>{server.state ?? "Nicht erreichbar"}</span>
               )}
             </div>
             <div style={{ color: "#999", fontSize: "0.9em" }}>Verbinden: {server.host}</div>

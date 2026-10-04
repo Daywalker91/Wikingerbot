@@ -50,14 +50,19 @@ class ServerStatusOut(BaseModel):
 async def _status_for(server: Server) -> ServerStatusOut:
     try:
         status = await amp_client.get_status(server.amp_instance_id)
-    except Exception:
-        logger.warning("get_status fehlgeschlagen fuer %s", server.instance_name, exc_info=True)
+    except Exception as error:
+        # Gestoppte Instanz = normaler Zustand, kein Fehler (die Seite fragt alle 15 s nach)
+        stopped = "Instance Unavailable" in str(error)
+        if not stopped:
+            first = (str(error).strip().splitlines() or [type(error).__name__])[0][:200]
+            logger.warning("Status von %s nicht abrufbar: %s", server.instance_name, first)
         return ServerStatusOut(
             id=server.id,
             instance_name=server.instance_name,
             display_name=server.display_name,
             host=await connect_address(server),
             reachable=False,
+            state="Instanz gestoppt" if stopped else None,
             whitelist_enabled=server.whitelist_enabled,
             role_id=server.discord_role_id,
         )

@@ -97,6 +97,22 @@ async def test_list_servers_marks_unreachable_server_without_crashing(db_session
     assert server["state"] is None
 
 
+async def test_stopped_instance_is_quiet_and_shown_as_stopped(db_session, monkeypatch, caplog):
+    db_session.add(Guild(id=1, name="Wikinger"))
+    db_session.add(Server(guild_id=1, instance_name="vein", amp_instance_id="v-1", display_name="Vein", host=""))
+    await db_session.commit()
+    error = Exception("Instance Unavailable: The requested instance is not available at this time.
+None")
+    monkeypatch.setattr(amp_client, "get_status", AsyncMock(side_effect=error))
+
+    async with await _client() as client:
+        client.cookies.set("session", _cookie_for(100, 1, Level.MEMBER))
+        [server] = (await client.get("/servers")).json()
+
+    assert server["reachable"] is False and server["state"] == "Instanz gestoppt"
+    assert "Vein" not in caplog.text and "vein" not in caplog.text  # keine Log-Flut
+
+
 async def test_list_servers_scopes_to_the_logged_in_guild(db_session):
     db_session.add_all([Guild(id=1, name="Guild A"), Guild(id=2, name="Guild B")])
     db_session.add(
