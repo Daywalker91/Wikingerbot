@@ -21,6 +21,7 @@ export default function AmpKontenPage() {
   const [data, setData] = useState<AmpKontenData | null>(null);
   const [url, setUrl] = useState("");
   const [map, setMap] = useState<Record<string, string | null>>({});
+  const [requires, setRequires] = useState("");
   const [note, setNote] = useState<string | null>(null);
 
   const load = useCallback(async () => {
@@ -28,6 +29,7 @@ export default function AmpKontenPage() {
     setData(loaded);
     setUrl(loaded.url);
     setMap(loaded.map);
+    setRequires(loaded.requires);
   }, []);
 
   useEffect(() => {
@@ -69,6 +71,24 @@ export default function AmpKontenPage() {
           <input style={{ width: "100%", maxWidth: 420 }} value={url} onChange={(e) => setUrl(e.target.value)} placeholder="https://amp.example.com" />
         </label>
 
+        <div style={{ marginTop: 16 }}>
+          <label>
+            Voraussetzung:{" "}
+            <select value={requires} onChange={(e) => setRequires(e.target.value)}>
+              <option value="">– keine, nur der Rang zählt –</option>
+              {data.extra_roles.map((x) => (
+                <option key={x.slug} value={x.slug}>
+                  Zusatzrolle „{x.name}“
+                </option>
+              ))}
+            </select>
+          </label>
+          <div style={muted}>
+            Mit Voraussetzung gibt es ohne diese Zusatzrolle keinen Zugang (wer sie verliert, wird gesperrt); mit ihr
+            bestimmt der Rang die AMP-Rolle unten.
+          </div>
+        </div>
+
         <table style={{ width: "100%", borderCollapse: "collapse", marginTop: 16 }}>
           <thead>
             <tr style={{ textAlign: "left" }}>
@@ -102,7 +122,7 @@ export default function AmpKontenPage() {
               : "Gemerkte Rollenliste – neue AMP-Rollen erscheinen nach „Rollen neu laden“ (dafür braucht der Bot einmal kurz Super Admins)."}
         </p>
         <div style={{ display: "flex", gap: 8 }}>
-          <button onClick={() => void act(() => saveAmpKonten(url, map), () => "Gespeichert.")}>Speichern</button>
+          <button onClick={() => void act(() => saveAmpKonten(url, map, requires), () => "Gespeichert.")}>Speichern</button>
           <button
             onClick={() =>
               void act(refreshRoles, (r) =>

@@ -180,3 +180,29 @@ async def test_outbox_runs_all_handlers_of_a_kind():
     assert outbox.registered() == ["user.role"]
     outbox.unregister("user.role", b)
     assert outbox.registered() == []
+
+
+async def test_required_extra_role_then_rank_decides(site, db_session):  # noqa: F811
+    """Mit Voraussetzung (z.B. Gameserver-Zusatzrolle): ohne sie kein Zugang, mit ihr bestimmt der Rang."""
+    from bot.cogs.ampkonten.accounts import REQUIRES_KEY
+
+    await seed({"huskarl": "r-mod"})
+    await set_bot_setting(REQUIRES_KEY, "schmied")
+    async with community_db.session() as db:
+        await db.execute(insert(community_db.roles).values(id=9, slug="schmied", name="Schmied", level=60, kind="extra", color="#000"))
+        await db.commit()
+    amp = FakeAMP()
+    denied = await handle_request(amp, 1)
+    assert denied.status == "denied" and "Schmied" in denied.note and not amp.users
+
+    async with community_db.session() as db:
+        await db.execute(insert(community_db.user_extra_roles).values(user_id=1, role_id=9))
+        await db.commit()
+    outcome = await handle_request(amp, 1)
+    assert outcome.status == "active" and amp.users["Ragnar"]["roles"] == {"r-mod"}  # Rang Huskarl -> Mod
+
+    async with community_db.session() as db:  # Zusatzrolle weg -> gesperrt
+        await db.execute(community_db.user_extra_roles.delete())
+        await db.commit()
+    disabled = await apply_rank(amp, 1)
+    assert disabled.status == "disabled" and "Schmied" in disabled.note and amp.users["Ragnar"]["Disabled"]

@@ -32,6 +32,9 @@ log = logging.getLogger("wikingerbot.ampkonten")
 CoreCall = Callable[[str, dict], Awaitable[object]]
 MAP_KEY = "ampkonten_map"  # {Rang-Slug: AMP-Rollen-ID}
 URL_KEY = "ampkonten_url"  # oeffentliche Adresse des Panels fuer die DM
+# Optional: Zusatzrolle der Seite (Slug), ohne die es keinen Zugang gibt - z.B. eine
+# Gameserver-Rolle. Mit ihr entscheidet weiter der Rang ueber die AMP-Rolle.
+REQUIRES_KEY = "ampkonten_requires"
 CACHE_KEY = "amp_roles_cache"  # {Name: ID}, gemerkt solange lesbar (bot/core/bot.py)
 FORBIDDEN_ROLES = {SUPER_ADMIN_ROLE, ROLE_NAME}
 PASSWORD_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789"
@@ -49,6 +52,7 @@ class SiteMember:
     discord_id: int | None
     banned: bool
     deleted: bool
+    extra_slugs: frozenset[str] = frozenset()
 
 
 @dataclass
@@ -83,6 +87,26 @@ async def load_map() -> dict[str, str]:
         return {k: str(v) for k, v in json.loads(await get_bot_setting(MAP_KEY, "{}") or "{}").items() if v}
     except json.JSONDecodeError:
         return {}
+
+
+async def load_requirement() -> str:
+    return (await get_bot_setting(REQUIRES_KEY, "") or "").strip()
+
+
+async def role_for(member: SiteMember) -> tuple[str | None, str | None]:
+    """(AMP-Rolle, fehlende Zusatzrolle). Rolle None: kein Zugang - wegen der fehlenden
+    Zusatzrolle (zweiter Wert = ihr Name) oder weil der Rang keinen hat (zweiter Wert None)."""
+    required = await load_requirement()
+    if required and required not in member.extra_slugs:
+        return None, await _extra_role_name(required)
+    return (await load_map()).get(member.rank_slug), None
+
+
+async def _extra_role_name(slug: str) -> str:
+    r = community_db.roles
+    async with community_db.session() as db:
+        name = (await db.execute(select(r.c.name).where(r.c.slug == slug))).scalar_one_or_none()
+    return name or slug
 
 
 async def available_roles(core_call: CoreCall | None) -> tuple[dict[str, str], bool]:
@@ -125,7 +149,16 @@ async def site_member(site_user_id: int) -> SiteMember | None:
         ).first()
     if row is None:
         return None
-    return SiteMember(row[0], row[1], row[2], row[3], bool(row[4]), row[5] is not None)
+    extras: frozenset[str] = frozenset()
+    if await community_db.extras_available():
+        x = community_db.user_extra_roles
+        async with community_db.session() as db:
+            extras = frozenset(
+                s for (s,) in (
+                    await db.execute(select(r.c.slug).select_from(x.join(r, r.c.id == x.c.role_id)).where(x.c.user_id == site_user_id))
+                ).all()
+            )
+    return SiteMember(row[0], row[1], row[2], row[3], bool(row[4]), row[5] is not None, extras)
 
 
 async def write_site_status(site_user_id: int, outcome: Outcome) -> None:
@@ -204,7 +237,9 @@ async def handle_request(core_call: CoreCall, site_user_id: int) -> Outcome:
         return Outcome("denied", "Dein Konto ist gesperrt.")
     if not member.discord_id:
         return Outcome("denied", "Verknüpfe zuerst Discord – dorthin kommen die Zugangsdaten.")
-    role_id = (await load_map()).get(member.rank_slug)
+    role_id, missing = await role_for(member)
+    if missing:
+        return Outcome("denied", f"Für einen AMP-Zugang brauchst du die Zusatzrolle „{missing}“.")
     if not role_id:
         return Outcome("denied", "Dein Rang hat (noch) keinen AMP-Zugang.")
 
@@ -248,14 +283,15 @@ async def handle_disable(core_call: CoreCall, site_user_id: int, note: str = "Ko
 
 
 async def apply_rank(core_call: CoreCall, site_user_id: int) -> Outcome | None:
-    """Rang geaendert: Rolle anpassen oder sperren. None = kein eigenes Konto, nichts zu tun."""
+    """Rang oder Zusatzrollen geaendert: Rolle anpassen oder sperren. None = kein eigenes Konto, nichts zu tun."""
     account = await own_account(site_user_id)
     member = await site_member(site_user_id)
     if account is None or member is None:
         return None
-    role_id = (await load_map()).get(member.rank_slug)
+    role_id, missing = await role_for(member)
     if not role_id or member.banned or member.deleted:
-        return await handle_disable(core_call, site_user_id, "Dein Rang hat keinen AMP-Zugang mehr.")
+        note = f"Ohne die Zusatzrolle „{missing}“ gibt es keinen AMP-Zugang mehr." if missing else "Dein Rang hat keinen AMP-Zugang mehr."
+        return await handle_disable(core_call, site_user_id, note)
     if account.disabled:
         await _set_disabled(core_call, account.amp_username, False)
         account.disabled = False

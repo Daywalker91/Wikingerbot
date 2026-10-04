@@ -464,6 +464,10 @@ geändert werden. *Passwort vergessen* auf der Seite schickt ein neues. Ändert 
 der Rang (auf der Seite oder über den Rang-Sync), passt der Bot die Rolle an; ein Rang
 ohne Zugang sperrt das Konto (nie löschen), ein gelöschtes Konto auf der Seite ebenso.
 
+Optional eine **Voraussetzung**: eine Zusatzrolle der Seite (z.B. für Gameserver-Betreuer).
+Ohne sie gibt es keinen Zugang – wer sie verliert, wird gesperrt –, mit ihr bestimmt
+weiterhin der Rang die AMP-Rolle.
+
 Fest eingebaut: Der Bot fasst nur Konten an, die er selbst angelegt hat (ist der
 Name schon vergeben, hängt er `-<Nr>` an), vergibt nie *Super Admins* oder seine
 eigene Rolle, und das Passwort steht nur in der DM. Im Tab: Adresse des Panels für

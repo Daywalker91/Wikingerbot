@@ -53,12 +53,14 @@ class AmpKontenCog(BaseCog):
         outbox.register("amp.reset", self._on_reset)
         outbox.register("amp.disable", self._on_disable)
         outbox.register("user.role", self._on_rank)
+        outbox.register("user.extra_roles", self._on_rank)  # z.B. Gameserver-Zusatzrolle weg -> sperren
 
     async def cog_unload(self) -> None:
         outbox.unregister("amp.request", self._on_request)
         outbox.unregister("amp.reset", self._on_reset)
         outbox.unregister("amp.disable", self._on_disable)
         outbox.unregister("user.role", self._on_rank)
+        outbox.unregister("user.extra_roles", self._on_rank)
 
     # --- Auftraege ---------------------------------------------------------------
 

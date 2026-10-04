@@ -8,7 +8,15 @@ from pydantic import BaseModel, Field
 from sqlalchemy import select
 
 from api.middleware.auth import CurrentUser, require_level
-from bot.cogs.ampkonten.accounts import MAP_KEY, URL_KEY, accounts_overview, available_roles, load_map
+from bot.cogs.ampkonten.accounts import (
+    MAP_KEY,
+    REQUIRES_KEY,
+    URL_KEY,
+    accounts_overview,
+    available_roles,
+    load_map,
+    load_requirement,
+)
 from bot.community import db as community_db
 from bot.core import runtime
 from bot.core.amp_client import amp_client
@@ -28,6 +36,15 @@ async def _ranks_and_names(user_ids: list[int]) -> tuple[list[dict], dict[int, s
     return [{"slug": s, "name": n, "level": lvl} for s, n, lvl in ranks], names
 
 
+async def _extra_roles() -> list[dict]:
+    if not await community_db.extras_available():
+        return []
+    r = community_db.roles
+    async with community_db.session() as db:
+        rows = (await db.execute(select(r.c.slug, r.c.name).where(r.c.kind == "extra").order_by(r.c.name))).all()
+    return [{"slug": s, "name": n} for s, n in rows]
+
+
 @router.get("/config")
 async def get_config(user: CurrentUser = Depends(require_level(Level.OWNER))) -> dict:
     roles, fresh = await available_roles(None)
@@ -40,6 +57,8 @@ async def get_config(user: CurrentUser = Depends(require_level(Level.OWNER))) ->
         "loaded": bool(runtime.bot and runtime.bot.get_cog("AmpKontenCog")),
         "community_enabled": community_db.enabled(),
         "ranks": [],
+        "requires": await load_requirement(),
+        "extra_roles": [],
         "accounts": [],
         "error": None,
     }
@@ -48,6 +67,7 @@ async def get_config(user: CurrentUser = Depends(require_level(Level.OWNER))) ->
     if community_db.enabled():
         try:
             data["ranks"], names = await _ranks_and_names([a["site_user_id"] for a in accounts])
+            data["extra_roles"] = await _extra_roles()
         except Exception as error:
             names = {}
             data["error"] = f"Seite nicht erreichbar: {str(error).splitlines()[0][:200]}"
@@ -68,6 +88,7 @@ async def get_config(user: CurrentUser = Depends(require_level(Level.OWNER))) ->
 class AmpKontenConfig(BaseModel):
     url: str = Field(default="", max_length=200, pattern=r"^(https?://\S+)?$")
     map: dict[str, str | None] = {}
+    requires: str = Field(default="", max_length=32)
 
 
 @router.put("/config")
@@ -80,6 +101,7 @@ async def put_config(body: AmpKontenConfig, user: CurrentUser = Depends(require_
         raise HTTPException(400, "Unbekannte oder gesperrte AMP-Rolle (Super Admins und die Bot-Rolle gehen nie).")
     await set_bot_setting(URL_KEY, body.url.rstrip("/"))
     await set_bot_setting(MAP_KEY, json.dumps(clean))
+    await set_bot_setting(REQUIRES_KEY, body.requires.strip())
     return {"ok": True}
 
 

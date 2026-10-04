@@ -14,17 +14,19 @@ export interface AmpKontenData {
   loaded: boolean;
   community_enabled: boolean;
   ranks: { slug: string; name: string; level: number }[];
+  requires: string;
+  extra_roles: { slug: string; name: string }[];
   accounts: { member: string; amp_username: string; disabled: boolean; roles: string[] }[];
   error: string | null;
 }
 
 export const getAmpKonten = () => apiFetch<AmpKontenData>("/ampkonten/config");
 
-export const saveAmpKonten = (url: string, map: Record<string, string | null>) =>
+export const saveAmpKonten = (url: string, map: Record<string, string | null>, requires: string) =>
   apiFetch<{ ok: boolean }>("/ampkonten/config", {
     method: "PUT",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ url, map }),
+    body: JSON.stringify({ url, map, requires }),
   });
 
 export const refreshRoles = () => apiFetch<{ roles: AmpRole[]; fresh: boolean }>("/ampkonten/refresh-roles", { method: "POST" });
