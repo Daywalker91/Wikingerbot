@@ -25,3 +25,7 @@ export async function removeGuildRole(id: number): Promise<void> {
 export async function getCogsStatus(): Promise<CogsStatus> {
   return apiFetch<CogsStatus>("/admin/cogs");
 }
+
+export async function changeCog(name: string, action: "load" | "unload" | "reload"): Promise<{ message: string }> {
+  return apiFetch<{ message: string }>(`/admin/cogs/${encodeURIComponent(name)}/${action}`, { method: "POST" });
+}

@@ -137,7 +137,7 @@ export default function RangsyncPage() {
             })}
           </tbody>
         </table>
-        <p style={muted}>Vorbelegt mit gleichnamigen Discord-Rollen (Member, Mod, Admin), falls vorhanden – bitte prüfen und speichern.</p>
+        <p style={muted}>Vorbelegt mit der gleichnamigen Discord-Rolle (oder Member/Mod/Admin), falls vorhanden – bitte prüfen und speichern.</p>
 
         <div style={{ margin: "12px 0" }}>
           System-Tickets (z.B. Discord-Bann) eröffnen im Namen von:{" "}

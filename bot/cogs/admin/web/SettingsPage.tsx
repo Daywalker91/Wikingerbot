@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 
-import { addGuildRole, getCogsStatus, getDiscordRoles, getGuildRoles, removeGuildRole } from "./api";
+import { addGuildRole, changeCog, getCogsStatus, getDiscordRoles, getGuildRoles, removeGuildRole } from "./api";
 import type { CogsStatus, DiscordRoleItem, GuildRoleItem, PermissionLevel } from "./types";
 
 export const route = { path: "/settings", navLabel: "Einstellungen" };
@@ -14,6 +14,17 @@ export default function SettingsPage() {
   const [newLevel, setNewLevel] = useState<PermissionLevel>("mod");
 
   const [cogsStatus, setCogsStatus] = useState<CogsStatus | null>(null);
+  const [cogNote, setCogNote] = useState<string | null>(null);
+
+  async function cogAction(name: string, action: "load" | "unload" | "reload") {
+    setCogNote(null);
+    try {
+      setCogNote((await changeCog(name, action)).message);
+    } catch (error) {
+      setCogNote((error as Error).message);
+    }
+    setCogsStatus(await getCogsStatus());
+  }
 
   async function load() {
     const [roles, guildRoleList, cogs] = await Promise.all([
@@ -97,10 +108,11 @@ export default function SettingsPage() {
       <section style={{ marginTop: 32 }}>
         <h2>Cogs</h2>
         <p style={{ color: "#999", fontSize: "0.9em", maxWidth: 640 }}>
-          Nur eine Übersicht - Laden/Entladen/Neuladen läuft weiterhin über die
-          Discord-Befehle <code>/bot cog load|unload|reload</code>, da der Bot-Prozess
-          getrennt vom WebUI-Server läuft.
+          Ein entladener Cog ist sofort aus – seine Befehle und Aufgaben ruhen, bis er wieder geladen wird.
+          Dasselbe geht in Discord mit <code>/bot cog load|unload|reload</code>. Den Cog <code>admin</code> kann
+          man nicht entladen, sonst gäbe es keinen Weg zurück.
         </p>
+        {cogNote && <p>{cogNote}</p>}
         {cogsStatus === null && <p>Lädt…</p>}
         {cogsStatus !== null && (
           <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
@@ -118,7 +130,17 @@ export default function SettingsPage() {
                       background: isLoaded ? "#4caf50" : "#777",
                     }}
                   />
-                  {name}
+                  <span style={{ display: "inline-block", minWidth: 140 }}>{name}</span>
+                  {isLoaded ? (
+                    <>
+                      <button onClick={() => void cogAction(name, "reload")} style={{ marginRight: 6 }}>
+                        Neu laden
+                      </button>
+                      {name !== "admin" && <button onClick={() => void cogAction(name, "unload")}>Entladen</button>}
+                    </>
+                  ) : (
+                    <button onClick={() => void cogAction(name, "load")}>Laden</button>
+                  )}
                 </div>
               );
             })}

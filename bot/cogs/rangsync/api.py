@@ -70,7 +70,8 @@ async def get_rangsync(user: CurrentUser = Depends(require_level(Level.OWNER))) 
                 "name": r.name,
                 "level": r.level,
                 "role_id": str(r.role_id) if r.role_id else None,
-                "suggested_role_id": by_name.get(SUGGESTED_ROLE_NAMES.get(r.slug, "")),
+                # gleichnamige Discord-Rolle zuerst (Rang "Karl" -> @Karl), sonst die uebliche Entsprechung
+                "suggested_role_id": by_name.get(r.name.lower()) or by_name.get(SUGGESTED_ROLE_NAMES.get(r.slug, "")),
                 "direction": r.direction,
                 "is_king": r.is_king,
             }

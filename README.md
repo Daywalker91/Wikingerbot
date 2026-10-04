@@ -20,7 +20,8 @@ optional gekoppelt an eine eigene Community-Webseite.*
 | Phase 3 | React-WebUI | ✅ läuft im Bot-Prozess (optional https über einen Reverse-Proxy): Dashboard, Server, Moderation, Whitelist, Einstellungen und je ein Tab pro Cog; Benutzer-Seite offen |
 | — | Betrieb in AMP: eigene Vorlage, Migrationen beim Start, MariaDB getestet ([AMP.md](AMP.md)) | ✅ fertig |
 | Phase 4 | `welcome`, `roles`, `music`, `stats`, `automod` | ✅ fertig (Tests ohne Discord; live in Discord noch zu prüfen) |
-| Phase 5 | Kopplung mit der Community-Seite als eigene, abschaltbare Cogs | 🔜 `community` (Verknüpfen, Auftrags-Abholung), `news`, `events`, `tickets`, `rangsync`, `wiki` und `ampkonten` fertig |
+| Phase 5 | Kopplung mit der Community-Seite als eigene, abschaltbare Cogs: `community`, `news`, `events`, `tickets`, `rangsync`, `wiki`, `ampkonten` | ✅ fertig (Tests ohne Discord; im Betrieb erprobt: Anbindung, Verknüpfung) |
+| — | Discord-Community-Funktionen: Ankündigungskanal, Mitgliedschaftsprüfung, Ticket-Forum mit Tags | ✅ fertig |
 
 Phase 1–3 sind gegen einen echten AMP-Server und einen Discord-Server live erprobt (nicht nur Unit-Tests). Die Cogs aus Phase 4 und 5 sind mit Unit-Tests abgesichert (Befehle laden, Regeln, Datenbank, echter FFmpeg-Lauf, nachgebaute Discord-/AMP-/Seiten-Gegenstellen); im Betrieb erprobt sind davon bisher die Anbindung und Verknüpfung.
 
@@ -302,7 +303,7 @@ da `require_role` auf `app_commands.Command` zugeschnitten ist.
 | `moderation` | Red (teilweise) | Kick/Ban/Warn/Timeout, ModLog, automatische Warn-Eskalation | ✅ fertig |
 | `whitelist` | GatekeeperV2 | Anfragen über Accept/Deny-Buttons, AMP-Whitelist, Rollen-Vergabe | ✅ fertig (kein Auto-Approve, immer Mod-Freigabe) |
 | `banner` | GatekeeperV2 | Embed-/Bild-Status-Banner, Steam-Artwork, Banner-Gruppen (kombiniert/einzeln), Editor-UI | ✅ fertig |
-| `roles` | Red (teilweise) | Autorole (nach Regel-Screening), Selbstwahl-Rollen per Knopf | ✅ fertig |
+| `roles` | Red (teilweise) | Autorole (nach Regel-Screening), Selbstwahl-Rollen per Knopf, eigener Tab | ✅ fertig |
 | `welcome` | Red (teilweise) | Begrüßung mit Platzhaltern, Willkommens-DM, Abschiedsmeldung | ✅ fertig |
 
 **Spätere Cogs (v2+):**
@@ -322,6 +323,8 @@ da `require_role` auf `app_commands.Command` zugeschnitten ist.
 |---|---|
 | Dashboard | Server-Übersicht, Online-Status, Spielerzahlen |
 | Musik | Jetzt läuft, Steuerung, Radio/Podcasts/Dateien abspielen; Admin: Sender und Podcasts |
+| Rollen | Autoroles, Selbstwahl-Panels anlegen und bearbeiten (Admin) |
+| Banner | Banner pro Server und Banner-Gruppen mit Live-Vorschau (Owner) |
 | Begrüßung | Begrüßung, DM und Abschied mit Vorschau (Admin) |
 | AutoMod | Discords AutoMod → Warn-Punkte, eigene Regeln, Folgen, Ausnahmen, Alarmkanal (Admin) |
 | Community | Anbindung an die Community-Seite (Owner) |
@@ -330,11 +333,11 @@ da `require_role` auf `app_commands.Command` zugeschnitten ist.
 | Tickets | Staff-Kanal, Ping-Rolle, DMs, offene Tickets mit Thread-Stand (Admin) |
 | Rang-Sync | Rang ↔ Discord-Rolle und Richtung, Ersteller für System-Tickets, alles abgleichen (Owner) |
 | AMP-Konten | Panel-Adresse, Rang → AMP-Rolle, angelegte Konten (Owner) |
-| Server | AMP-Instanzen verwalten, Start/Stop, Console-Log |
+| Server | AMP-Instanzen anlegen/entfernen, Standard-Spieladresse, Start/Stop, Console-Log |
 | Moderation | ModLog ansehen, Verwarnungen, gebannte User |
 | Whitelist | Anfragen verwalten, genehmigen/ablehnen |
 | Benutzer | User-Datenbank, Rollen, Steam-IDs |
-| Einstellungen | Bot-Konfiguration, Cogs laden/entladen |
+| Einstellungen | Rollen-Zuordnung (Discord-Rolle → Bot-Stufe), Übersicht der Cogs |
 
 Aktueller Stand: Alle Seiten außer „Benutzer“ sind fertig. Im Betrieb läuft die
 Oberfläche im Bot-Prozess (`api/server.py`: API unter `/api`, gebautes Frontend
@@ -410,7 +413,9 @@ nach `web/dist` entpacken. Fertige Docker-/Kubernetes-Dateien gibt es (noch) nic
 **Phase 5 — Community-Seite** ✅
 - `community` (Konto-Verknüpfung, Aufträge der Seite), `news`, `events`, `tickets`, `rangsync`, `wiki`, `ampkonten`
 
-**Geplant** – mehrere Discord-Server mit je eigener Community-Seite: [docs/PLAN_MEHRERE_SERVER.md](docs/PLAN_MEHRERE_SERVER.md)
+**Geplant**
+- Zusatzrollen (Support, Wiki, News, …) auf der Seite, Sync mit Discord, Befehle an Rollen binden: [docs/PLAN_ZUSATZROLLEN.md](docs/PLAN_ZUSATZROLLEN.md)
+- mehrere Discord-Server mit je eigener Community-Seite: [docs/PLAN_MEHRERE_SERVER.md](docs/PLAN_MEHRERE_SERVER.md)
 
 ---
 

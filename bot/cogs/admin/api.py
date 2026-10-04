@@ -10,12 +10,10 @@ Moderations-Konfiguration (Warn-Schwelle/-Aktion/-Timeout) liegt bewusst NICHT
 hier, sondern in bot/cogs/moderation/api.py - das ist Moderations-Fachlogik
 (modconfig_group-Befehle leben ebenfalls im moderation-Cog), nicht Admin.
 
-Cog-Liste ist nur lesend: der API-Prozess hat keinen Zugriff auf die lebende
-WikingerBot-Instanz (anderer Prozess, kein IPC) und kann deshalb nicht
-load_cog()/unload_cog() aufrufen. "verfuegbar" kommt per Verzeichnis-Scan
-(discover_cog_names(), unabhaengig vom Bot-Prozess moeglich), "geladen" liest
-der Bot bei jeder Aenderung selbst in einen BotSetting-Eintrag (siehe
-bot/core/bot.py:_sync_loaded_cogs_to_db).
+Cogs: "verfuegbar" kommt per Verzeichnis-Scan (discover_cog_names()), "geladen"
+schreibt der Bot bei jeder Aenderung in einen BotSetting-Eintrag (siehe
+bot/core/bot.py:_sync_loaded_cogs_to_db). Laeuft die API im Bot-Prozess
+(runtime.bot gesetzt), lassen sich Cogs hier auch laden/entladen/neu laden.
 """
 
 import json
@@ -29,6 +27,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.middleware.auth import CurrentUser, require_level
 from api.types import Snowflake
+from bot.core import runtime
 from bot.core.bot import LOADED_COGS_KEY, discover_cog_names
 from bot.core.bot_settings import get_bot_setting
 from bot.core.config import settings
@@ -49,6 +48,28 @@ class CogsStatusOut(BaseModel):
 async def list_cogs(user: CurrentUser = Depends(require_level(Level.OWNER))) -> CogsStatusOut:
     loaded_json = await get_bot_setting(LOADED_COGS_KEY, default="[]")
     return CogsStatusOut(available=discover_cog_names(), loaded=json.loads(loaded_json))
+
+
+# Ohne den admin-Cog gaebe es keinen Weg zurueck (Befehle und diese Seite haengen daran)
+PROTECTED_COGS = {"admin"}
+
+
+@router.post("/cogs/{name}/{action}")
+async def change_cog(
+    name: str, action: Literal["load", "unload", "reload"], user: CurrentUser = Depends(require_level(Level.OWNER))
+) -> dict:
+    if runtime.bot is None:
+        raise HTTPException(503, "Nur möglich, wenn die Oberfläche im Bot-Prozess läuft.")
+    if name not in discover_cog_names():
+        raise HTTPException(404, "Unbekannter Cog.")
+    if action == "unload" and name in PROTECTED_COGS:
+        raise HTTPException(400, f"Der Cog `{name}` lässt sich nicht entladen.")
+    try:
+        await {"load": runtime.bot.load_cog, "unload": runtime.bot.unload_cog, "reload": runtime.bot.reload_cog}[action](name)
+    except Exception as error:
+        raise HTTPException(400, f"Fehlgeschlagen: {str(error).splitlines()[0][:200]}") from None
+    done = {"load": "geladen", "unload": "entladen", "reload": "neu geladen"}[action]
+    return {"ok": True, "message": f"Cog `{name}` {done}."}
 
 
 class DiscordRoleOut(BaseModel):
