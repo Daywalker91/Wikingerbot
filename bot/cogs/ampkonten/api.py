@@ -145,13 +145,15 @@ async def _run_setup(guild_id: int, apply: bool) -> dict:
     instances = await _game_instances(guild_id)
     if not instances:
         raise HTTPException(400, "Noch keine Gameserver angelegt (Tab Server).")
-    report = await role_setup.run(amp_client.core_call, amp_client.instance_core_call, instances, apply=apply)
+    # frische Anmeldung: gerade vergebene Super Admins gelten sofort, ohne Bot-Neustart
+    controller_call, instance_call = amp_client.fresh_calls()
+    report = await role_setup.run(controller_call, instance_call, instances, apply=apply)
     if apply:
         ok = [iid for iid, name in instances.items() if not report.instances.get(name, {}).get("error")
               and not any(isinstance(v, dict) and v.get("error") for v in report.instances.get(name, {}).values())]
         if not report.errors:
             await set_bot_setting(DONE_KEY, json.dumps(sorted(set(await _done()) | set(ok))))
-        await available_roles(amp_client.core_call)  # neue Rollen gleich in die Auswahl
+        await available_roles(controller_call)  # neue Rollen gleich in die Auswahl
     return asdict(report)
 
 

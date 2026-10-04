@@ -121,3 +121,32 @@ async def test_apply_reports_missing_role_in_instance_and_controller_errors():
 
     failed = await run(denied, amp.instance, {"game-1": "Vein"}, apply=True)
     assert failed.errors and "Super Admins" in failed.errors[0]
+
+
+async def test_api_uses_fresh_login_and_remembers_done_servers(db_session, monkeypatch):
+    import httpx
+
+    from api.main import app
+    from api.middleware.auth import create_access_token
+    from bot.core.amp_client import amp_client
+    from db.models.guild import Guild
+    from db.models.role import Level
+    from db.models.server import Server
+
+    db_session.add(Guild(id=1, name="Wikinger"))
+    await db_session.commit()
+    db_session.add(Server(guild_id=1, instance_name="vein", amp_instance_id="game-1", display_name="Vein", host=""))
+    await db_session.commit()
+    amp = FakeAMP()
+    logins = []
+    monkeypatch.setattr(amp_client, "fresh_calls", lambda: logins.append(1) or (amp.controller, amp.instance))
+
+    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
+        client.cookies.set("session", create_access_token(100, 1, Level.OWNER))
+        assert (await client.get("/ampkonten/roles/status")).json()["pending"] == ["Vein"]
+        assert (await client.post("/ampkonten/roles/check")).status_code == 200 and amp.set == []
+        applied = (await client.post("/ampkonten/roles/apply")).json()
+        assert applied["changed"] > 0 and not applied["errors"]
+        status = (await client.get("/ampkonten/roles/status")).json()
+        assert status["done"] == ["Vein"] and status["pending"] == []
+    assert len(logins) == 2  # jede Aktion meldet sich frisch an

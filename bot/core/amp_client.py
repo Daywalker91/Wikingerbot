@@ -281,6 +281,30 @@ class AMPClient:
             return result["result"]
         return result
 
+    def fresh_calls(self):
+        """(controller_call, instance_call) mit FRISCHER Anmeldung - fuer Aufgaben, die gerade
+        erst vergebene Rechte brauchen (z.B. kurz Super Admins zum Einrichten von Rollen).
+        AMP legt die Rechte einer Sitzung beim Anmelden fest; die laufenden Sitzungen des
+        Bots (Konsole, Status) bleiben so unberuehrt und ohne die erhoehten Rechte."""
+        controller = ADSAsync(self._auth(settings.amp_url))
+        instances: dict[str, MinecraftAsync] = {}
+
+        def unwrap(result):
+            if isinstance(result, dict) and set(result) == {"result"}:
+                return result["result"]
+            return result
+
+        async def controller_call(endpoint: str, args: dict | None = None):
+            return unwrap(await _with_timeout(controller.Core.api_call(f"Core/{endpoint}", args or {}), DEFAULT_TIMEOUT))
+
+        async def instance_call(instance_id: str, endpoint: str, args: dict | None = None):
+            if instance_id not in instances:
+                instances[instance_id] = MinecraftAsync(self._auth(f"{settings.amp_url}/API/ADSModule/Servers/{instance_id}"))
+            client = instances[instance_id]
+            return unwrap(await _with_timeout(client.Core.api_call(f"Core/{endpoint}", args or {}), DEFAULT_TIMEOUT))
+
+        return controller_call, instance_call
+
     async def instance_core_call(self, instance_id: str, endpoint: str, args: dict | None = None):
         """Wie core_call, aber in einer Instanz (z.B. Rollen-Rechte dieser Instanz)."""
         result = await _with_timeout(
