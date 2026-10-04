@@ -71,7 +71,8 @@ function RoleSetup({ onDone }: { onDone: () => void }) {
     <section style={card}>
       <h2 style={{ marginTop: 0 }}>Gameserver-Rollen in AMP</h2>
       <p style={muted}>
-        Der Bot legt drei Rollen an und setzt ihre Rechte am Controller (Anmelden, nur die Spiel-Instanzen) und in jeder
+        Der Bot legt drei Rollen an und setzt ihre Rechte am Controller (Anmelden; die Spiel-Instanzen sehen, starten,
+        stoppen und neustarten – nie anlegen, löschen oder aktualisieren) und in jeder
         Spiel-Instanz. Nie: Benutzer- und Rollenverwaltung, Audit-Log, die Instanz des Bots. Erst <strong>Prüfen</strong>{" "}
         (ändert nichts), dann <strong>Einrichten</strong>. Bei jedem neuen Gameserver erneut einrichten.
       </p>

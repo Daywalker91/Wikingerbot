@@ -28,7 +28,16 @@ INSTANCE_SPEC = [
 
 CONTROLLER_SPEC = [
     node("ADS", node("ADS.Manage")),
-    node("Instances", node("Instances.game-1", node("Instances.game-1.Manage"), node("Instances.game-1.Start"))),
+    node(
+        "Instances",
+        node(
+            "Instances.game-1",
+            node("Instances.game-1.Manage"),
+            node("Instances.game-1.Start"),
+            node("Instances.game-1.Stop"),
+            node("Instances.game-1.Delete"),
+        ),
+    ),
 ]
 
 
@@ -52,7 +61,8 @@ def test_leaves_and_instance_plan():
 def test_controller_plan():
     plan = controller_plan(CONTROLLER_SPEC, {"game-1": "Vein", "game-2": "ARK"})
     assert plan["login"] == ["ADS.Manage"]
-    assert plan["instances"] == {"Vein": ["Instances.game-1.Manage"]}
+    # Manage + Instanz starten/stoppen, aber nie loeschen
+    assert sorted(plan["instances"]["Vein"]) == ["Instances.game-1.Manage", "Instances.game-1.Start", "Instances.game-1.Stop"]
     assert plan["missing_instances"] == ["ARK"]
 
 
@@ -99,7 +109,12 @@ async def test_apply_creates_roles_and_sets_permissions():
     report = await run(amp.controller, amp.instance, {"game-1": "Vein"}, apply=True)
     assert report.created_roles == ["Gameserver Helfer", "Gameserver Betreuer", "Gameserver Admin"]
     helfer_ads = {(n, v) for where, rid, n, v in amp.set if where == "ads" and rid == "r-Gameserver Helfer"}
-    assert helfer_ads == {("ADS.Manage", True), ("Instances.game-1.Manage", True)}
+    assert helfer_ads == {
+        ("ADS.Manage", True),
+        ("Instances.game-1.Manage", True),
+        ("Instances.game-1.Start", True),
+        ("Instances.game-1.Stop", True),
+    }
     helfer = {(n, v) for where, rid, n, v in amp.set if where == "game-1" and rid == "r-Gameserver Helfer"}
     assert ("Core.AppManagement.StartApplication", True) in helfer
     assert ("Settings.Server.Port", None) in helfer  # Admin-Recht: neutral

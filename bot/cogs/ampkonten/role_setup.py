@@ -104,17 +104,24 @@ def instance_plan(spec) -> dict:
     return plan
 
 
+# Je Spiel-Instanz am Controller: sehen/hineingehen und die Instanz selbst starten,
+# stoppen, neustarten (eine gestoppte Instanz beantwortet sonst gar nichts).
+# Bewusst NICHT: anlegen, loeschen, umbauen, AMP-Version hochziehen.
+INSTANCE_ACTIONS = ("manage", "start", "stop", "restart")
+
+
 def controller_plan(spec, instance_ids: dict[str, str]) -> dict:
-    """Controller: Anmelden ("Manage" ausserhalb der Instanzen) und "Manage" je Spiel-Instanz.
+    """Controller: Anmelden und je Spiel-Instanz Manage/Start/Stop/Restart.
 
     instance_ids: Instanz-ID -> Anzeigename."""
     nodes = [n for n, _ in leaves(spec)]
     login = [n for n in nodes if n.lower().endswith(".manage") and not n.lower().startswith("instances.")][:1]
     per_instance, missing = {}, []
     for iid, name in instance_ids.items():
-        manage = [n for n in nodes if n.lower().startswith("instances.") and iid.lower() in n.lower() and n.lower().endswith(".manage")]
-        if manage:
-            per_instance[name] = manage
+        own = [n for n in nodes if n.lower().startswith("instances.") and iid.lower() in n.lower()]
+        chosen = [n for n in own if n.rsplit(".", 1)[-1].lower() in INSTANCE_ACTIONS]
+        if any(n.lower().endswith(".manage") for n in chosen):
+            per_instance[name] = chosen
         else:
             missing.append(name)
     # Zur Fehlersuche: alle Controller-Rechte ausserhalb der Instanzen (Knoten = Anzeigename)
