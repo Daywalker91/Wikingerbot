@@ -135,7 +135,15 @@ async def roles_status(user: CurrentUser = Depends(require_level(Level.OWNER))) 
     instances = await _game_instances(user.guild_id)
     done = set(await _done())
     return {
-        "tiers": [{"key": t.key, "name": t.name, "caps": [CAPABILITIES[c][0] for c in t.caps]} for t in TIERS],
+        "tiers": [
+            {
+                "key": t.key,
+                "name": t.name,
+                "caps": [CAPABILITIES[c][0] for c in t.caps]
+                + (["Instanzen anlegen, löschen und umbauen"] if t.key == "admin" else []),
+            }
+            for t in TIERS
+        ],
         "pending": sorted(name for iid, name in instances.items() if iid not in done),
         "done": sorted(name for iid, name in instances.items() if iid in done),
     }

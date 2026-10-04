@@ -106,8 +106,12 @@ def instance_plan(spec) -> dict:
 
 # Je Spiel-Instanz am Controller: sehen/hineingehen und die Instanz selbst starten,
 # stoppen, neustarten (eine gestoppte Instanz beantwortet sonst gar nichts).
-# Bewusst NICHT: anlegen, loeschen, umbauen, AMP-Version hochziehen.
 INSTANCE_ACTIONS = ("manage", "start", "stop", "restart")
+
+# Nur Admins, am Controller: Instanzen anlegen, loeschen, umbauen und neu angelegte
+# selbst verwalten (sonst koennte man die eigene neue Instanz nicht oeffnen).
+# Bewusst NIE: AMP-Version hochziehen (trifft alle Instanzen), Remote-Ziele, Vorlagen.
+ADMIN_CONTROLLER = ("createinstance", "deleteinstances", "reconfigure", "selfassigninstance")
 
 
 def controller_plan(spec, instance_ids: dict[str, str]) -> dict:
@@ -126,7 +130,8 @@ def controller_plan(spec, instance_ids: dict[str, str]) -> dict:
             missing.append(name)
     # Zur Fehlersuche: alle Controller-Rechte ausserhalb der Instanzen (Knoten = Anzeigename)
     other = [f"{n} = {name}" for n, name in leaves(spec) if not n.lower().startswith("instances.")]
-    return {"login": login, "instances": per_instance, "missing_instances": missing, "other_nodes": other}
+    admin = [n for n in nodes if n.lower().startswith("ads.instancemanagement.") and n.rsplit(".", 1)[-1].lower() in ADMIN_CONTROLLER]
+    return {"login": login, "instances": per_instance, "missing_instances": missing, "admin": admin, "other_nodes": other}
 
 
 # --- Ausfuehren ----------------------------------------------------------------------------
@@ -185,7 +190,10 @@ async def run(
                 role_ids = _role_ids(await controller_call("GetRoleIds", {}))
             for tier in TIERS:
                 rid = role_ids[tier.name]
-                for node in report.controller["login"] + [n for ns in report.controller["instances"].values() for n in ns]:
+                nodes = report.controller["login"] + [n for ns in report.controller["instances"].values() for n in ns]
+                if tier.key == "admin":
+                    nodes += report.controller["admin"]
+                for node in nodes:
                     await controller_call("SetAMPRolePermission", {"RoleId": rid, "PermissionNode": node, "Enabled": True})
                     report.changed += 1
         except Exception as error:

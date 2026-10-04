@@ -481,7 +481,8 @@ Bot legt drei gemeinsame Rollen an (Helfer: starten/stoppen/neustarten, Konsole 
 Betreuer: zusätzlich Konsole schreiben, Spieler, Backups, Updates · Admin: zusätzlich
 Einstellungen, Dateien, Zeitpläne, Backups löschen) und setzt ihre Rechte am Controller
 (Anmelden; für die Spiel-Instanzen aus dem Tab Server „Manage“ sowie die Instanz starten,
-stoppen und neustarten – nie anlegen, löschen oder aktualisieren) und in jeder
+stoppen und neustarten; Admins zusätzlich Instanzen anlegen, löschen, umbauen und neu
+angelegte selbst verwalten – nie AMP-Versionen hochziehen) und in jeder
 Spiel-Instanz. Benutzer- und Rollenverwaltung sowie Audit-Log sind immer verboten. Die
 Rechte-Namen sucht er in der Rechte-Liste des jeweiligen AMP; **Prüfen** zeigt das ohne
 etwas zu ändern, **Einrichten** braucht Super-Admin-Rechte – bei jedem neuen Gameserver

@@ -72,7 +72,7 @@ function RoleSetup({ onDone }: { onDone: () => void }) {
       <h2 style={{ marginTop: 0 }}>Gameserver-Rollen in AMP</h2>
       <p style={muted}>
         Der Bot legt drei Rollen an und setzt ihre Rechte am Controller (Anmelden; die Spiel-Instanzen sehen, starten,
-        stoppen und neustarten – nie anlegen, löschen oder aktualisieren) und in jeder
+        stoppen und neustarten; Admins zusätzlich Instanzen anlegen, löschen und umbauen – nie AMP-Versionen hochziehen) und in jeder
         Spiel-Instanz. Nie: Benutzer- und Rollenverwaltung, Audit-Log, die Instanz des Bots. Erst <strong>Prüfen</strong>{" "}
         (ändert nichts), dann <strong>Einrichten</strong>. Bei jedem neuen Gameserver erneut einrichten.
       </p>
@@ -144,6 +144,7 @@ function SetupResult({ report, applied }: { report: SetupReport; applied: boolea
         <details>
           <summary>Controller: Anmelden {c.login.length ? "✅" : "❌ nicht gefunden"}, Spiel-Instanzen {Object.keys(c.instances ?? {}).length}</summary>
           <div style={muted}>Anmelden: {c.login.join(", ") || "–"}</div>
+          <div style={muted}>Nur Admins: {(c.admin ?? []).join(", ") || "– nicht gefunden"}</div>
           {Object.entries(c.instances ?? {}).map(([name, nodes]) => (
             <div key={name} style={muted}>
               {name}: {nodes.join(", ")}

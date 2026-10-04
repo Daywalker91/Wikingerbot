@@ -27,7 +27,18 @@ INSTANCE_SPEC = [
 ]
 
 CONTROLLER_SPEC = [
-    node("ADS", node("ADS.Manage")),
+    node(
+        "ADS",
+        node("ADS.Manage"),
+        node(
+            "ADS.InstanceManagement",
+            node("ADS.InstanceManagement.CreateInstance"),
+            node("ADS.InstanceManagement.DeleteInstances"),
+            node("ADS.InstanceManagement.Reconfigure"),
+            node("ADS.InstanceManagement.SelfAssignInstance"),
+            node("ADS.InstanceManagement.UpgradeInstances"),
+        ),
+    ),
     node(
         "Instances",
         node(
@@ -64,6 +75,13 @@ def test_controller_plan():
     # Manage + Instanz starten/stoppen, aber nie loeschen
     assert sorted(plan["instances"]["Vein"]) == ["Instances.game-1.Manage", "Instances.game-1.Start", "Instances.game-1.Stop"]
     assert plan["missing_instances"] == ["ARK"]
+    # Admins: anlegen, loeschen, umbauen, eigene verwalten - nie AMP-Version hochziehen
+    assert sorted(plan["admin"]) == [
+        "ADS.InstanceManagement.CreateInstance",
+        "ADS.InstanceManagement.DeleteInstances",
+        "ADS.InstanceManagement.Reconfigure",
+        "ADS.InstanceManagement.SelfAssignInstance",
+    ]
 
 
 class FakeAMP:
@@ -115,6 +133,9 @@ async def test_apply_creates_roles_and_sets_permissions():
         ("Instances.game-1.Start", True),
         ("Instances.game-1.Stop", True),
     }
+    admin_ads = {n for where, rid, n, v in amp.set if where == "ads" and rid == "r-Gameserver Admin"}
+    assert "ADS.InstanceManagement.CreateInstance" in admin_ads and "ADS.InstanceManagement.UpgradeInstances" not in admin_ads
+    assert not any(n.startswith("ADS.InstanceManagement") for n, _ in helfer_ads)
     helfer = {(n, v) for where, rid, n, v in amp.set if where == "game-1" and rid == "r-Gameserver Helfer"}
     assert ("Core.AppManagement.StartApplication", True) in helfer
     assert ("Settings.Server.Port", None) in helfer  # Admin-Recht: neutral
@@ -178,4 +199,4 @@ async def test_api_uses_fresh_login_and_remembers_done_servers(db_session, monke
 
 def test_controller_plan_lists_other_nodes_for_diagnosis():
     plan = controller_plan(CONTROLLER_SPEC, {"game-1": "Vein"})
-    assert plan["other_nodes"] == ["ADS.Manage = Manage"]
+    assert "ADS.Manage = Manage" in plan["other_nodes"]
