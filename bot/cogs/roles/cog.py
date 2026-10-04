@@ -92,8 +92,12 @@ def role_id_from_custom_id(custom_id: str | None) -> int | None:
 
 
 async def rank_role_ids(guild_id: int) -> set[int]:
+    """Berechtigungsrollen ab Mod - die darf man sich nicht selbst geben. Rollen der
+    Stufe Member (z.B. die normale Mitgliederrolle als Autorole) sind harmlos."""
     async with get_db_session() as db:
-        result = await db.execute(select(GuildRole.discord_role_id).where(GuildRole.guild_id == guild_id))
+        result = await db.execute(
+            select(GuildRole.discord_role_id).where(GuildRole.guild_id == guild_id, GuildRole.level != Level.MEMBER)
+        )
         return {row[0] for row in result.all()}
 
 

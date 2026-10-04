@@ -99,6 +99,7 @@ async def seed(db_session):
     db_session.add(Guild(id=1, name="Wikinger"))
     await db_session.commit()
     db_session.add(GuildRole(guild_id=1, discord_role_id=MOD, level=Level.MOD))
+    db_session.add(GuildRole(guild_id=1, discord_role_id=KARL, level=Level.MEMBER))  # Grundstufe: bleibt vergebbar
     await db_session.commit()
 
 
