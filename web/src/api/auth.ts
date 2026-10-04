@@ -7,6 +7,8 @@ export interface CurrentUser {
   user_id: string;
   guild_id: string;
   level: Level;
+  // Faehigkeiten wie "server.control" (bot/core/capabilities.py)
+  capabilities?: string[];
 }
 
 export async function getMe(): Promise<CurrentUser> {

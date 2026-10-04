@@ -72,6 +72,40 @@ async def change_cog(
     return {"ok": True, "message": f"Cog `{name}` {done}."}
 
 
+class CapabilityOut(BaseModel):
+    key: str
+    label: str
+    default: Literal["member", "mod", "admin", "owner"]
+    role_ids: list[Snowflake]
+
+
+@router.get("/capabilities", response_model=list[CapabilityOut])
+async def list_capabilities(user: CurrentUser = Depends(require_level(Level.OWNER))) -> list[CapabilityOut]:
+    from bot.core.capabilities import CAPABILITIES, capability_roles
+
+    mapping = await capability_roles(user.guild_id)
+    return [
+        CapabilityOut(key=key, label=cap.label, default=cap.default.value, role_ids=mapping[key])
+        for key, cap in CAPABILITIES.items()
+    ]
+
+
+class CapabilitiesIn(BaseModel):
+    roles: dict[str, list[Snowflake]]
+
+
+@router.put("/capabilities")
+async def put_capabilities(body: CapabilitiesIn, user: CurrentUser = Depends(require_level(Level.OWNER))) -> dict:
+    from bot.core.capabilities import CAPABILITIES, save_capability_roles
+
+    unknown = set(body.roles) - set(CAPABILITIES)
+    if unknown:
+        raise HTTPException(400, f"Unbekannte Fähigkeit: {', '.join(sorted(unknown))}")
+    guild = runtime.bot.get_guild(user.guild_id) if runtime.bot else None
+    await save_capability_roles(user.guild_id, guild.name if guild else str(user.guild_id), body.roles)
+    return {"ok": True, "message": "Gespeichert – gilt sofort."}
+
+
 class DiscordRoleOut(BaseModel):
     id: Snowflake
     name: str

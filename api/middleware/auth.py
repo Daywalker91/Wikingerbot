@@ -85,3 +85,26 @@ def require_level(minimum: Level):
         return user
 
     return dependency
+
+
+def member_role_ids(user: CurrentUser) -> list[int]:
+    """Discord-Rollen des Eingeloggten - aus dem laufenden Bot (die API laeuft im Bot-Prozess)."""
+    from bot.core import runtime
+
+    guild = runtime.bot.get_guild(user.guild_id) if runtime.bot else None
+    member = guild.get_member(user.user_id) if guild else None
+    return [role.id for role in member.roles] if member else []
+
+
+def require_capability(capability: str):
+    """FastAPI-Dependency: Standard-Stufe der Faehigkeit ODER eine zugeordnete Discord-Rolle
+    (bot/core/capabilities.py)."""
+
+    async def dependency(user: CurrentUser = Depends(get_current_user)) -> CurrentUser:
+        from bot.core.capabilities import allowed
+
+        if await allowed(user.guild_id, capability, user.level, member_role_ids(user)):
+            return user
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Unzureichende Berechtigung")
+
+    return dependency

@@ -6,6 +6,11 @@ dafür nötig ist. Level-Hierarchie (siehe [README.md](README.md#berechtigungssy
 (`guild_permissions.administrator`) erfüllt automatisch jede Anforderung,
 unabhängig von zugewiesenen Rollen.
 
+**Mod\***: Diese Befehle dürfen außer Mods auch Discord-Rollen, denen im Tab
+*Einstellungen → Zusatz-Berechtigungen* die passende Fähigkeit gegeben wurde
+(`server.control`, `whitelist.review`, `banner.refresh`) – z.B. Gameserver-Betreuer,
+die keine Mods sind. Dasselbe gilt für die entsprechenden Knöpfe in der Oberfläche.
+
 Commands mit `📍` posten öffentlich sichtbare Antworten (z.B. Kick/Ban-
 Bestätigungen), alle anderen antworten ephemer (nur der Ausführende sieht
 die Antwort), teils mit automatischer Selbstlöschung nach ~20s.
@@ -36,9 +41,9 @@ für die Konsolen-Filter/Event-Muster inkl. Regex-Grundlagen.
 |---|---|---|
 | `/server list` | Listet alle konfigurierten Server mit Live-Status | Member |
 | `/server status name:` | Detail-Status (Zustand, Uptime, Verbindungsadresse) eines Servers | Member |
-| `/server start name:` | 📍 Startet einen Server über den AMP-Controller | Mod |
-| `/server stop name:` | 📍 Stoppt einen Server | Mod |
-| `/server console name: command:` | Sendet einen rohen Konsolenbefehl an die Instanz | Mod |
+| `/server start name:` | 📍 Startet einen Server über den AMP-Controller | Mod\* |
+| `/server stop name:` | 📍 Stoppt einen Server | Mod\* |
+| `/server console name: command:` | Sendet einen rohen Konsolenbefehl an die Instanz | Mod\* |
 | `/server discover` | Listet AMP-Instanzen, die am Controller bekannt, aber noch nicht angelegt sind. Instanzen von Discord-Servern, auf denen der Bot nicht mehr ist, gelten als frei; `/server add` übernimmt sie samt eigener Muster (Kanäle, Banner und Whitelist-Rolle neu setzen) | Owner |
 | `/server add name: amp_instance_id: display_name: [host:]` | Legt einen neuen Server-Eintrag an. `host` ist nur die Anzeige-Adresse für Spieler und optional: leer = Standard-Spieladresse (Tab *Server*, sonst der Host aus `PUBLIC_URL`); ohne Port hängt der Bot den Spiel-Port an, den AMP für die Instanz meldet – bei jeder Anzeige frisch, Port-Änderungen in AMP kommen also mit. Ein eigener Port im Eintrag hat Vorrang. Erkennt die Steam-App-ID automatisch aus AMPs `DisplayImageSource`, falls vorhanden (siehe `/server steam_appid` für manuelle Korrektur) | Owner |
 | `/server remove name:` | Entfernt einen Server-Eintrag nach Rückfrage – mit eigenen Mustern, Filter-Ausnahmen und Whitelist-Anfragen; der Banner wird gelöscht. Die AMP-Instanz bleibt bestehen. Auch im Tab *Server* (Knopf *Entfernen*) | Owner |
@@ -113,9 +118,9 @@ es beim (Wieder-)Beitritt außerdem den Rang der Seite.
 |---|---|---|
 | `/whitelist channel channel:` | Setzt den Kanal, in dem Anfragen zur Freigabe erscheinen (Mods/Admins) | Owner |
 | `/whitelist request server: ign:` | Beantragt Whitelist-Zugang; `ign` weglassen, um den zuletzt genutzten In-Game-Namen wiederzuverwenden | Member |
-| `/whitelist list status:` | Listet Anfragen nach Status (Default: `pending`) | Mod |
-| `/whitelist approve request_id:` | Genehmigt eine Anfrage (Fallback zum Accept-Button) | Mod |
-| `/whitelist deny request_id: reason:` | Lehnt eine Anfrage ab (Fallback zum Deny-Button) | Mod |
+| `/whitelist list status:` | Listet Anfragen nach Status (Default: `pending`) | Mod\* |
+| `/whitelist approve request_id:` | Genehmigt eine Anfrage (Fallback zum Accept-Button) | Mod\* |
+| `/whitelist deny request_id: reason:` | Lehnt eine Anfrage ab (Fallback zum Deny-Button) | Mod\* |
 | `/whitelist donator user: enabled:` | Setzt/entfernt den Donator-Status eines Nutzers (zeigt sich als Stern-Badge auf Bannern von Servern, bei denen dieser Nutzer freigeschaltet ist) | Owner |
 
 Anfragen erscheinen im konfigurierten Kanal als Embed mit **Annehmen**/
@@ -141,7 +146,7 @@ Alles hier geht auch im Tab *Banner* der Weboberfläche, mit Live-Vorschau.
 | `/banner theme name: theme:` | Setzt ein eingebautes Verlaufs-Theme, löscht eigenes Hintergrundbild/Farben | Owner |
 | `/banner background name: image:` | Lädt ein eigenes Hintergrundbild hoch (PNG/JPEG/WebP, max. 8 MB), löscht Theme/Farben | Owner |
 | `/banner customize name:` | Interaktiver Editor (Start-/Endfarbe + Unschärfe ohne Hintergrundbild, sonst Schriftfarbe + Unschärfe) mit Live-Vorschau, Übernehmen-/Abbrechen-Buttons | Owner |
-| `/banner refresh name:` | Aktualisiert den Banner sofort, ohne auf die 60s-Loop zu warten | Mod |
+| `/banner refresh name:` | Aktualisiert den Banner sofort, ohne auf die 60s-Loop zu warten | Mod\* |
 
 **Hintergrund-Priorität** (höchste zuerst): eigenes hochgeladenes Bild →
 automatisch erkanntes Steam-Artwork (aus `Server.steam_app_id`, siehe
@@ -173,7 +178,7 @@ stur jede Minute erneut anzurennen.
 | `/bannergroup theme group: theme:` | Wie `/banner theme` — nur im `combined`-Layout wirksam | Owner |
 | `/bannergroup background group: image:` | Wie `/banner background` — nur im `combined`-Layout wirksam | Owner |
 | `/bannergroup customize group:` | Wie `/banner customize` — nur im `combined`-Layout wirksam | Owner |
-| `/bannergroup refresh group:` | Aktualisiert die Gruppe sofort | Mod |
+| `/bannergroup refresh group:` | Aktualisiert die Gruppe sofort | Mod\* |
 | `/bannergroup disable group:` | Löst die Gruppe komplett auf (Mitglieder werden freigegeben, Nachricht gelöscht) | Owner |
 
 Ein Server gehört zu maximal einer Gruppe. Zwei Layouts stehen zur Wahl:

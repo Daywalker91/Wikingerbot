@@ -27,7 +27,8 @@ const CAN_MANAGE_LEVELS = ["mod", "admin", "owner"];
 
 export default function ServerPage() {
   const { user } = useAuth();
-  const canManage = user !== null && CAN_MANAGE_LEVELS.includes(user.level);
+  const canManage =
+    user !== null && (CAN_MANAGE_LEVELS.includes(user.level) || (user.capabilities ?? []).includes("server.control"));
   const isOwner = user?.level === "owner";
 
   const [servers, setServers] = useState<ServerStatus[] | null>(null);

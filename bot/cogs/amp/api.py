@@ -14,7 +14,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from api.middleware.auth import CurrentUser, get_current_user, require_level
+from api.middleware.auth import CurrentUser, get_current_user, require_capability, require_level
 from bot.cogs.amp.registry import add_server, delete_banner_message, known_instance_ids, remove_server
 from bot.core import runtime
 from bot.core.amp_client import amp_client
@@ -236,7 +236,7 @@ async def delete_server(server_id: int, user: CurrentUser = Depends(require_leve
 @router.post("/{server_id}/start", response_model=ServerActionResult)
 async def start_server(
     server_id: int,
-    user: CurrentUser = Depends(require_level(Level.MOD)),
+    user: CurrentUser = Depends(require_capability("server.control")),
     db: AsyncSession = Depends(get_db),
 ) -> ServerActionResult:
     server = await _get_scoped_server(db, server_id, user.guild_id)
@@ -250,7 +250,7 @@ async def start_server(
 @router.post("/{server_id}/stop", response_model=ServerActionResult)
 async def stop_server(
     server_id: int,
-    user: CurrentUser = Depends(require_level(Level.MOD)),
+    user: CurrentUser = Depends(require_capability("server.control")),
     db: AsyncSession = Depends(get_db),
 ) -> ServerActionResult:
     server = await _get_scoped_server(db, server_id, user.guild_id)
@@ -264,7 +264,7 @@ async def stop_server(
 @router.get("/{server_id}/console", response_model=list[ConsoleLineOut])
 async def get_console(
     server_id: int,
-    user: CurrentUser = Depends(require_level(Level.MOD)),
+    user: CurrentUser = Depends(require_capability("server.control")),
     db: AsyncSession = Depends(get_db),
 ) -> list[ConsoleLineOut]:
     """Liefert neue Konsolenzeilen seit dem letzten Poll dieser AMP-Instanz-Session.
@@ -288,7 +288,7 @@ async def get_console(
 async def send_console_command(
     server_id: int,
     body: ConsoleCommandBody,
-    user: CurrentUser = Depends(require_level(Level.MOD)),
+    user: CurrentUser = Depends(require_capability("server.control")),
     db: AsyncSession = Depends(get_db),
 ) -> ServerActionResult:
     server = await _get_scoped_server(db, server_id, user.guild_id)

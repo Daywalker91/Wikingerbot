@@ -19,7 +19,7 @@ from PIL import Image
 from pydantic import BaseModel, Field, field_validator
 from sqlalchemy import select
 
-from api.middleware.auth import CurrentUser, require_level
+from api.middleware.auth import CurrentUser, require_capability, require_level
 from api.types import Snowflake
 from bot.cogs.banner.cog import (
     ALLOWED_CONTENT_TYPES,
@@ -232,7 +232,7 @@ async def _after_save(stale: tuple | None, kind: str, target_id: int, post: bool
 
 
 @router.post("/servers/{server_id}/refresh")
-async def refresh_server(server_id: int, user: CurrentUser = Depends(require_level(Level.MOD))) -> dict:
+async def refresh_server(server_id: int, user: CurrentUser = Depends(require_capability("banner.refresh"))) -> dict:
     async with get_db_session() as db:
         server = await _own_server(db, user.guild_id, server_id)
         enabled = server.banner_enabled and server.banner_group_id is None
@@ -345,7 +345,7 @@ async def delete_group(group_id: int, user: CurrentUser = Depends(require_level(
 
 
 @router.post("/groups/{group_id}/refresh")
-async def refresh_group(group_id: int, user: CurrentUser = Depends(require_level(Level.MOD))) -> dict:
+async def refresh_group(group_id: int, user: CurrentUser = Depends(require_capability("banner.refresh"))) -> dict:
     async with get_db_session() as db:
         await _own_group(db, user.guild_id, group_id)
     return await _after_save(None, "group", group_id, True)

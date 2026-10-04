@@ -15,6 +15,7 @@ from bot.cogs.banner.embed import build_embed, build_group_embed
 from bot.cogs.banner.image import extract_players, render_banner, render_banner_group
 from bot.cogs.banner.themes import BANNER_THEMES, BLUR_LEVELS, PRESET_COLORS
 from bot.core.base_cog import BaseCog
+from bot.core.capabilities import require_capability
 from bot.core.discord_utils import send_temp_followup as _followup_temp
 from bot.core.entities import ensure_guild
 from bot.core.permissions import Level, check_level_interaction, require_role
@@ -709,7 +710,7 @@ class BannerCog(BaseCog):
     @banner_group.command(name="refresh", description="Aktualisiert den Banner sofort")
     @app_commands.describe(name="Interner Servername (instance_name)")
     @app_commands.autocomplete(name=_autocomplete_instance_name)
-    @require_role(Level.MOD)
+    @require_capability("banner.refresh")
     async def banner_refresh(self, interaction: discord.Interaction, name: str) -> None:
         await interaction.response.defer(ephemeral=True)
         server = await _get_server(interaction.guild_id, name)
@@ -939,7 +940,7 @@ class BannerCog(BaseCog):
     @bannergroup_group.command(name="refresh", description="Aktualisiert eine Banner-Gruppe sofort")
     @app_commands.describe(group="Gruppenname")
     @app_commands.autocomplete(group=_autocomplete_group_name)
-    @require_role(Level.MOD)
+    @require_capability("banner.refresh")
     async def bannergroup_refresh(self, interaction: discord.Interaction, group: str) -> None:
         await interaction.response.defer(ephemeral=True)
         group_row = await _get_group(interaction.guild_id, group)

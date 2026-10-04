@@ -20,7 +20,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.types import Snowflake
-from api.middleware.auth import CurrentUser, require_level
+from api.middleware.auth import CurrentUser, require_capability, require_level
 from bot.core.amp_client import amp_client
 from db.models.role import Level
 from db.models.server import Server
@@ -67,7 +67,7 @@ async def _get_scoped_request(
 @router.get("/requests", response_model=list[WhitelistRequestOut])
 async def list_requests(
     status: Literal["pending", "approved", "denied"] = "pending",
-    user: CurrentUser = Depends(require_level(Level.MOD)),
+    user: CurrentUser = Depends(require_capability("whitelist.review")),
     db: AsyncSession = Depends(get_db),
 ) -> list[WhitelistRequestOut]:
     result = await db.execute(
@@ -94,7 +94,7 @@ async def list_requests(
 @router.post("/requests/{request_id}/approve", response_model=ActionResult)
 async def approve_request(
     request_id: int,
-    user: CurrentUser = Depends(require_level(Level.MOD)),
+    user: CurrentUser = Depends(require_capability("whitelist.review")),
     db: AsyncSession = Depends(get_db),
 ) -> ActionResult:
     request, server = await _get_scoped_request(db, request_id, user.guild_id)
@@ -116,7 +116,7 @@ async def approve_request(
 async def deny_request(
     request_id: int,
     body: DenyBody,
-    user: CurrentUser = Depends(require_level(Level.MOD)),
+    user: CurrentUser = Depends(require_capability("whitelist.review")),
     db: AsyncSession = Depends(get_db),
 ) -> ActionResult:
     request, _server = await _get_scoped_request(db, request_id, user.guild_id)

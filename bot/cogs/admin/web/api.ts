@@ -22,6 +22,25 @@ export async function removeGuildRole(id: number): Promise<void> {
   await apiFetch<{ ok: boolean }>(`/admin/roles/${id}`, { method: "DELETE" });
 }
 
+export interface CapabilityItem {
+  key: string;
+  label: string;
+  default: PermissionLevel;
+  role_ids: string[];
+}
+
+export async function getCapabilities(): Promise<CapabilityItem[]> {
+  return apiFetch<CapabilityItem[]>("/admin/capabilities");
+}
+
+export async function saveCapabilities(roles: Record<string, string[]>): Promise<{ message: string }> {
+  return apiFetch<{ message: string }>("/admin/capabilities", {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ roles }),
+  });
+}
+
 export async function getCogsStatus(): Promise<CogsStatus> {
   return apiFetch<CogsStatus>("/admin/cogs");
 }

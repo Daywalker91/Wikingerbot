@@ -10,6 +10,7 @@ from sqlalchemy import select
 from bot.cogs.amp.registry import add_server, delete_banner_message, known_instance_ids, remove_server
 from bot.core.amp_client import amp_client
 from bot.core.base_cog import BaseCog
+from bot.core.capabilities import require_capability
 from bot.core.console_filters import (
     BUILTIN_EVENT_PATTERNS,
     BUILTIN_FILTER_PATTERNS,
@@ -333,7 +334,7 @@ class AMPCog(BaseCog):
     @server_group.command(name="start", description="Startet einen Server")
     @app_commands.describe(name="Interner Servername (instance_name)")
     @app_commands.autocomplete(name=_autocomplete_instance_name)
-    @require_role(Level.MOD)
+    @require_capability("server.control")
     async def server_start(self, interaction: discord.Interaction, name: str) -> None:
         await interaction.response.defer(ephemeral=True)
 
@@ -352,7 +353,7 @@ class AMPCog(BaseCog):
     @server_group.command(name="stop", description="Stoppt einen Server")
     @app_commands.describe(name="Interner Servername (instance_name)")
     @app_commands.autocomplete(name=_autocomplete_instance_name)
-    @require_role(Level.MOD)
+    @require_capability("server.control")
     async def server_stop(self, interaction: discord.Interaction, name: str) -> None:
         await interaction.response.defer(ephemeral=True)
 
@@ -371,7 +372,7 @@ class AMPCog(BaseCog):
     @server_group.command(name="console", description="Sendet einen Konsolenbefehl")
     @app_commands.describe(name="Interner Servername (instance_name)", command="Konsolenbefehl")
     @app_commands.autocomplete(name=_autocomplete_instance_name)
-    @require_role(Level.MOD)
+    @require_capability("server.control")
     async def server_console(self, interaction: discord.Interaction, name: str, command: str) -> None:
         await interaction.response.defer(ephemeral=True)
 

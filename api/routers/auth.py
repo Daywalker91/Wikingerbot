@@ -165,5 +165,14 @@ async def logout(response: Response) -> dict:
 @router.get("/me")
 async def me(user: CurrentUser = Depends(get_current_user)) -> dict:
     """Session-Introspektion fuers Frontend - wer ist gerade eingeloggt, ohne Reload."""
+    from api.middleware.auth import member_role_ids
+    from bot.core.capabilities import member_capabilities
+
     # IDs als Text - siehe api/types.py
-    return {"user_id": str(user.user_id), "guild_id": str(user.guild_id), "level": user.level.value}
+    return {
+        "user_id": str(user.user_id),
+        "guild_id": str(user.guild_id),
+        "level": user.level.value,
+        # Faehigkeiten (z.B. server.control) - Stufe oder zugeordnete Discord-Rolle
+        "capabilities": await member_capabilities(user.guild_id, user.level, member_role_ids(user)),
+    }

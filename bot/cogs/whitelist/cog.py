@@ -5,6 +5,7 @@ from sqlalchemy import select
 
 from bot.core.amp_client import amp_client
 from bot.core.base_cog import BaseCog
+from bot.core.capabilities import check_capability_interaction, require_capability
 from bot.core.discord_utils import send_temp_followup
 from bot.core.entities import ensure_guild, ensure_user
 from bot.core.guild_config import get_config, set_config
@@ -127,7 +128,7 @@ class WhitelistReviewView(discord.ui.View):
         self.deny_button.custom_id = f"whitelist_deny:{request_id}"
 
     async def _handle(self, interaction: discord.Interaction, approved: bool) -> None:
-        if not await check_level_interaction(interaction, self.guild_id, Level.MOD):
+        if not await check_capability_interaction(interaction, self.guild_id, "whitelist.review"):
             return
         await interaction.response.defer()
 
@@ -267,7 +268,7 @@ class WhitelistCog(BaseCog):
             app_commands.Choice(name="Abgelehnt", value="denied"),
         ]
     )
-    @require_role(Level.MOD)
+    @require_capability("whitelist.review")
     async def whitelist_list_cmd(
         self, interaction: discord.Interaction, status: app_commands.Choice[str] | None = None
     ) -> None:
@@ -296,7 +297,7 @@ class WhitelistCog(BaseCog):
     @whitelist_group.command(name="approve", description="Genehmigt eine Whitelist-Anfrage")
     @app_commands.describe(request_id="Anfrage-ID")
     @app_commands.autocomplete(request_id=_autocomplete_pending_request)
-    @require_role(Level.MOD)
+    @require_capability("whitelist.review")
     async def whitelist_approve_cmd(self, interaction: discord.Interaction, request_id: int) -> None:
         await interaction.response.defer(ephemeral=True)
         _, summary = await _resolve_request(request_id, True, interaction.user)
@@ -305,7 +306,7 @@ class WhitelistCog(BaseCog):
     @whitelist_group.command(name="deny", description="Lehnt eine Whitelist-Anfrage ab")
     @app_commands.describe(request_id="Anfrage-ID", reason="Begruendung")
     @app_commands.autocomplete(request_id=_autocomplete_pending_request)
-    @require_role(Level.MOD)
+    @require_capability("whitelist.review")
     async def whitelist_deny_cmd(
         self, interaction: discord.Interaction, request_id: int, reason: str | None = None
     ) -> None:
