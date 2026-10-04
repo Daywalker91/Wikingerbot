@@ -6,7 +6,9 @@
 - Selbstwahl-Rollen: eine Bot-Nachricht mit Knoepfen, jeder Knopf schaltet
   eine Rolle an/aus. Die Rolle steckt in der custom_id des Knopfs
   (DynamicItem) - die Knoepfe funktionieren damit auch nach einem Neustart
-  ohne eigene Tabelle; die Nachricht selbst ist der Speicher.
+  ohne eigene Tabelle; die Nachricht selbst ist der Speicher. Welche
+  Nachrichten Panels sind, merkt sich der Bot in guild_config "role_panels"
+  (fuer den Tab Rollen der Weboberflaeche).
 
 Die Raenge/Berechtigungsrollen des Bots (guild_roles) und Rollen mit
 Verwaltungsrechten lassen sich bewusst NICHT selbst waehlen.
@@ -100,6 +102,36 @@ async def get_autoroles(guild_id: int) -> list[int]:
 
 async def set_autoroles(guild: discord.Guild, role_ids: list[int]) -> None:
     await set_config(guild.id, "autorole_ids", json.dumps(role_ids), guild.name)
+
+
+PANELS_KEY = "role_panels"  # [{"channel_id": ..., "message_id": ...}, ...]
+
+
+async def get_panels(guild_id: int) -> list[tuple[int, int]]:
+    try:
+        stored = json.loads(await get_config(guild_id, PANELS_KEY, "[]") or "[]")
+    except json.JSONDecodeError:
+        stored = []
+    return [(int(p["channel_id"]), int(p["message_id"])) for p in stored if p.get("channel_id") and p.get("message_id")]
+
+
+async def set_panels(guild: discord.Guild, panels: list[tuple[int, int]]) -> None:
+    unique = list(dict.fromkeys(panels))
+    await set_config(guild.id, PANELS_KEY, json.dumps([{"channel_id": str(c), "message_id": str(m)} for c, m in unique]), guild.name)
+
+
+async def remember_panel(guild: discord.Guild, channel_id: int, message_id: int) -> None:
+    panels = await get_panels(guild.id)
+    if (channel_id, message_id) not in panels:
+        await set_panels(guild, [*panels, (channel_id, message_id)])
+
+
+async def forget_panel(guild: discord.Guild, message_id: int) -> None:
+    await set_panels(guild, [p for p in await get_panels(guild.id) if p[1] != message_id])
+
+
+def panel_embed(title: str, text: str) -> discord.Embed:
+    return discord.Embed(title=title[:256], description=text[:4000], color=0x8B5A2B)
 
 
 class RoleToggleButton(discord.ui.DynamicItem[discord.ui.Button], template=r"wb:role:(?P<role_id>\d+)"):
@@ -288,12 +320,13 @@ class RolesCog(BaseCog):
         titel: str,
         text: str = "Klick auf einen Knopf, um dir die Rolle zu geben oder wieder zu nehmen.",
     ) -> None:
-        embed = discord.Embed(title=titel[:256], description=text.replace("\\n", "\n")[:4000], color=0x8B5A2B)
+        embed = panel_embed(titel, text.replace("\\n", "\n"))
         try:
             message = await kanal.send(embed=embed)
         except discord.HTTPException as error:
             await interaction.response.send_message(f"Konnte nicht posten: {error.text}", ephemeral=True)
             return
+        await remember_panel(interaction.guild, kanal.id, message.id)
         await interaction.response.send_message(
             f"Panel erstellt: {message.jump_url}\nJetzt Knöpfe hinzufügen mit `/rollen panel knopf` "
             "und diesem Link.",

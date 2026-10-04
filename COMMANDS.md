@@ -218,6 +218,10 @@ Rollen/Kanäle/Server verwalten, Bannen, Kicken, Timeout, …) und – bei den
 Knöpfen – die Berechtigungsrollen des Bots (Mod/Admin/…). Braucht das Bot-Recht
 **Rollen verwalten**.
 
+Alles hier geht auch im Tab *Rollen* der Weboberfläche: Autoroles wählen, Panels
+anlegen, Titel/Text ändern, Knöpfe hinzufügen, entfernen und umsortieren. Panels,
+die vor dem Tab per Befehl erstellt wurden, lassen sich dort per Link übernehmen.
+
 | Command | Beschreibung | Level |
 |---|---|---|
 | `/rollen auto hinzufuegen rolle:` | Rolle wird neuen Mitgliedern automatisch gegeben | Admin |
