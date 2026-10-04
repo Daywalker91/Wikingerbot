@@ -114,12 +114,16 @@ INSTANCE_ACTIONS = ("manage", "start", "stop", "restart")
 ADMIN_CONTROLLER = ("createinstance", "deleteinstances", "reconfigure", "selfassigninstance")
 
 
-def controller_plan(spec, instance_ids: dict[str, str]) -> dict:
+def controller_plan(spec, instance_ids: dict[str, str], controller_ids: tuple[str, ...] = ()) -> dict:
     """Controller: Anmelden und je Spiel-Instanz Manage/Start/Stop/Restart.
 
     instance_ids: Instanz-ID -> Anzeigename."""
     nodes = [n for n, _ in leaves(spec)]
-    login = [n for n in nodes if n.lower().endswith(".manage") and not n.lower().startswith("instances.")][:1]
+    # Anmelden am Panel = "Manage" auf der Instanz des Controllers selbst (ADS) - nur das,
+    # nie dessen Start/Stop. Rueckfall: ein "...Manage" ausserhalb der Instanzen.
+    login = [n for n in nodes if any(c.lower() in n.lower() for c in controller_ids) and n.lower().endswith(".manage")]
+    if not login:
+        login = [n for n in nodes if n.lower().endswith(".manage") and not n.lower().startswith("instances.")][:1]
     per_instance, missing = {}, []
     for iid, name in instance_ids.items():
         own = [n for n in nodes if n.lower().startswith("instances.") and iid.lower() in n.lower()]
@@ -164,6 +168,7 @@ async def run(
     instances: dict[str, str],
     *,
     apply: bool,
+    controller_ids: tuple[str, ...] = (),
 ) -> SetupReport:
     """Pruefen (apply=False) oder einrichten (apply=True).
 
@@ -176,7 +181,7 @@ async def run(
     except Exception as error:
         report.errors.append(f"Rechte-Liste des Controllers nicht lesbar ({_short(error)}) – mit einem Super-Admin-Konto anmelden oder dem Bot kurz Super Admins geben.")
         return report
-    report.controller = controller_plan(spec, instances)
+    report.controller = controller_plan(spec, instances, controller_ids)
 
     role_ids: dict[str, str] = {}
     if apply:

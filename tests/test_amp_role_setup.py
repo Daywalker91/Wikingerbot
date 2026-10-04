@@ -176,6 +176,9 @@ async def test_api_uses_fresh_login_and_remembers_done_servers(db_session, monke
     amp = FakeAMP()
     logins = []
     monkeypatch.setattr(amp_client, "fresh_calls", lambda *login: logins.append(login) or (amp.controller, amp.instance))
+    from unittest.mock import AsyncMock
+
+    monkeypatch.setattr(amp_client, "controller_instance_ids", AsyncMock(return_value=["ads-1"]))
 
     async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
         client.cookies.set("session", create_access_token(100, 1, Level.OWNER))
@@ -200,3 +203,13 @@ async def test_api_uses_fresh_login_and_remembers_done_servers(db_session, monke
 def test_controller_plan_lists_other_nodes_for_diagnosis():
     plan = controller_plan(CONTROLLER_SPEC, {"game-1": "Vein"})
     assert "ADS.Manage = Manage" in plan["other_nodes"]
+
+
+def test_login_is_manage_on_the_controller_instance():
+    spec = [
+        node("Instances", node("Instances.ads-1", node("Instances.ads-1.Manage"), node("Instances.ads-1.Stop"))),
+        node("Instances.game-1", node("Instances.game-1.Manage")),
+    ]
+    plan = controller_plan(spec, {"game-1": "Vein"}, ("ads-1",))
+    assert plan["login"] == ["Instances.ads-1.Manage"]  # nur Manage, nie Start/Stop des Controllers
+    assert plan["instances"] == {"Vein": ["Instances.game-1.Manage"]}

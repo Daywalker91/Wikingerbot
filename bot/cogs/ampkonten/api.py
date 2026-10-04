@@ -166,7 +166,11 @@ async def _run_setup(guild_id: int, apply: bool, login: AdminLogin | None) -> di
     login = login or AdminLogin()
     controller_call, instance_call = amp_client.fresh_calls(login.username.strip(), login.password, login.token.strip())
     try:
-        report = await role_setup.run(controller_call, instance_call, instances, apply=apply)
+        try:
+            controller_ids = tuple(await amp_client.controller_instance_ids())
+        except Exception:
+            controller_ids = ()
+        report = await role_setup.run(controller_call, instance_call, instances, apply=apply, controller_ids=controller_ids)
     except Exception as error:  # z.B. Anmeldung abgelehnt - ohne die Zugangsdaten zu nennen
         raise HTTPException(400, "Anmeldung bei AMP fehlgeschlagen – Benutzername, Passwort oder Zwei-Faktor-Code prüfen.") from None
     finally:
