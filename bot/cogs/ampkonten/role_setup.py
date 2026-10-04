@@ -62,6 +62,11 @@ TIERS: tuple[Tier, ...] = (
 )
 
 # In jeder Instanz fuer alle Stufen ausdruecklich verboten
+# Stand der Rechte-Regeln oben - erhoehen, wenn sich TIERS/CAPABILITIES/DENY aendern: dann
+# gelten bereits eingerichtete Instanzen als veraltet und werden beim naechsten Einrichten
+# wieder mitgenommen.
+PLAN_VERSION = 1
+
 DENY = ("Core.UserManagement.*", "Core.RoleManagement.*", "Core.AuditLog.*")
 
 
@@ -148,6 +153,7 @@ class SetupReport:
     created_roles: list[str] = field(default_factory=list)
     changed: int = 0
     errors: list[str] = field(default_factory=list)
+    skipped: list[str] = field(default_factory=list)  # schon eingerichtet, diesmal ausgelassen
 
 
 def _short(error: Exception) -> str:
@@ -169,12 +175,15 @@ async def run(
     *,
     apply: bool,
     controller_ids: tuple[str, ...] = (),
+    only: set[str] | None = None,
 ) -> SetupReport:
     """Pruefen (apply=False) oder einrichten (apply=True).
 
     controller_call(endpoint, args) - Core-Endpunkt am Controller
     instance_call(instance_id, endpoint, args) - Core-Endpunkt in einer Instanz
-    instances - Instanz-ID -> Anzeigename (nur Spiel-Instanzen)"""
+    instances - Instanz-ID -> Anzeigename (nur Spiel-Instanzen)
+    only - nur diese Instanz-IDs in den Instanzen selbst einrichten (None = alle); der
+           Controller-Teil gilt immer fuer alle, er ist schnell und braucht keine laufende Instanz"""
     report = SetupReport()
     try:
         spec = await controller_call("GetPermissionsSpec", {})
@@ -206,10 +215,16 @@ async def run(
             return report
 
     for iid, name in instances.items():
+        if only is not None and iid not in only:
+            report.skipped.append(name)
+            continue
         try:
             plan = instance_plan(await instance_call(iid, "GetPermissionsSpec", {}))
         except Exception as error:
-            report.instances[name] = {"error": f"Rechte-Liste nicht lesbar: {_short(error)}"}
+            if "Instance Unavailable" in str(error):
+                report.instances[name] = {"error": "Instanz läuft nicht – starten und dann erneut einrichten"}
+            else:
+                report.instances[name] = {"error": f"Rechte-Liste nicht lesbar: {_short(error)}"}
             continue
         report.instances[name] = plan
         if not apply:

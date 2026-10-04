@@ -108,7 +108,7 @@ async def put_config(body: AmpKontenConfig, user: CurrentUser = Depends(require_
     return {"ok": True}
 
 
-DONE_KEY = "ampkonten_roles_done"  # Instanz-IDs, in denen die Gameserver-Rollen eingerichtet sind
+DONE_KEY = "ampkonten_roles_done"  # Instanz-ID -> Rechte-Stand (role_setup.PLAN_VERSION), mit dem eingerichtet wurde
 
 
 async def _game_instances(guild_id: int) -> dict[str, str]:
@@ -123,17 +123,26 @@ async def _game_instances(guild_id: int) -> dict[str, str]:
     return {iid: name for iid, name in rows}
 
 
-async def _done() -> list[str]:
+async def _done() -> dict[str, int]:
+    """Eingerichtete Instanzen mit ihrem Rechte-Stand (aeltere Bot-Versionen: nur eine Liste = Stand 1)."""
     try:
-        return json.loads(await get_bot_setting(DONE_KEY, "[]") or "[]")
+        data = json.loads(await get_bot_setting(DONE_KEY, "{}") or "{}")
     except json.JSONDecodeError:
-        return []
+        return {}
+    if isinstance(data, list):
+        return {iid: 1 for iid in data}
+    return {str(iid): int(v) for iid, v in data.items()} if isinstance(data, dict) else {}
+
+
+async def _up_to_date() -> set[str]:
+    return {iid for iid, version in (await _done()).items() if version >= role_setup.PLAN_VERSION}
 
 
 @router.get("/roles/status")
 async def roles_status(user: CurrentUser = Depends(require_level(Level.OWNER))) -> dict:
     instances = await _game_instances(user.guild_id)
-    done = set(await _done())
+    known = await _done()
+    done = await _up_to_date()
     return {
         "tiers": [
             {
@@ -144,7 +153,8 @@ async def roles_status(user: CurrentUser = Depends(require_level(Level.OWNER))) 
             }
             for t in TIERS
         ],
-        "pending": sorted(name for iid, name in instances.items() if iid not in done),
+        "pending": sorted(name for iid, name in instances.items() if iid not in known),
+        "outdated": sorted(name for iid, name in instances.items() if iid in known and iid not in done),
         "done": sorted(name for iid, name in instances.items() if iid in done),
     }
 
@@ -158,10 +168,12 @@ class AdminLogin(BaseModel):
     token: str = Field(default="", max_length=20)  # Zwei-Faktor-Code, falls aktiv
 
 
-async def _run_setup(guild_id: int, apply: bool, login: AdminLogin | None) -> dict:
+async def _run_setup(guild_id: int, apply: bool, login: AdminLogin | None, redo: bool = False) -> dict:
     instances = await _game_instances(guild_id)
     if not instances:
         raise HTTPException(400, "Noch keine Gameserver angelegt (Tab Server).")
+    # schon eingerichtete Instanzen auslassen - ausser ausdruecklich "alle erneut"
+    only = None if redo else set(instances) - await _up_to_date()
     # frische Anmeldung: mit Admin-Zugangsdaten oder als Bot (gerade vergebene Super Admins gelten sofort)
     login = login or AdminLogin()
     controller_call, instance_call = amp_client.fresh_calls(login.username.strip(), login.password, login.token.strip())
@@ -170,31 +182,39 @@ async def _run_setup(guild_id: int, apply: bool, login: AdminLogin | None) -> di
             controller_ids = tuple(await amp_client.controller_instance_ids())
         except Exception:
             controller_ids = ()
-        report = await role_setup.run(controller_call, instance_call, instances, apply=apply, controller_ids=controller_ids)
+        report = await role_setup.run(
+            controller_call, instance_call, instances, apply=apply, controller_ids=controller_ids, only=only
+        )
     except Exception as error:  # z.B. Anmeldung abgelehnt - ohne die Zugangsdaten zu nennen
         raise HTTPException(400, "Anmeldung bei AMP fehlgeschlagen – Benutzername, Passwort oder Zwei-Faktor-Code prüfen.") from None
     finally:
         login.password = ""
     if apply:
-        ok = [iid for iid, name in instances.items() if not report.instances.get(name, {}).get("error")
+        ok = [iid for iid, name in instances.items() if name in report.instances and not report.instances[name].get("error")
               and not any(isinstance(v, dict) and v.get("error") for v in report.instances.get(name, {}).values())]
         if not report.errors:
-            await set_bot_setting(DONE_KEY, json.dumps(sorted(set(await _done()) | set(ok))))
+            done = await _done()
+            done.update({iid: role_setup.PLAN_VERSION for iid in ok})
+            await set_bot_setting(DONE_KEY, json.dumps(dict(sorted(done.items()))))
         await available_roles(controller_call)  # neue Rollen gleich in die Auswahl
     return asdict(report)
 
 
 @router.post("/roles/check")
-async def roles_check(login: AdminLogin | None = None, user: CurrentUser = Depends(require_level(Level.OWNER))) -> dict:
+async def roles_check(
+    login: AdminLogin | None = None, redo: bool = False, user: CurrentUser = Depends(require_level(Level.OWNER))
+) -> dict:
     """Zeigt, welche Rechte gesetzt wuerden - aendert nichts."""
-    return await _run_setup(user.guild_id, apply=False, login=login)
+    return await _run_setup(user.guild_id, apply=False, login=login, redo=redo)
 
 
 @router.post("/roles/apply")
-async def roles_apply(login: AdminLogin | None = None, user: CurrentUser = Depends(require_level(Level.OWNER))) -> dict:
+async def roles_apply(
+    login: AdminLogin | None = None, redo: bool = False, user: CurrentUser = Depends(require_level(Level.OWNER))
+) -> dict:
     """Legt die Gameserver-Rollen an und setzt die Rechte - mit den Zugangsdaten eines
     AMP-Super-Admins (einmalig) oder wenn der Bot-Benutzer gerade Super Admins hat."""
-    return await _run_setup(user.guild_id, apply=True, login=login)
+    return await _run_setup(user.guild_id, apply=True, login=login, redo=redo)
 
 
 @router.post("/refresh-roles")

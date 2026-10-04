@@ -190,7 +190,21 @@ async def test_api_uses_fresh_login_and_remembers_done_servers(db_session, monke
         assert applied["changed"] > 0 and not applied["errors"]
         status = (await client.get("/ampkonten/roles/status")).json()
         assert status["done"] == ["Vein"] and status["pending"] == []
-    assert logins == [("", "", ""), ("daywalker", "geheim-123", "123456")]  # jede Aktion frisch, Admin-Daten nur durchgereicht
+
+        # zweiter Lauf: schon eingerichtete Instanz wird ausgelassen, ausser "alle erneut"
+        again = (await client.post("/ampkonten/roles/apply")).json()
+        assert again["skipped"] == ["Vein"] and "Vein" not in again["instances"]
+        redo = (await client.post("/ampkonten/roles/apply?redo=true")).json()
+        assert redo["skipped"] == [] and "Vein" in redo["instances"]
+
+        # neue Rechte-Regeln: Instanz gilt als veraltet und kommt wieder dran
+        from bot.cogs.ampkonten import role_setup
+
+        monkeypatch.setattr(role_setup, "PLAN_VERSION", role_setup.PLAN_VERSION + 1)
+        status = (await client.get("/ampkonten/roles/status")).json()
+        assert status["outdated"] == ["Vein"] and status["done"] == []
+        assert (await client.post("/ampkonten/roles/check")).json()["skipped"] == []
+    assert logins[:2] == [("", "", ""), ("daywalker", "geheim-123", "123456")]  # jede Aktion frisch, Admin-Daten nur durchgereicht
 
     from sqlalchemy import select
 
@@ -231,3 +245,13 @@ async def test_controller_instance_ids_skips_remote_targets(monkeypatch):
     client = AMPClient.__new__(AMPClient)
     monkeypatch.setattr(client, "_controller_client", lambda: controller, raising=False)
     assert await client.controller_instance_ids() == ["ads-ctrl"]
+
+
+async def test_unavailable_instance_gets_clear_hint():
+    amp = FakeAMP()
+
+    async def stopped(iid, endpoint, args):
+        raise RuntimeError("Instance Unavailable: The requested instance is not available at this time.")
+
+    report = await run(amp.controller, stopped, {"game-1": "Vein"}, apply=False)
+    assert "läuft nicht" in report.instances["Vein"]["error"]

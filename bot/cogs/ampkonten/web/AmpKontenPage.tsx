@@ -35,6 +35,7 @@ function RoleSetup({ onDone }: { onDone: () => void }) {
   const [busy, setBusy] = useState(false);
   const [note, setNote] = useState<string | null>(null);
   const [useAdmin, setUseAdmin] = useState(true);
+  const [redo, setRedo] = useState(false);
   const [login, setLogin] = useState<AdminLogin>({ username: "", password: "", token: "" });
 
   const loadStatus = useCallback(() => {
@@ -54,7 +55,7 @@ function RoleSetup({ onDone }: { onDone: () => void }) {
     setNote(null);
     const credentials = useAdmin ? login : null;
     try {
-      setReport(await (apply ? applyRoles(credentials) : checkRoles(credentials)));
+      setReport(await (apply ? applyRoles(credentials, redo) : checkRoles(credentials, redo)));
       setLogin({ ...login, password: "", token: "" }); // nichts im Browser liegen lassen
       setApplied(apply);
       if (apply) {
@@ -74,7 +75,8 @@ function RoleSetup({ onDone }: { onDone: () => void }) {
         Der Bot legt drei Rollen an und setzt ihre Rechte am Controller (Anmelden; die Spiel-Instanzen sehen, starten,
         stoppen und neustarten; Admins zusätzlich Instanzen anlegen, löschen und umbauen – nie AMP-Versionen hochziehen) und in jeder
         Spiel-Instanz. Nie: Benutzer- und Rollenverwaltung, Audit-Log, die Instanz des Bots. Erst <strong>Prüfen</strong>{" "}
-        (ändert nichts), dann <strong>Einrichten</strong>. Bei jedem neuen Gameserver erneut einrichten.
+        (ändert nichts), dann <strong>Einrichten</strong>. Schon eingerichtete Gameserver werden ausgelassen – bei neuen oder
+        gestoppten Gameservern einfach erneut einrichten.
       </p>
       <div style={{ margin: "8px 0" }}>
         <label>
@@ -107,6 +109,11 @@ function RoleSetup({ onDone }: { onDone: () => void }) {
           {status.pending.length > 0 && (
             <p style={{ ...muted, color: "var(--wb-accent-strong)" }}>Noch nicht eingerichtet: {status.pending.join(", ")}</p>
           )}
+          {(status.outdated ?? []).length > 0 && (
+            <p style={{ ...muted, color: "var(--wb-accent-strong)" }}>
+              Mit älteren Rechte-Regeln eingerichtet (werden beim nächsten Einrichten aktualisiert): {status.outdated!.join(", ")}
+            </p>
+          )}
           {status.done.length > 0 && <p style={muted}>Eingerichtet: {status.done.join(", ")}</p>}
         </>
       )}
@@ -117,6 +124,9 @@ function RoleSetup({ onDone }: { onDone: () => void }) {
         <button disabled={busy} onClick={() => void run(true)}>
           Einrichten
         </button>
+        <label style={muted}>
+          <input type="checkbox" checked={redo} onChange={(e) => setRedo(e.target.checked)} /> auch schon eingerichtete erneut
+        </label>
         {busy && <span style={muted}>läuft…</span>}
       </div>
       {note && <p>{note}</p>}
@@ -161,6 +171,7 @@ function SetupResult({ report, applied }: { report: SetupReport; applied: boolea
           )}
         </details>
       )}
+      {(report.skipped ?? []).length > 0 && <p style={muted}>Ausgelassen (schon eingerichtet): {report.skipped!.join(", ")}</p>}
       {Object.entries(report.instances).map(([name, plan]) => (
         <details key={name}>
           <summary>

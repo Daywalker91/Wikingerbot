@@ -50,11 +50,13 @@ export interface SetupReport {
   created_roles: string[];
   changed: number;
   errors: string[];
+  skipped?: string[];
 }
 
 export interface RolesStatus {
   tiers: { key: string; name: string; caps: string[] }[];
   pending: string[];
+  outdated?: string[];
   done: string[];
 }
 
@@ -71,5 +73,8 @@ const withLogin = (login: AdminLogin | null): RequestInit => ({
   body: JSON.stringify(login ?? {}),
 });
 
-export const checkRoles = (login: AdminLogin | null) => apiFetch<SetupReport>("/ampkonten/roles/check", withLogin(login));
-export const applyRoles = (login: AdminLogin | null) => apiFetch<SetupReport>("/ampkonten/roles/apply", withLogin(login));
+// redo: auch schon eingerichtete Instanzen erneut (sonst nur die offenen)
+export const checkRoles = (login: AdminLogin | null, redo = false) =>
+  apiFetch<SetupReport>(`/ampkonten/roles/check?redo=${redo}`, withLogin(login));
+export const applyRoles = (login: AdminLogin | null, redo = false) =>
+  apiFetch<SetupReport>(`/ampkonten/roles/apply?redo=${redo}`, withLogin(login));
