@@ -281,6 +281,15 @@ class AMPClient:
             return result["result"]
         return result
 
+    async def instance_core_call(self, instance_id: str, endpoint: str, args: dict | None = None):
+        """Wie core_call, aber in einer Instanz (z.B. Rollen-Rechte dieser Instanz)."""
+        result = await _with_timeout(
+            self._instance_client(instance_id).Core.api_call(f"Core/{endpoint}", args or {}), DEFAULT_TIMEOUT
+        )
+        if isinstance(result, dict) and set(result) == {"result"}:
+            return result["result"]
+        return result
+
     async def poll_console(self, instance_id: str) -> list[ConsoleLine]:
         """Neue Konsolenzeilen seit dem letzten Poll dieser Instanz-Session."""
         updates = await _with_timeout(

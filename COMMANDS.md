@@ -476,6 +476,16 @@ geändert werden. *Passwort vergessen* auf der Seite schickt ein neues. Ändert 
 der Rang (auf der Seite oder über den Rang-Sync), passt der Bot die Rolle an; ein Rang
 ohne Zugang sperrt das Konto (nie löschen), ein gelöschtes Konto auf der Seite ebenso.
 
+**Gameserver-Rollen in AMP einrichten** (Tab, Abschnitt „Gameserver-Rollen in AMP“): Der
+Bot legt drei gemeinsame Rollen an (Helfer: starten/stoppen/neustarten, Konsole lesen ·
+Betreuer: zusätzlich Konsole schreiben, Spieler, Backups, Updates · Admin: zusätzlich
+Einstellungen, Dateien, Zeitpläne, Backups löschen) und setzt ihre Rechte am Controller
+(Anmelden, „Manage“ nur für die Spiel-Instanzen aus dem Tab Server) und in jeder
+Spiel-Instanz. Benutzer- und Rollenverwaltung sowie Audit-Log sind immer verboten. Die
+Rechte-Namen sucht er in der Rechte-Liste des jeweiligen AMP; **Prüfen** zeigt das ohne
+etwas zu ändern, **Einrichten** braucht kurz „Super Admins“ für den AMP-Benutzer des
+Bots – bei jedem neuen Gameserver einmal, der Tab zeigt, welche noch fehlen.
+
 Optional eine **Voraussetzung**: eine Zusatzrolle der Seite (z.B. für Gameserver-Betreuer).
 Ohne sie gibt es keinen Zugang – wer sie verliert, wird gesperrt –, mit ihr bestimmt
 weiterhin der Rang die AMP-Rolle.

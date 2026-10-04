@@ -2,7 +2,17 @@ import { useCallback, useEffect, useState, type CSSProperties } from "react";
 
 import { useAuth } from "@/auth/useAuth";
 
-import { getAmpKonten, refreshRoles, saveAmpKonten, type AmpKontenData } from "./api";
+import {
+  applyRoles,
+  checkRoles,
+  getAmpKonten,
+  getRolesStatus,
+  refreshRoles,
+  saveAmpKonten,
+  type AmpKontenData,
+  type RolesStatus,
+  type SetupReport,
+} from "./api";
 
 export const route = { path: "/ampkonten", navLabel: "AMP-Konten" };
 
@@ -15,6 +25,128 @@ const card: CSSProperties = {
 };
 const muted: CSSProperties = { color: "var(--wb-text-muted)", fontSize: "0.9em" };
 const cell: CSSProperties = { padding: "6px 8px", borderBottom: "1px solid var(--wb-border)" };
+
+/** Gameserver-Rollen in AMP anlegen und ihre Rechte in allen Spiel-Instanzen setzen. */
+function RoleSetup({ onDone }: { onDone: () => void }) {
+  const [status, setStatus] = useState<RolesStatus | null>(null);
+  const [report, setReport] = useState<SetupReport | null>(null);
+  const [applied, setApplied] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [note, setNote] = useState<string | null>(null);
+
+  const loadStatus = useCallback(() => {
+    getRolesStatus()
+      .then(setStatus)
+      .catch((e: Error) => setNote(e.message));
+  }, []);
+  useEffect(loadStatus, [loadStatus]);
+
+  async function run(apply: boolean) {
+    if (apply && !window.confirm("Hat der AMP-Benutzer des Bots gerade die Rolle „Super Admins“? Ohne sie lehnt AMP das Einrichten ab.")) return;
+    setBusy(true);
+    setNote(null);
+    try {
+      setReport(await (apply ? applyRoles() : checkRoles()));
+      setApplied(apply);
+      if (apply) {
+        loadStatus();
+        onDone();
+      }
+    } catch (error) {
+      setNote((error as Error).message);
+    }
+    setBusy(false);
+  }
+
+  return (
+    <section style={card}>
+      <h2 style={{ marginTop: 0 }}>Gameserver-Rollen in AMP</h2>
+      <p style={muted}>
+        Der Bot legt drei Rollen an und setzt ihre Rechte am Controller (Anmelden, nur die Spiel-Instanzen) und in jeder
+        Spiel-Instanz. Nie: Benutzer- und Rollenverwaltung, Audit-Log, die Instanz des Bots. Erst <strong>Prüfen</strong>{" "}
+        (ändert nichts), dann <strong>Einrichten</strong> – dafür braucht der AMP-Benutzer des Bots kurz „Super Admins“
+        (danach wieder wegnehmen). Bei jedem neuen Gameserver erneut einrichten.
+      </p>
+      {status && (
+        <>
+          <ul style={{ margin: "8px 0", paddingLeft: 20 }}>
+            {status.tiers.map((t) => (
+              <li key={t.key}>
+                <strong>{t.name}</strong>: {t.caps.join(", ")}
+              </li>
+            ))}
+          </ul>
+          {status.pending.length > 0 && (
+            <p style={{ ...muted, color: "var(--wb-accent-strong)" }}>Noch nicht eingerichtet: {status.pending.join(", ")}</p>
+          )}
+          {status.done.length > 0 && <p style={muted}>Eingerichtet: {status.done.join(", ")}</p>}
+        </>
+      )}
+      <div style={{ display: "flex", gap: 8 }}>
+        <button disabled={busy} onClick={() => void run(false)}>
+          Prüfen
+        </button>
+        <button disabled={busy} onClick={() => void run(true)}>
+          Einrichten
+        </button>
+        {busy && <span style={muted}>läuft…</span>}
+      </div>
+      {note && <p>{note}</p>}
+      {report && <SetupResult report={report} applied={applied} />}
+    </section>
+  );
+}
+
+function SetupResult({ report, applied }: { report: SetupReport; applied: boolean }) {
+  const c = report.controller;
+  return (
+    <div style={{ marginTop: 12 }}>
+      {report.errors.map((e) => (
+        <p key={e} style={{ color: "var(--wb-accent-strong)" }}>
+          {e}
+        </p>
+      ))}
+      {applied && !report.errors.length && (
+        <p>
+          Eingerichtet – {report.changed} Rechte gesetzt
+          {report.created_roles.length > 0 && `, neu angelegt: ${report.created_roles.join(", ")}`}.
+        </p>
+      )}
+      {c.login && (
+        <details>
+          <summary>Controller: Anmelden {c.login.length ? "✅" : "❌ nicht gefunden"}, Spiel-Instanzen {Object.keys(c.instances ?? {}).length}</summary>
+          <div style={muted}>Anmelden: {c.login.join(", ") || "–"}</div>
+          {Object.entries(c.instances ?? {}).map(([name, nodes]) => (
+            <div key={name} style={muted}>
+              {name}: {nodes.join(", ")}
+            </div>
+          ))}
+          {(c.missing_instances ?? []).length > 0 && (
+            <div style={{ color: "var(--wb-accent-strong)" }}>Keine „Manage“-Berechtigung gefunden für: {c.missing_instances!.join(", ")}</div>
+          )}
+        </details>
+      )}
+      {Object.entries(report.instances).map(([name, plan]) => (
+        <details key={name}>
+          <summary>
+            {name}: {plan.error ? `❌ ${plan.error}` : Object.values(plan).some((t) => typeof t === "object" && t.missing?.length) ? "⚠️ nicht alles gefunden" : "✅"}
+          </summary>
+          {!plan.error &&
+            Object.entries(plan).map(([tier, t]) =>
+              typeof t !== "object" ? null : (
+                <div key={tier} style={{ ...muted, margin: "4px 0 8px" }}>
+                  <strong>{tier}</strong>
+                  {t.error && <span style={{ color: "var(--wb-accent-strong)" }}> – {t.error}</span>}
+                  <div>erlaubt: {t.allow.join(", ") || "–"}</div>
+                  {t.missing.length > 0 && <div style={{ color: "var(--wb-accent-strong)" }}>nicht gefunden: {t.missing.join(", ")}</div>}
+                </div>
+              ),
+            )}
+        </details>
+      ))}
+    </div>
+  );
+}
 
 export default function AmpKontenPage() {
   const { user } = useAuth();
@@ -134,6 +266,8 @@ export default function AmpKontenPage() {
           </button>
         </div>
       </section>
+
+      <RoleSetup onDone={() => void load()} />
 
       <section style={card}>
         <h2 style={{ marginTop: 0 }}>Angelegte Konten</h2>

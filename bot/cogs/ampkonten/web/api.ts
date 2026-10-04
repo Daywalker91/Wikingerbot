@@ -30,3 +30,28 @@ export const saveAmpKonten = (url: string, map: Record<string, string | null>, r
   });
 
 export const refreshRoles = () => apiFetch<{ roles: AmpRole[]; fresh: boolean }>("/ampkonten/refresh-roles", { method: "POST" });
+
+export interface TierPlan {
+  allow: string[];
+  neutral: string[];
+  missing: string[];
+  error?: string;
+}
+
+export interface SetupReport {
+  controller: { login?: string[]; instances?: Record<string, string[]>; missing_instances?: string[] };
+  instances: Record<string, Record<string, TierPlan> & { error?: string }>;
+  created_roles: string[];
+  changed: number;
+  errors: string[];
+}
+
+export interface RolesStatus {
+  tiers: { key: string; name: string; caps: string[] }[];
+  pending: string[];
+  done: string[];
+}
+
+export const getRolesStatus = () => apiFetch<RolesStatus>("/ampkonten/roles/status");
+export const checkRoles = () => apiFetch<SetupReport>("/ampkonten/roles/check", { method: "POST" });
+export const applyRoles = () => apiFetch<SetupReport>("/ampkonten/roles/apply", { method: "POST" });

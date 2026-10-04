@@ -2,6 +2,7 @@
 oeffentliche Panel-Adresse, Rang -> AMP-Rolle, angelegte Konten. Nur Owner."""
 
 import json
+from dataclasses import asdict
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
@@ -17,6 +18,8 @@ from bot.cogs.ampkonten.accounts import (
     load_map,
     load_requirement,
 )
+from bot.cogs.ampkonten import role_setup
+from bot.cogs.ampkonten.role_setup import CAPABILITIES, TIERS
 from bot.community import db as community_db
 from bot.core import runtime
 from bot.core.amp_client import amp_client
@@ -103,6 +106,65 @@ async def put_config(body: AmpKontenConfig, user: CurrentUser = Depends(require_
     await set_bot_setting(MAP_KEY, json.dumps(clean))
     await set_bot_setting(REQUIRES_KEY, body.requires.strip())
     return {"ok": True}
+
+
+DONE_KEY = "ampkonten_roles_done"  # Instanz-IDs, in denen die Gameserver-Rollen eingerichtet sind
+
+
+async def _game_instances(guild_id: int) -> dict[str, str]:
+    """Spiel-Instanzen dieses Discord-Servers (Tab Server): Instanz-ID -> Anzeigename."""
+    from sqlalchemy import select as sa_select
+
+    from db.models.server import Server
+    from db.session import get_db_session
+
+    async with get_db_session() as db:
+        rows = (await db.execute(sa_select(Server.amp_instance_id, Server.display_name).where(Server.guild_id == guild_id))).all()
+    return {iid: name for iid, name in rows}
+
+
+async def _done() -> list[str]:
+    try:
+        return json.loads(await get_bot_setting(DONE_KEY, "[]") or "[]")
+    except json.JSONDecodeError:
+        return []
+
+
+@router.get("/roles/status")
+async def roles_status(user: CurrentUser = Depends(require_level(Level.OWNER))) -> dict:
+    instances = await _game_instances(user.guild_id)
+    done = set(await _done())
+    return {
+        "tiers": [{"key": t.key, "name": t.name, "caps": [CAPABILITIES[c][0] for c in t.caps]} for t in TIERS],
+        "pending": sorted(name for iid, name in instances.items() if iid not in done),
+        "done": sorted(name for iid, name in instances.items() if iid in done),
+    }
+
+
+async def _run_setup(guild_id: int, apply: bool) -> dict:
+    instances = await _game_instances(guild_id)
+    if not instances:
+        raise HTTPException(400, "Noch keine Gameserver angelegt (Tab Server).")
+    report = await role_setup.run(amp_client.core_call, amp_client.instance_core_call, instances, apply=apply)
+    if apply:
+        ok = [iid for iid, name in instances.items() if not report.instances.get(name, {}).get("error")
+              and not any(isinstance(v, dict) and v.get("error") for v in report.instances.get(name, {}).values())]
+        if not report.errors:
+            await set_bot_setting(DONE_KEY, json.dumps(sorted(set(await _done()) | set(ok))))
+        await available_roles(amp_client.core_call)  # neue Rollen gleich in die Auswahl
+    return asdict(report)
+
+
+@router.post("/roles/check")
+async def roles_check(user: CurrentUser = Depends(require_level(Level.OWNER))) -> dict:
+    """Zeigt, welche Rechte gesetzt wuerden - aendert nichts."""
+    return await _run_setup(user.guild_id, apply=False)
+
+
+@router.post("/roles/apply")
+async def roles_apply(user: CurrentUser = Depends(require_level(Level.OWNER))) -> dict:
+    """Legt die Gameserver-Rollen an und setzt die Rechte (braucht kurz Super Admins)."""
+    return await _run_setup(user.guild_id, apply=True)
 
 
 @router.post("/refresh-roles")
