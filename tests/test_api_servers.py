@@ -101,8 +101,7 @@ async def test_stopped_instance_is_quiet_and_shown_as_stopped(db_session, monkey
     db_session.add(Guild(id=1, name="Wikinger"))
     db_session.add(Server(guild_id=1, instance_name="vein", amp_instance_id="v-1", display_name="Vein", host=""))
     await db_session.commit()
-    error = Exception("Instance Unavailable: The requested instance is not available at this time.
-None")
+    error = Exception("Instance Unavailable: The requested instance is not available at this time.\nNone")
     monkeypatch.setattr(amp_client, "get_status", AsyncMock(side_effect=error))
 
     async with await _client() as client:
