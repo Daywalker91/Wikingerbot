@@ -281,10 +281,10 @@ export default function AmpKontenPage() {
         </table>
         <p style={muted}>
           {data.roles.length === 0
-            ? "Noch keine AMP-Rollen bekannt – „Rollen neu laden“ oder dem Bot-Benutzer einmal kurz Super Admins geben und den Bot neu starten."
+            ? "Noch keine AMP-Rollen bekannt – „Rollen neu laden“ (braucht das Recht „Rollen ansehen“ für den Bot)."
             : data.roles_fresh
               ? "Rollen frisch aus AMP."
-              : "Gemerkte Rollenliste – neue AMP-Rollen erscheinen nach „Rollen neu laden“ (dafür braucht der Bot einmal kurz Super Admins)."}
+              : "Gemerkte Rollenliste – neue AMP-Rollen erscheinen nach „Rollen neu laden“."}
         </p>
         <div style={{ display: "flex", gap: 8 }}>
           <button onClick={() => void act(() => saveAmpKonten(url, map, requires), () => "Gespeichert.")}>Speichern</button>
