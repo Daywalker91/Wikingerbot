@@ -188,15 +188,19 @@ class AMPClient:
         return None
 
     async def controller_instance_ids(self) -> list[str]:
-        """Instanz-IDs des Controllers selbst (Module "ADS") - "Manage" darauf ist in AMP
+        """Instanz-ID(s) des Controllers selbst (Module "ADS") - "Manage" darauf ist in AMP
         das Recht, sich am Panel anzumelden (fuer bot/cogs/ampkonten/role_setup.py)."""
         controller = self._controller_client()
         nodes = await _with_timeout(controller.api_call("ADSModule/GetInstances", {"ForceIncludeSelf": True}), DEFAULT_TIMEOUT)
         if isinstance(nodes, dict) and "result" in nodes:
             nodes = nodes["result"]
+        nodes = nodes or []
+        # Bei Controller/Target-Setups hat jedes Target ein eigenes ADS - angemeldet
+        # wird aber nur am Controller, also nur dessen lokalen Knoten nehmen.
+        local = [node for node in nodes if not node.get("IsRemote")]
         return [
             str(instance.get("InstanceID"))
-            for node in nodes or []
+            for node in local or nodes
             for instance in node.get("AvailableInstances", [])
             if instance.get("Module") == "ADS" and instance.get("InstanceID")
         ]

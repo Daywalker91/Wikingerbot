@@ -213,3 +213,21 @@ def test_login_is_manage_on_the_controller_instance():
     plan = controller_plan(spec, {"game-1": "Vein"}, ("ads-1",))
     assert plan["login"] == ["Instances.ads-1.Manage"]  # nur Manage, nie Start/Stop des Controllers
     assert plan["instances"] == {"Vein": ["Instances.game-1.Manage"]}
+
+
+async def test_controller_instance_ids_skips_remote_targets(monkeypatch):
+    """Controller/Target-Setup: jedes Target hat ein eigenes ADS - nur das lokale zaehlt."""
+    from unittest.mock import AsyncMock, MagicMock
+
+    from bot.core.amp_client import AMPClient
+
+    def ads(target, iid, remote):
+        return {"IsRemote": remote, "AvailableInstances": [
+            {"InstanceID": iid, "Module": "ADS"}, {"InstanceID": f"{target}-game", "Module": "GenericModule"}]}
+
+    controller = MagicMock()
+    controller.api_call = AsyncMock(return_value={"result": [
+        ads("ctrl", "ads-ctrl", False), ads("t1", "ads-t1", True), ads("t2", "ads-t2", True)]})
+    client = AMPClient.__new__(AMPClient)
+    monkeypatch.setattr(client, "_controller_client", lambda: controller, raising=False)
+    assert await client.controller_instance_ids() == ["ads-ctrl"]
