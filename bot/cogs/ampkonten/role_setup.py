@@ -182,8 +182,8 @@ async def run(
     controller_call(endpoint, args) - Core-Endpunkt am Controller
     instance_call(instance_id, endpoint, args) - Core-Endpunkt in einer Instanz
     instances - Instanz-ID -> Anzeigename (nur Spiel-Instanzen)
-    only - nur diese Instanz-IDs in den Instanzen selbst einrichten (None = alle); der
-           Controller-Teil gilt immer fuer alle, er ist schnell und braucht keine laufende Instanz"""
+    only - nur diese Instanz-IDs einrichten, am Controller wie in der Instanz (None = alle);
+           angezeigt wird der Controller-Plan trotzdem fuer alle"""
     report = SetupReport()
     try:
         spec = await controller_call("GetPermissionsSpec", {})
@@ -204,7 +204,11 @@ async def run(
                 role_ids = _role_ids(await controller_call("GetRoleIds", {}))
             for tier in TIERS:
                 rid = role_ids[tier.name]
-                nodes = report.controller["login"] + [n for ns in report.controller["instances"].values() for n in ns]
+                # am Controller auch nur die offenen Instanzen (Anmelden immer - ist nur ein Recht)
+                todo = {name for iid, name in instances.items() if only is None or iid in only}
+                nodes = report.controller["login"] + [
+                    n for name, ns in report.controller["instances"].items() if name in todo for n in ns
+                ]
                 if tier.key == "admin":
                     nodes += report.controller["admin"]
                 for node in nodes:

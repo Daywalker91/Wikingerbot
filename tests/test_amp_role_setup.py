@@ -255,3 +255,14 @@ async def test_unavailable_instance_gets_clear_hint():
 
     report = await run(amp.controller, stopped, {"game-1": "Vein"}, apply=False)
     assert "läuft nicht" in report.instances["Vein"]["error"]
+
+
+async def test_controller_only_sets_open_instances():
+    """Schon eingerichtete Instanzen werden auch am Controller nicht erneut gesetzt."""
+    amp = FakeAMP()
+    report = await run(amp.controller, amp.instance, {"game-1": "Vein", "game-2": "Ark"}, apply=True, only={"game-2"})
+    assert report.skipped == ["Vein"]
+    controller_nodes = {node for where, _, node, _ in amp.set if where == "ads"}
+    assert "ADS.Manage" in controller_nodes  # Anmelden immer
+    assert not any(node.startswith("Instances.game-1.") for node in controller_nodes)
+    assert "Instances.game-1.Manage" in report.controller["instances"]["Vein"]  # angezeigt wird trotzdem alles
