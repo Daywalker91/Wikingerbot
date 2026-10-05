@@ -90,11 +90,15 @@ function Autoroles({ data, onDone }: { data: RolesData; onDone: (msg: string) =>
         </button>
       </div>
       <button
-        onClick={() =>
-          saveAutoroles(ids)
+        onClick={() => {
+          // gewaehlt, aber "Hinzufuegen" vergessen: trotzdem mitnehmen statt still eine leere Liste zu speichern
+          const next = pick && !ids.includes(pick) ? [...ids, pick] : ids;
+          setIds(next);
+          setPick("");
+          saveAutoroles(next)
             .then((r) => onDone(r.message))
-            .catch((e: Error) => onDone(e.message))
-        }
+            .catch((e: Error) => onDone(e.message));
+        }}
       >
         Speichern
       </button>
