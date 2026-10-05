@@ -93,8 +93,15 @@ async def login(request: Request, guild_id: int = Query(...)):
     return RedirectResponse(f"{DISCORD_API}/oauth2/authorize?{urlencode(params)}")
 
 
+def login_error(reason: str) -> RedirectResponse:
+    """Zurueck zur Login-Seite mit verstaendlichem Hinweis statt einer Fehlerseite."""
+    return RedirectResponse(f"{settings.frontend_url}/login?error={reason}")
+
+
 @router.get("/callback")
-async def callback(request: Request, code: str, state: str) -> RedirectResponse:
+async def callback(request: Request, state: str = "", code: str = "", error: str = "") -> RedirectResponse:
+    if error or not code:  # z.B. bei Discord auf "Abbrechen" getippt
+        return login_error("denied")
     guild_id = verify_state_token(state)
 
     async with httpx.AsyncClient() as client:
@@ -110,7 +117,7 @@ async def callback(request: Request, code: str, state: str) -> RedirectResponse:
             headers={"Content-Type": "application/x-www-form-urlencoded"},
         )
         if token_resp.status_code != 200:
-            raise HTTPException(status_code=400, detail="Discord-Token-Austausch fehlgeschlagen")
+            return login_error("failed")
         tokens = token_resp.json()
         access_token = tokens["access_token"]
         refresh_token = tokens["refresh_token"]
@@ -125,6 +132,8 @@ async def callback(request: Request, code: str, state: str) -> RedirectResponse:
         member_resp = await client.get(
             f"{DISCORD_API}/users/@me/guilds/{guild_id}/member", headers=auth_header
         )
+        if member_resp.status_code in (403, 404):  # nicht auf diesem Discord-Server
+            return login_error("not_member")
         member_resp.raise_for_status()
         member = member_resp.json()
 

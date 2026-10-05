@@ -154,3 +154,28 @@ def test_trusted_proxies(monkeypatch):
     assert server.forwarded_allow_ips() == "*"
     monkeypatch.setattr(settings, "trusted_proxies", " 192.0.2.35, 198.51.100.0/24 ,")
     assert server.forwarded_allow_ips() == ["192.0.2.35", "198.51.100.0/24"]
+
+
+def test_login_callback_hints_instead_of_error_page(monkeypatch):
+    """Abbrechen bei Discord / kein Mitglied des Servers: zurueck zum Login mit Hinweis."""
+    import httpx
+
+    from api.middleware.auth import create_state_token
+
+    monkeypatch.setattr(settings, "frontend_url", "")
+    client = TestClient(server.build_app(), base_url="http://192.0.2.5:8765")
+    cancelled = client.get("/api/auth/callback?error=access_denied&state=x", follow_redirects=False)
+    assert cancelled.headers["location"] == "/login?error=denied"
+
+    def discord(request: httpx.Request) -> httpx.Response:
+        if request.url.path.endswith("/oauth2/token"):
+            return httpx.Response(200, json={"access_token": "a", "refresh_token": "r", "expires_in": 60})
+        if request.url.path.endswith("/users/@me"):
+            return httpx.Response(200, json={"id": "42"})
+        return httpx.Response(404, json={"message": "Unknown Guild"})  # nicht auf dem Server
+
+    real_client = httpx.AsyncClient
+    monkeypatch.setattr(httpx, "AsyncClient", lambda *a, **k: real_client(transport=httpx.MockTransport(discord)))
+    state = create_state_token(1)
+    outsider = client.get(f"/api/auth/callback?code=c&state={state}", follow_redirects=False)
+    assert outsider.headers["location"] == "/login?error=not_member"

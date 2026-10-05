@@ -7,8 +7,17 @@ interface Guild {
   name: string;
 }
 
+// Hinweise, wenn die Anmeldung zurueckspringt (/login?error=...)
+const LOGIN_ERRORS: Record<string, string> = {
+  not_member: "Du bist nicht auf diesem Discord-Server – anmelden können sich nur Mitglieder.",
+  denied: "Die Anmeldung bei Discord wurde abgebrochen.",
+  failed: "Die Anmeldung bei Discord hat nicht geklappt – bitte nochmal versuchen.",
+};
+
 export default function Login() {
   const [guilds, setGuilds] = useState<Guild[] | null>(null);
+  const errorCode = new URLSearchParams(window.location.search).get("error");
+  const error = errorCode ? (LOGIN_ERRORS[errorCode] ?? LOGIN_ERRORS.failed) : null;
 
   useEffect(() => {
     // Die Server liefert der laufende Bot selbst - nur lokal ohne Bot greift
@@ -29,6 +38,7 @@ export default function Login() {
     <main style={{ display: "flex", height: "100vh", alignItems: "center", justifyContent: "center" }}>
       <div style={{ textAlign: "center" }}>
         <h1>WikingerBot</h1>
+        {error && <p style={{ color: "var(--wb-accent-strong)" }}>{error}</p>}
         {guilds === null && <p>Lade …</p>}
         {guilds?.length === 0 && <p>Der Bot ist noch auf keinem Discord-Server.</p>}
         {guilds?.length === 1 && <button onClick={() => handleLogin(guilds[0].id)}>Mit Discord anmelden</button>}
