@@ -35,10 +35,22 @@ const textarea: CSSProperties = {
   fontFamily: "inherit",
 };
 
-function RoleSelect({ data, value, onChange, exclude }: { data: RolesData; value: string; onChange: (id: string) => void; exclude: string[] }) {
+function RoleSelect({
+  data,
+  value,
+  onChange,
+  exclude,
+  placeholder = "– Rolle wählen –",
+}: {
+  data: RolesData;
+  value: string;
+  onChange: (id: string) => void;
+  exclude: string[];
+  placeholder?: string;
+}) {
   return (
     <select value={value} onChange={(e) => onChange(e.target.value)}>
-      <option value="">– Rolle wählen –</option>
+      <option value="">{placeholder}</option>
       {data.roles.map((r) => (
         <option key={r.id} value={r.id} disabled={!!r.blocked || exclude.includes(r.id)} title={r.blocked ?? undefined}>
           @{r.name}
@@ -55,7 +67,6 @@ function roleName(data: RolesData, id: string): string {
 
 function Autoroles({ data, onDone }: { data: RolesData; onDone: (msg: string) => void }) {
   const [ids, setIds] = useState<string[]>(data.autoroles);
-  const [pick, setPick] = useState("");
   const broken = ids.filter((id) => data.roles.find((r) => r.id === id)?.blocked);
 
   return (
@@ -78,27 +89,15 @@ function Autoroles({ data, onDone }: { data: RolesData; onDone: (msg: string) =>
         </p>
       )}
       <div style={row}>
-        <RoleSelect data={data} value={pick} onChange={setPick} exclude={ids} />
-        <button
-          disabled={!pick}
-          onClick={() => {
-            setIds([...ids, pick]);
-            setPick("");
-          }}
-        >
-          Hinzufügen
-        </button>
+        {/* Auswahl fuegt sofort hinzu - kein extra Klick, der vergessen werden kann */}
+        <RoleSelect data={data} value="" onChange={(id) => id && setIds([...ids, id])} exclude={ids} placeholder="– Rolle hinzufügen –" />
       </div>
       <button
-        onClick={() => {
-          // gewaehlt, aber "Hinzufuegen" vergessen: trotzdem mitnehmen statt still eine leere Liste zu speichern
-          const next = pick && !ids.includes(pick) ? [...ids, pick] : ids;
-          setIds(next);
-          setPick("");
-          saveAutoroles(next)
+        onClick={() =>
+          saveAutoroles(ids)
             .then((r) => onDone(r.message))
-            .catch((e: Error) => onDone(e.message));
-        }}
+            .catch((e: Error) => onDone(e.message))
+        }
       >
         Speichern
       </button>
@@ -107,7 +106,6 @@ function Autoroles({ data, onDone }: { data: RolesData; onDone: (msg: string) =>
 }
 
 function ButtonsEditor({ data, buttons, onChange }: { data: RolesData; buttons: PanelButton[]; onChange: (b: PanelButton[]) => void }) {
-  const [pick, setPick] = useState("");
   const set = (index: number, change: Partial<PanelButton>) => onChange(buttons.map((b, i) => (i === index ? { ...b, ...change } : b)));
   const move = (index: number, delta: number) => {
     const next = [...buttons];
@@ -134,18 +132,18 @@ function ButtonsEditor({ data, buttons, onChange }: { data: RolesData; buttons: 
           <button onClick={() => onChange(buttons.filter((_, j) => j !== i))}>Entfernen</button>
         </div>
       ))}
-      <div style={row}>
-        <RoleSelect data={data} value={pick} onChange={setPick} exclude={buttons.map((b) => b.role_id)} />
-        <button
-          disabled={!pick || buttons.length >= data.max_buttons}
-          onClick={() => {
-            onChange([...buttons, { role_id: pick, label: "", emoji: "" }]);
-            setPick("");
-          }}
-        >
-          Knopf hinzufügen
-        </button>
-      </div>
+      {buttons.length < data.max_buttons && (
+        <div style={row}>
+          {/* Auswahl fuegt den Knopf sofort hinzu - kein extra Klick, der vergessen werden kann */}
+          <RoleSelect
+            data={data}
+            value=""
+            onChange={(id) => id && onChange([...buttons, { role_id: id, label: "", emoji: "" }])}
+            exclude={buttons.map((b) => b.role_id)}
+            placeholder="– Knopf für Rolle hinzufügen –"
+          />
+        </div>
+      )}
       <div style={muted}>Emoji: einfach einfügen (z.B. 🦖) oder bei eigenen Server-Emojis die Form &lt;:name:id&gt;.</div>
     </div>
   );
@@ -243,7 +241,8 @@ function NewPanel({ data, onDone }: { data: RolesData; onDone: (msg: string, rel
       <textarea rows={3} style={textarea} value={text} onChange={(e) => setText(e.target.value)} />
       <ButtonsEditor data={data} buttons={buttons} onChange={setButtons} />
       <button
-        disabled={!channel || !title.trim()}
+        disabled={!channel || !title.trim() || buttons.length === 0}
+        title={buttons.length === 0 ? "Erst mindestens einen Knopf hinzufügen" : undefined}
         onClick={() =>
           createPanel({ channel_id: channel, title: title.trim(), text, buttons })
             .then((r) => onDone(r.message))

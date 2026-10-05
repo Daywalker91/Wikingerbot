@@ -130,6 +130,8 @@ async def test_panel_create_edit_adopt_delete(db_session, discord_guild):
     async with await _client() as client:
         bad = await client.post("/roles/panels", json={"channel_id": "100", "title": "Spiele", "buttons": [{"role_id": str(ADMINROLE)}]})
         assert bad.status_code == 400
+        empty = await client.post("/roles/panels", json={"channel_id": "100", "title": "Spiele", "buttons": []})
+        assert empty.status_code == 400 and "Knopf" in empty.json()["detail"]  # Panel ohne Knoepfe: nutzlos
         twice = [{"role_id": str(VEIN)}, {"role_id": str(VEIN)}]
         assert (await client.post("/roles/panels", json={"channel_id": "100", "title": "Spiele", "buttons": twice})).status_code == 400
 

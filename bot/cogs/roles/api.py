@@ -122,6 +122,8 @@ class NewPanel(Panel):
 
 
 async def _view(guild: discord.Guild, buttons: list[PanelButton]) -> discord.ui.View | None:
+    if not buttons:  # ein Panel ohne Knoepfe kann niemand benutzen
+        raise HTTPException(400, "Mindestens einen Knopf hinzufügen.")
     if len(buttons) > MAX_BUTTONS:
         raise HTTPException(400, f"Höchstens {MAX_BUTTONS} Knöpfe pro Panel.")
     if len({b.role_id for b in buttons}) != len(buttons):
