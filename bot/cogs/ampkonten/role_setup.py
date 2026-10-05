@@ -2,8 +2,9 @@
 
 AMP hat zwei Ebenen: Am Controller entscheidet "Manage", ob man sich anmelden darf und
 welche Instanzen man sieht. Alles Weitere (Starten, Konsole, Dateien, Einstellungen, ...)
-wird in JEDER Instanz fuer die Rolle gesetzt. Die Rollen legt der Bot als gemeinsame
-Rollen am Controller an, damit sie in allen Instanzen vorhanden sind.
+wird in JEDER Instanz fuer die Rolle gesetzt. Die Rollen legt der Bot als globale
+Rollen am Controller an: in allen Instanzen vorhanden, Rechte je Instanz eigen (keine
+Vorlage-Rollen - deren Rechte gaelten ueberall gleich, auch im Controller selbst).
 
 Die genauen Rechte-Namen unterscheiden sich je nach AMP-Version und Spiel-Modul. Der
 Bot sucht sie deshalb in der Rechte-Liste des jeweiligen AMP (GetPermissionsSpec)
@@ -12,7 +13,8 @@ das ohne etwas zu aendern; "Einrichten" setzt es (braucht kurz Super Admins).
 
 Gesetzt werden nur Blaetter des Rechte-Baums (keine Wildcards) - so erbt eine Rolle
 nichts, was spaeter neu dazukommt. Was eine Stufe nicht haben soll, wird neutral (grau)
-gesetzt; Benutzer-/Rollenverwaltung und Audit-Log ausdruecklich verboten.
+gesetzt; Benutzer-/Rollenverwaltung ausdruecklich verboten, Audit-Log ausser fuer Verwalter.
+Super Admins (alles, auch Benutzer/Rollen und AMP-Einstellungen) vergibt der Bot nie.
 """
 
 from dataclasses import dataclass, field
@@ -49,6 +51,7 @@ CAPABILITIES: dict[str, tuple[str, Callable[[str], bool]]] = {
     "settings": ("Einstellungen", lambda n: n.startswith("settings.")),
     "files": ("Dateimanager", lambda n: n.startswith("filemanager.")),
     "scheduler": ("Zeitpläne", lambda n: n.startswith("core.scheduler.")),
+    "audit": ("Audit-Log lesen", lambda n: n.startswith("core.auditlog.")),
 }
 
 TIERS: tuple[Tier, ...] = (
@@ -59,15 +62,25 @@ TIERS: tuple[Tier, ...] = (
         "Gameserver Admin",
         ("start", "stop", "restart", "console_view", "console_send", "players", "backup_use", "update", "settings", "files", "scheduler", "backup_delete"),
     ),
+    Tier(
+        "verwalter",
+        "Gameserver Verwalter",
+        ("start", "stop", "restart", "console_view", "console_send", "players", "backup_use", "update", "settings", "files", "scheduler", "backup_delete", "audit"),
+    ),
 )
 
-# In jeder Instanz fuer alle Stufen ausdruecklich verboten
-# Stand der Rechte-Regeln oben - erhoehen, wenn sich TIERS/CAPABILITIES/DENY aendern: dann
-# gelten bereits eingerichtete Instanzen als veraltet und werden beim naechsten Einrichten
-# wieder mitgenommen.
-PLAN_VERSION = 1
+# Stand der Rechte-Regeln - erhoehen, wenn sich TIERS/CAPABILITIES/DENY/Controller-Rechte
+# aendern: dann gelten bereits eingerichtete Instanzen als veraltet und werden beim
+# naechsten Einrichten wieder mitgenommen.
+PLAN_VERSION = 2
 
-DENY = ("Core.UserManagement.*", "Core.RoleManagement.*", "Core.AuditLog.*")
+# In jeder Instanz fuer alle Stufen ausdruecklich verboten (sonst koennte man sich selbst
+# mehr Rechte geben); das Audit-Log nur fuer Stufen ohne "audit".
+DENY = ("Core.UserManagement.*", "Core.RoleManagement.*")
+
+
+def deny_for(tier: Tier) -> tuple[str, ...]:
+    return DENY + (() if "audit" in tier.caps else ("Core.AuditLog.*",))
 
 
 # --- Rechte-Baum ---------------------------------------------------------------------------
@@ -113,10 +126,41 @@ def instance_plan(spec) -> dict:
 # stoppen, neustarten (eine gestoppte Instanz beantwortet sonst gar nichts).
 INSTANCE_ACTIONS = ("manage", "start", "stop", "restart")
 
-# Nur Admins, am Controller: Instanzen anlegen, loeschen, umbauen und neu angelegte
-# selbst verwalten (sonst koennte man die eigene neue Instanz nicht oeffnen).
-# Bewusst NIE: AMP-Version hochziehen (trifft alle Instanzen), Remote-Ziele, Vorlagen.
+# Admins und Verwalter, am Controller: Instanzen anlegen, loeschen, umbauen und neu
+# angelegte selbst verwalten (sonst koennte man die eigene neue Instanz nicht oeffnen).
 ADMIN_CONTROLLER = ("createinstance", "deleteinstances", "reconfigure", "selfassigninstance")
+
+# Nur Verwalter, am Controller zusaetzlich: AMP-Versionen der Instanzen hochziehen,
+# Targets anbinden/entfernen/bearbeiten, Instanzen aussetzen, Konfiguration neu laden,
+# Vorlagen und Store, Audit-Log. Fuer niemanden: Benutzer-/Rollenverwaltung, Einstellungen
+# des Controllers, "beliebige Instanz starten/stoppen" (traefe auch die Instanz des Bots).
+VERWALTER_CONTROLLER = (
+    "upgradeinstances",
+    "attachremoteadsinstance",
+    "removeremoteadsinstance",
+    "editremotetargets",
+    "suspendinstances",
+    "managesuspendedinstances",
+    "refreshconfiguration",
+    "refreshremoteconfigstores",
+)
+CONTROLLER_EXTRAS = {
+    "admin": ("Instanzen anlegen, löschen und umbauen",),
+    "verwalter": (
+        "Instanzen anlegen, löschen und umbauen",
+        "AMP-Versionen der Instanzen hochziehen",
+        "Targets verwalten",
+        "Instanzen aussetzen",
+        "Vorlagen und Store",
+    ),
+}
+
+
+def _verwalter_node(n: str) -> bool:
+    n = n.lower()
+    if n.startswith("ads.instancemanagement."):
+        return n.rsplit(".", 1)[-1] in VERWALTER_CONTROLLER
+    return n.startswith(("ads.templatemanagement.", "store.", "core.auditlog."))
 
 
 def controller_plan(spec, instance_ids: dict[str, str], controller_ids: tuple[str, ...] = ()) -> dict:
@@ -140,7 +184,15 @@ def controller_plan(spec, instance_ids: dict[str, str], controller_ids: tuple[st
     # Zur Fehlersuche: alle Controller-Rechte ausserhalb der Instanzen (Knoten = Anzeigename)
     other = [f"{n} = {name}" for n, name in leaves(spec) if not n.lower().startswith("instances.")]
     admin = [n for n in nodes if n.lower().startswith("ads.instancemanagement.") and n.rsplit(".", 1)[-1].lower() in ADMIN_CONTROLLER]
-    return {"login": login, "instances": per_instance, "missing_instances": missing, "admin": admin, "other_nodes": other}
+    verwalter = [n for n in nodes if _verwalter_node(n)]
+    return {
+        "login": login,
+        "instances": per_instance,
+        "missing_instances": missing,
+        "admin": admin,
+        "verwalter": verwalter,
+        "other_nodes": other,
+    }
 
 
 # --- Ausfuehren ----------------------------------------------------------------------------
@@ -231,8 +283,10 @@ async def run(
                 nodes = report.controller["login"] + [
                     n for name, ns in report.controller["instances"].items() if name in todo for n in ns
                 ]
-                if tier.key == "admin":
+                if tier.key in ("admin", "verwalter"):
                     nodes += report.controller["admin"]
+                if tier.key == "verwalter":
+                    nodes += report.controller["verwalter"]
                 for node in nodes:
                     await controller_call("SetAMPRolePermission", {"RoleId": rid, "PermissionNode": node, "Enabled": True})
                     report.changed += 1
@@ -265,7 +319,7 @@ async def run(
                 for node, enabled in (
                     [(n, True) for n in plan[tier.key]["allow"]]
                     + [(n, None) for n in plan[tier.key]["neutral"]]
-                    + [(n, False) for n in DENY]
+                    + [(n, False) for n in deny_for(tier)]
                 ):
                     await instance_call(iid, "SetAMPRolePermission", {"RoleId": rid, "PermissionNode": node, "Enabled": enabled})
                     report.changed += 1

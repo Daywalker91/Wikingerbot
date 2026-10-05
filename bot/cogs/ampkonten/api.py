@@ -19,7 +19,7 @@ from bot.cogs.ampkonten.accounts import (
     load_requirement,
 )
 from bot.cogs.ampkonten import role_setup
-from bot.cogs.ampkonten.role_setup import CAPABILITIES, TIERS
+from bot.cogs.ampkonten.role_setup import CAPABILITIES, CONTROLLER_EXTRAS, TIERS
 from bot.community import db as community_db
 from bot.core import runtime
 from bot.core.amp_client import amp_client
@@ -148,8 +148,7 @@ async def roles_status(user: CurrentUser = Depends(require_level(Level.OWNER))) 
             {
                 "key": t.key,
                 "name": t.name,
-                "caps": [CAPABILITIES[c][0] for c in t.caps]
-                + (["Instanzen anlegen, löschen und umbauen"] if t.key == "admin" else []),
+                "caps": [CAPABILITIES[c][0] for c in t.caps] + list(CONTROLLER_EXTRAS.get(t.key, ())),
             }
             for t in TIERS
         ],

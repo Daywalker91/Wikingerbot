@@ -44,6 +44,7 @@ export interface SetupReport {
     instances?: Record<string, string[]>;
     missing_instances?: string[];
     admin?: string[];
+    verwalter?: string[];
     other_nodes?: string[];
   };
   instances: Record<string, Record<string, TierPlan> & { error?: string }>;

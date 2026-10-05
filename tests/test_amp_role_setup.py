@@ -20,6 +20,7 @@ INSTANCE_SPEC = [
         node("Core.Console", node("Core.Console.ViewConsole"), node("Core.Console.SendConsoleInput")),
         node("Core.Scheduler", node("Core.Scheduler.EditSchedule")),
         node("Core.UserManagement", node("Core.UserManagement.EditUsers")),
+        node("Core.AuditLog", node("Core.AuditLog.ViewAuditLog")),
     ),
     node("FileManager", node("FileManager.FileManager.BrowseFiles"), node("FileManager.FileManager.TrashFiles")),
     node("Settings", node("Settings.Server.Port")),
@@ -37,8 +38,11 @@ CONTROLLER_SPEC = [
             node("ADS.InstanceManagement.Reconfigure"),
             node("ADS.InstanceManagement.SelfAssignInstance"),
             node("ADS.InstanceManagement.UpgradeInstances"),
+            node("ADS.InstanceManagement.StartInstances"),
         ),
+        node("ADS.TemplateManagement", node("ADS.TemplateManagement.ManageTemplates")),
     ),
+    node("Core", node("Core.AuditLog", node("Core.AuditLog.ViewAuditLog")), node("Core.UserManagement", node("Core.UserManagement.EditUsers"))),
     node(
         "Instances",
         node(
@@ -128,7 +132,7 @@ async def test_check_changes_nothing():
 async def test_apply_creates_roles_and_sets_permissions():
     amp = FakeAMP()
     report = await run(amp.controller, amp.instance, {"game-1": "Vein"}, apply=True)
-    assert report.created_roles == ["Gameserver Helfer", "Gameserver Betreuer", "Gameserver Admin"]
+    assert report.created_roles == ["Gameserver Helfer", "Gameserver Betreuer", "Gameserver Admin", "Gameserver Verwalter"]
     helfer_ads = {(n, v) for where, rid, n, v in amp.set if where == "ads" and rid == "r-Gameserver Helfer"}
     assert helfer_ads == {
         ("ADS.Manage", True),
@@ -142,7 +146,7 @@ async def test_apply_creates_roles_and_sets_permissions():
     helfer = {(n, v) for where, rid, n, v in amp.set if where == "game-1" and rid == "r-Gameserver Helfer"}
     assert ("Core.AppManagement.StartApplication", True) in helfer
     assert ("Settings.Server.Port", None) in helfer  # Admin-Recht: neutral
-    assert all((d, False) in helfer for d in DENY)
+    assert all((d, False) in helfer for d in DENY) and ("Core.AuditLog.*", False) in helfer
     assert ("Core.UserManagement.EditUsers", True) not in helfer
 
     # zweiter Lauf legt nichts doppelt an
@@ -288,3 +292,19 @@ async def test_new_roles_set_up_all_instances():
     amp = FakeAMP()
     report = await run(amp.controller, amp.instance, {"game-1": "Vein"}, apply=True, only=set())
     assert report.created_roles and report.skipped == [] and "Vein" in report.instances
+
+
+async def test_verwalter_gets_more_than_admin_but_never_user_management():
+    amp = FakeAMP()
+    await run(amp.controller, amp.instance, {"game-1": "Vein"}, apply=True)
+    ads = {n for where, rid, n, v in amp.set if where == "ads" and rid == "r-Gameserver Verwalter" and v}
+    assert {"ADS.InstanceManagement.UpgradeInstances", "ADS.TemplateManagement.ManageTemplates", "Core.AuditLog.ViewAuditLog"} <= ads
+    assert "ADS.InstanceManagement.CreateInstance" in ads  # alles von Admin
+    assert "ADS.InstanceManagement.StartInstances" not in ads  # beliebige Instanz (auch die des Bots): nie
+    assert not any(n.startswith("Core.UserManagement") for n in ads)
+    admin_ads = {n for where, rid, n, v in amp.set if where == "ads" and rid == "r-Gameserver Admin"}
+    assert "Core.AuditLog.ViewAuditLog" not in admin_ads
+
+    game = {(n, v) for where, rid, n, v in amp.set if where == "game-1" and rid == "r-Gameserver Verwalter"}
+    assert ("Core.AuditLog.ViewAuditLog", True) in game and ("Core.AuditLog.*", False) not in game
+    assert ("Core.UserManagement.*", False) in game and ("Core.RoleManagement.*", False) in game

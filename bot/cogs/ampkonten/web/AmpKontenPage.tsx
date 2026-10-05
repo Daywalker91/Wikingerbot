@@ -72,9 +72,10 @@ function RoleSetup({ onDone }: { onDone: () => void }) {
     <section style={card}>
       <h2 style={{ marginTop: 0 }}>Gameserver-Rollen in AMP</h2>
       <p style={muted}>
-        Der Bot legt drei Rollen an und setzt ihre Rechte am Controller (Anmelden; die Spiel-Instanzen sehen, starten,
-        stoppen und neustarten; Admins zusätzlich Instanzen anlegen, löschen und umbauen – nie AMP-Versionen hochziehen) und in jeder
-        Spiel-Instanz. Nie: Benutzer- und Rollenverwaltung, Audit-Log, die Instanz des Bots. Erst <strong>Prüfen</strong>{" "}
+        Der Bot legt vier Rollen an und setzt ihre Rechte am Controller (Anmelden; die Spiel-Instanzen sehen, starten,
+        stoppen und neustarten; Admins zusätzlich Instanzen anlegen, löschen und umbauen; Verwalter außerdem AMP-Versionen
+        hochziehen, Targets verwalten, Instanzen aussetzen, Vorlagen und Store) und in jeder Spiel-Instanz. Nie: Benutzer- und
+        Rollenverwaltung, Einstellungen des Controllers, die Instanz des Bots, Super Admins. Erst <strong>Prüfen</strong>{" "}
         (ändert nichts), dann <strong>Einrichten</strong>. Schon eingerichtete Gameserver werden ausgelassen – bei neuen oder
         gestoppten Gameservern einfach erneut einrichten.
       </p>
@@ -154,7 +155,8 @@ function SetupResult({ report, applied }: { report: SetupReport; applied: boolea
         <details>
           <summary>Controller: Anmelden {c.login.length ? "✅" : "❌ nicht gefunden"}, Spiel-Instanzen {Object.keys(c.instances ?? {}).length}</summary>
           <div style={muted}>Anmelden: {c.login.join(", ") || "–"}</div>
-          <div style={muted}>Nur Admins: {(c.admin ?? []).join(", ") || "– nicht gefunden"}</div>
+          <div style={muted}>Admins und Verwalter: {(c.admin ?? []).join(", ") || "– nicht gefunden"}</div>
+          <div style={muted}>Nur Verwalter: {(c.verwalter ?? []).join(", ") || "– nicht gefunden"}</div>
           {Object.entries(c.instances ?? {}).map(([name, nodes]) => (
             <div key={name} style={muted}>
               {name}: {nodes.join(", ")}
