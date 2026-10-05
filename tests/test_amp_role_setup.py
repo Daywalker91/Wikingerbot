@@ -89,6 +89,7 @@ class FakeAMP:
         self.controller_roles = {"r-super": "Super Admins"}
         self.instance_roles = instance_roles
         self.set = []  # (wo, Rolle, Knoten, Wert)
+        self.template_roles = set()
 
     async def controller(self, endpoint, args):
         if endpoint == "GetPermissionsSpec":
@@ -96,9 +97,11 @@ class FakeAMP:
         if endpoint == "GetRoleIds":
             return dict(self.controller_roles)
         if endpoint == "CreateRole":
-            assert args["AsCommonRole"] is True
+            assert args["AsCommonRole"] is False  # globale Rolle, keine Vorlage-Rolle
             self.controller_roles[f"r-{args['Name']}"] = args["Name"]
             return {"Status": True}
+        if endpoint == "GetRole":
+            return {"ID": args["RoleId"], "IsCommonRole": args["RoleId"] in self.template_roles}
         if endpoint == "SetAMPRolePermission":
             self.set.append(("ads", args["RoleId"], args["PermissionNode"], args["Enabled"]))
             return {"Status": True}
@@ -260,9 +263,28 @@ async def test_unavailable_instance_gets_clear_hint():
 async def test_controller_only_sets_open_instances():
     """Schon eingerichtete Instanzen werden auch am Controller nicht erneut gesetzt."""
     amp = FakeAMP()
+    await run(amp.controller, amp.instance, {"game-1": "Vein"}, apply=True)  # Rollen gibt es schon
+    amp.set.clear()
     report = await run(amp.controller, amp.instance, {"game-1": "Vein", "game-2": "Ark"}, apply=True, only={"game-2"})
     assert report.skipped == ["Vein"]
     controller_nodes = {node for where, _, node, _ in amp.set if where == "ads"}
     assert "ADS.Manage" in controller_nodes  # Anmelden immer
     assert not any(node.startswith("Instances.game-1.") for node in controller_nodes)
     assert "Instances.game-1.Manage" in report.controller["instances"]["Vein"]  # angezeigt wird trotzdem alles
+
+
+async def test_template_roles_are_refused():
+    """Alte Vorlage-Rollen: nichts setzen, sondern zum Loeschen auffordern."""
+    amp = FakeAMP()
+    amp.controller_roles["r-t"] = "Gameserver Helfer"
+    amp.template_roles = {"r-t"}
+    report = await run(amp.controller, amp.instance, {"game-1": "Vein"}, apply=True)
+    assert report.errors and "Vorlage-Rolle" in report.errors[0] and "Gameserver Helfer" in report.errors[0]
+    assert amp.set == [] and report.created_roles == []
+
+
+async def test_new_roles_set_up_all_instances():
+    """Wurden Rollen neu angelegt, kommen alle Instanzen dran - auch schon eingerichtete."""
+    amp = FakeAMP()
+    report = await run(amp.controller, amp.instance, {"game-1": "Vein"}, apply=True, only=set())
+    assert report.created_roles and report.skipped == [] and "Vein" in report.instances

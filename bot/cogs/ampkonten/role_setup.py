@@ -192,16 +192,38 @@ async def run(
         return report
     report.controller = controller_plan(spec, instances, controller_ids)
 
-    role_ids: dict[str, str] = {}
+    # Vorlage-Rollen ("Template Role" = AsCommonRole) haben in JEDER Instanz dieselben
+    # Rechte, auch im ADS von Controller und Targets - Instanz-Rechte wie Dateimanager oder
+    # Einstellungen landeten so auch dort. Die Rollen muessen globale Rollen sein (gleiche
+    # Rolle ueberall, Rechte je Instanz eigen); eine Vorlage-Rolle laesst sich nicht umstellen.
+    try:
+        role_ids = _role_ids(await controller_call("GetRoleIds", {}))
+        templates = []
+        for tier in TIERS:
+            if tier.name in role_ids:
+                role = await controller_call("GetRole", {"RoleId": role_ids[tier.name]})
+                if isinstance(role, dict) and role.get("IsCommonRole"):
+                    templates.append(tier.name)
+    except Exception as error:
+        report.errors.append(f"Rollen des Controllers nicht lesbar ({_short(error)}) – fehlen Super-Admin-Rechte?")
+        return report
+    if templates:
+        report.errors.append(
+            f"{', '.join(templates)}: in AMP als Vorlage-Rolle (Template Role) angelegt – deren Rechte gelten überall "
+            "gleich, auch im Controller. Bitte in AMP unter Configuration → Role Management löschen und dann erneut "
+            "einrichten; der Bot legt sie als globale Rollen neu an."
+        )
+        return report
+
     if apply:
         try:
-            role_ids = _role_ids(await controller_call("GetRoleIds", {}))
             for tier in TIERS:
                 if tier.name not in role_ids:
-                    await controller_call("CreateRole", {"Name": tier.name, "AsCommonRole": True})
+                    await controller_call("CreateRole", {"Name": tier.name, "AsCommonRole": False})
                     report.created_roles.append(tier.name)
             if report.created_roles:
                 role_ids = _role_ids(await controller_call("GetRoleIds", {}))
+                only = None  # neue Rollen haben noch keine Rechte - alle Instanzen einrichten
             for tier in TIERS:
                 rid = role_ids[tier.name]
                 # am Controller auch nur die offenen Instanzen (Anmelden immer - ist nur ein Recht)
