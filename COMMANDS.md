@@ -168,10 +168,10 @@ Start-/Endfarbe nicht (das Bild hat Vorrang) — der Editor bietet in dem
 Fall stattdessen eine Schriftfarbe an.
 
 Der Banner zeigt zusätzlich ein Whitelist-Badge (🔒 Anzahl freigeschalteter
-Nutzer, ⭐ falls mind. einer davon Donator ist). Die Verbindungs-Adresse
-steht einmalig als echter, kopierbarer Inline-Code-Text **über** der
-Nachricht (nicht nochmal im Embed-Feld oder als Pixel im Bild — beides
-wäre redundant und im Bild ohnehin nicht antippbar). Eine `tasks.loop(60s)`
+Nutzer, ⭐ falls mind. einer davon Donator ist). Jeder Banner ist eine Karte
+(Embed): oben die Verbindungs-Adresse als kopierbarer Inline-Code-Text, darunter
+Status bzw. das Bild, Rand in Statusfarbe (nicht als Pixel im Bild — dort wäre
+sie nicht antippbar). Eine `tasks.loop(60s)`
 aktualisiert alle aktiven Banner per `message.edit()` (kein Neu-Posten,
 solange die Nachricht existiert); wiederholte Fehlschläge (z.B. ein
 hängendes Rate-Limit) führen zu exponentiell steigenden Pausen statt
@@ -201,8 +201,8 @@ Ein Server gehört zu maximal einer Gruppe. Zwei Layouts stehen zur Wahl:
   Whitelist-Badge).
 - **`separate`** (wie GatekeeperV2): jedes Mitglied bekommt sein **eigenes**
   vollständiges Banner-Bild/-Embed (mit seinem eigenen Steam-Artwork/Theme/
-  Farben, exakt wie ein Einzel-Banner) — alle zusammen als mehrere Anhänge/
-  Embeds in einer gemeinsamen Nachricht. Die gruppenweiten `theme`/
+  Farben, exakt wie ein Einzel-Banner) — alle zusammen als Karten
+  untereinander in einer gemeinsamen Nachricht, jede mit ihrer Adresse. Die gruppenweiten `theme`/
   `background`/`customize`-Befehle wirken in diesem Layout nicht, da jedes
   Mitglied seine eigene Optik behält (dafür `/banner theme` usw. pro
   Mitgliedsserver nutzen).

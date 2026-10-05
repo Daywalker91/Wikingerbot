@@ -11,6 +11,22 @@ STATE_EMOJI = {
 DEFAULT_STATE_EMOJI = "\N{LARGE YELLOW CIRCLE}"
 
 
+def address_line(host: str | None) -> str | None:
+    """Kopierbare Verbinden-Zeile oben in der Banner-Karte."""
+    return f"Verbinden: `{host}`" if host else None
+
+
+def image_card(host: str | None, filename: str, color: tuple[int, int, int]) -> discord.Embed:
+    """Karte fuer einen Bild-Banner: Adresse oben, Bild darunter, Rand in Statusfarbe.
+
+    Als Karte statt als nackter Anhang, damit Adresse und Bild sichtbar zusammengehoeren -
+    nackte Anhaenge zeigt Discord bei mehreren Bannern als zugeschnittene Galerie, und
+    Nachrichtentext steht dort immer UEBER allen Bildern."""
+    embed = discord.Embed(description=address_line(host), colour=discord.Colour.from_rgb(*color))
+    embed.set_image(url=f"attachment://{filename}")
+    return embed
+
+
 def _whitelist_field(whitelist_count: int | None, has_donator: bool) -> str:
     text = f"\N{LOCK} {whitelist_count} freigeschaltet"
     if has_donator:
@@ -30,9 +46,8 @@ def build_embed(
     state_name = status.State.name
     emoji = STATE_EMOJI.get(state_name, DEFAULT_STATE_EMOJI)
 
-    # Die Verbinden-Adresse steht bereits als eigener, kopierbarer Text ueber der
-    # Nachricht (siehe BannerCog._build_server_payload) - hier nicht nochmal duplizieren.
-    embed = discord.Embed(title=display_name)
+    # Verbinden-Adresse kopierbar oben in der Karte
+    embed = discord.Embed(title=display_name, description=address_line(host))
     embed.add_field(name="Status", value=f"{emoji} {state_name}", inline=True)
     if players is not None:
         embed.add_field(name="Spieler", value=f"{players[0]}/{players[1]}", inline=True)

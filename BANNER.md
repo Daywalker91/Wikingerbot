@@ -25,10 +25,11 @@ Zuspammen des Kanals mit neuen Posts).
 | `embed` | Discord-Embed mit Feldern (Status, Spieler, Uptime, Whitelist). Leichtgewichtig, immer lesbar, kein Hintergrundbild. |
 | `image` | Ein von uns gerendertes PNG (800×300px) mit Verlauf/Artwork als Hintergrund, Text mit Schlagschatten darüber. Optisch aufwendiger, unterstützt Themes/eigene Bilder/Steam-Artwork. |
 
-In beiden Fällen steht die Verbindungs-Adresse **zusätzlich** als eigener,
-antippbarer/kopierbarer Text über der eigentlichen Nachricht — das ist bei
-Bildern der einzige Weg, die Adresse kopierbar zu machen (Pixel lassen sich
-nicht markieren).
+In beiden Fällen ist der Banner eine Karte: oben die Verbindungs-Adresse als
+kopierbarer Text, darunter Status bzw. das Bild, der Rand in Statusfarbe. Ins
+Bild gemalt wird die Adresse nicht (Pixel lassen sich nicht markieren). Als
+Karte gehört die Adresse sichtbar zum richtigen Server, auch wenn mehrere
+Banner untereinander oder in einer Gruppe stehen.
 
 Später wechseln: `/banner type name:<server> type:image` (postet neu).
 

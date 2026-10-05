@@ -19,13 +19,22 @@ def test_build_embed_contains_core_fields():
     assert embed.timestamp is not None
 
 
-def test_build_embed_does_not_duplicate_connect_address():
-    # Die Adresse wird als eigener Text ueber der Nachricht gesendet (siehe
-    # BannerCog._build_server_payload), nicht nochmal im Embed selbst.
+def test_build_embed_shows_connect_address_once_on_top():
+    # Adresse kopierbar oben in der Karte (Beschreibung), nicht nochmal als Feld
     embed = build_embed("Valheim", "play.example.com", _STATUS, (3, 10))
 
-    field_names = [field.name for field in embed.fields]
-    assert "Verbinden" not in field_names
+    assert embed.description == "Verbinden: `play.example.com`"
+    assert "Verbinden" not in [field.name for field in embed.fields]
+    assert build_embed("Valheim", "", _STATUS, None).description is None
+
+
+def test_image_card_keeps_address_and_image_together():
+    from bot.cogs.banner.embed import image_card
+
+    card = image_card("play.example.com:2456", "banner_7.png", (40, 200, 80))
+    assert card.description == "Verbinden: `play.example.com:2456`"
+    assert card.image.url == "attachment://banner_7.png"
+    assert card.colour.to_rgb() == (40, 200, 80)
 
 
 def test_build_embed_omits_players_field_when_none():

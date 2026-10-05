@@ -11,8 +11,8 @@ from PIL import Image
 from sqlalchemy import func, select
 
 from bot.core.amp_client import amp_client
-from bot.cogs.banner.embed import build_embed, build_group_embed
-from bot.cogs.banner.image import extract_players, render_banner, render_banner_group
+from bot.cogs.banner.embed import build_embed, build_group_embed, image_card
+from bot.cogs.banner.image import _status_color, extract_players, render_banner, render_banner_group
 from bot.cogs.banner.themes import BANNER_THEMES, BLUR_LEVELS, PRESET_COLORS
 from bot.core.base_cog import BaseCog
 from bot.core.capabilities import require_capability
@@ -329,10 +329,11 @@ class BannerCog(BaseCog):
         players = extract_players(status)
         whitelist_count, has_donator = await self._whitelist_badge(server.id)
 
-        # Adresse steht einheitlich als eigener, kopierbarer Inline-Code-Text ueber der
-        # Nachricht - egal ob Embed oder Bild, nicht nochmal im Embed/Bild dupliziert.
+        # Jeder Banner ist eine Karte (Embed): Verbinden-Adresse kopierbar oben, darunter
+        # Status bzw. das Bild - so gehoert die Adresse sichtbar zum richtigen Server, auch
+        # wenn mehrere Banner untereinander oder in einer Gruppe stehen. Kein Nachrichtentext.
         address = await connect_address(server)
-        content = f"Verbinden: `{address}`" if address else None
+        content = None
 
         if server.banner_type == BannerType.EMBED:
             embed = build_embed(
@@ -360,7 +361,10 @@ class BannerCog(BaseCog):
             whitelist_count=whitelist_count,
             has_donator=has_donator,
         )
-        return None, discord.File(buffer, filename="banner.png"), content
+        # eindeutiger Dateiname: in einer Gruppe stehen mehrere Bilder in einer Nachricht
+        filename = f"banner_{server.id}.png"
+        card = image_card(address, filename, _status_color(status.State.name))
+        return card, discord.File(buffer, filename=filename), content
 
     async def _post_or_refresh_server(self, server_id: int) -> None:
         async with get_db_session() as db:
@@ -446,7 +450,8 @@ class BannerCog(BaseCog):
         files: list[discord.File] = []
         content_lines: list[str] = []
 
-        for member in members:
+        # Discord erlaubt 10 Karten pro Nachricht
+        for member in members[:10]:
             embed, file, member_content = await self._build_server_payload(member)
             if embed is not None:
                 embeds.append(embed)
