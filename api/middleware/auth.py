@@ -73,11 +73,34 @@ async def get_current_user(
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Session ungueltig") from exc
     if payload.get("type") != "access":
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Session ungueltig")
-    return CurrentUser(
+    user = CurrentUser(
         user_id=int(payload["sub"]),
         guild_id=int(payload["guild_id"]),
         level=Level(payload["level"]),
     )
+    return await _with_live_level(user)
+
+
+async def _with_live_level(user: CurrentUser) -> CurrentUser:
+    """Stufe bei jedem Aufruf frisch aus Discord statt der beim Login gemerkten: wer eine
+    Rolle verliert oder den Server verlaesst, verliert die Rechte sofort - nicht erst,
+    wenn die Sitzung ablaeuft. Ohne laufenden Bot (oder solange er die Mitglieder noch
+    nicht kennt) gilt die Stufe aus dem Login."""
+    from bot.core import runtime
+    from bot.core.permissions import resolve_level
+
+    get_guild = getattr(runtime.bot, "get_guild", None)
+    guild = get_guild(user.guild_id) if get_guild else None
+    if guild is None or not getattr(guild, "chunked", False):
+        return user
+    member = guild.get_member(user.user_id)
+    if member is None:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Nicht mehr auf dem Discord-Server")
+    if member.guild_permissions.administrator:  # auch der Server-Owner
+        level = Level.OWNER
+    else:
+        level = await resolve_level(guild.id, [role.id for role in member.roles])
+    return CurrentUser(user_id=user.user_id, guild_id=user.guild_id, level=level)
 
 
 def require_level(minimum: Level):

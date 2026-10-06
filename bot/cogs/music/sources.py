@@ -54,6 +54,31 @@ async def check_public_url(url: str) -> None:
         raise SourceError("Adressen im internen Netz sind nicht erlaubt.")
 
 
+MAX_REDIRECTS = 5
+
+
+async def fetch_limited(url: str, max_bytes: int, *, too_big: str | None = None) -> tuple[int, bytes]:
+    """GET mit Groessengrenze; Weiterleitungen werden einzeln verfolgt und JEDES Ziel geprueft
+    (sonst koennte eine oeffentliche Adresse ins interne Netz weiterleiten).
+    too_big: Meldung bei Ueberschreitung - ohne wird einfach abgeschnitten."""
+    async with httpx.AsyncClient(timeout=HTTP_TIMEOUT, follow_redirects=False, headers={"User-Agent": USER_AGENT}) as client:
+        for _ in range(MAX_REDIRECTS + 1):
+            await check_public_url(url)
+            async with client.stream("GET", url) as response:
+                if response.is_redirect and response.headers.get("location"):
+                    url = str(response.url.join(response.headers["location"]))
+                    continue
+                body = b""
+                async for chunk in response.aiter_bytes():
+                    body += chunk
+                    if len(body) > max_bytes:
+                        if too_big:
+                            raise SourceError(too_big)
+                        break
+                return response.status_code, body
+    raise SourceError("Zu viele Weiterleitungen.")
+
+
 # --- Radio: Playlisten aufloesen -------------------------------------------------
 
 
@@ -71,20 +96,17 @@ def parse_playlist(text: str) -> str | None:
 async def resolve_stream_url(url: str) -> str:
     """Radiosender verweisen oft auf eine .m3u/.pls-Liste statt direkt auf den
     Stream - die wird hier aufgeloest. HLS (.m3u8) kann FFmpeg selbst."""
+    await check_public_url(url)  # auch eingetragene Sender - nie ins interne Netz
     path = urlparse(url).path.lower()
     if not path.endswith((".m3u", ".pls")):
         return url
-    async with httpx.AsyncClient(timeout=HTTP_TIMEOUT, follow_redirects=True, headers={"User-Agent": USER_AGENT}) as client:
-        async with client.stream("GET", url) as response:
-            response.raise_for_status()
-            body = b""
-            async for chunk in response.aiter_bytes():
-                body += chunk
-                if len(body) > MAX_PLAYLIST_BYTES:
-                    break
+    status, body = await fetch_limited(url, MAX_PLAYLIST_BYTES)
+    if status != 200:
+        raise SourceError(f"Playlist des Senders nicht abrufbar (HTTP {status}).")
     stream = parse_playlist(body.decode("utf-8", errors="replace"))
     if stream is None:
         raise SourceError("In der Playlist des Senders steht keine Stream-Adresse.")
+    await check_public_url(stream)
     return stream
 
 
@@ -151,16 +173,9 @@ async def fetch_feed(url: str, *, use_cache: bool = True) -> Feed:
     cached = _feed_cache.get(url)
     if use_cache and cached and time.monotonic() - cached[0] < FEED_CACHE_SECONDS:
         return cached[1]
-    await check_public_url(url)
-    async with httpx.AsyncClient(timeout=HTTP_TIMEOUT, follow_redirects=True, headers={"User-Agent": USER_AGENT}) as client:
-        async with client.stream("GET", url) as response:
-            if response.status_code != 200:
-                raise SourceError(f"Feed nicht abrufbar (HTTP {response.status_code}).")
-            body = b""
-            async for chunk in response.aiter_bytes():
-                body += chunk
-                if len(body) > MAX_FEED_BYTES:
-                    raise SourceError("Der Feed ist zu groß.")
+    status, body = await fetch_limited(url, MAX_FEED_BYTES, too_big="Der Feed ist zu groß.")
+    if status != 200:
+        raise SourceError(f"Feed nicht abrufbar (HTTP {status}).")
     feed = parse_feed(body)
     _feed_cache[url] = (time.monotonic(), feed)
     return feed

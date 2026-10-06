@@ -358,9 +358,15 @@ async def _read_upload(request: Request) -> bytes:
     content_type = (request.headers.get("content-type") or "").split(";")[0].strip()
     if content_type not in ALLOWED_CONTENT_TYPES:
         raise HTTPException(400, "Nur PNG-, JPEG- oder WebP-Bilder.")
-    data = await request.body()
-    if len(data) > MAX_UPLOAD_BYTES:
-        raise HTTPException(400, "Bild ist zu gross (max. 8 MB).")
+    too_big = HTTPException(400, "Bild ist zu gross (max. 8 MB).")
+    declared = request.headers.get("content-length")
+    if declared and declared.isdigit() and int(declared) > MAX_UPLOAD_BYTES:
+        raise too_big  # gar nicht erst einlesen
+    data = b""
+    async for chunk in request.stream():
+        data += chunk
+        if len(data) > MAX_UPLOAD_BYTES:
+            raise too_big
     try:
         with Image.open(io.BytesIO(data)) as image:
             image.verify()

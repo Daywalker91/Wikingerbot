@@ -1,3 +1,4 @@
+import asyncio
 import io
 import time
 from pathlib import Path
@@ -101,11 +102,16 @@ async def _autocomplete_group_name(
     return [Choice(name=n, value=n) for n in names if current_lower in n.lower()][:25]
 
 
-async def _save_background(data: bytes, path: Path) -> None:
-    """Normalisiert ein hochgeladenes Bild auf PNG, unabhaengig vom Quellformat."""
+def _convert_to_png(data: bytes, path: Path) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     with Image.open(io.BytesIO(data)) as source:
         source.convert("RGB").save(path, format="PNG")
+
+
+async def _save_background(data: bytes, path: Path) -> None:
+    """Normalisiert ein hochgeladenes Bild auf PNG, unabhaengig vom Quellformat - in einem
+    eigenen Thread, damit grosse Bilder den Bot nicht kurz anhalten."""
+    await asyncio.to_thread(_convert_to_png, data, path)
 
 
 class _ColorSelect(discord.ui.Select):
