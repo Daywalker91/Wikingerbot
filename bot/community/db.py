@@ -46,6 +46,11 @@ from bot.core.config import settings
 
 DB_NAME_KEY = "community_db_name"
 SITE_URL_KEY = "community_site_url"
+# Optional eigene Verbindung zur Seiten-DB (leerer Server = Server/Benutzer der Bot-DB)
+DB_HOST_KEY = "community_db_host"
+DB_PORT_KEY = "community_db_port"
+DB_USER_KEY = "community_db_user"
+DB_PASSWORD_KEY = "community_db_password"  # nie an die Oberflaeche zurueck
 
 metadata = MetaData()
 
@@ -210,20 +215,24 @@ wiki_pages = Table(
 
 _engine: AsyncEngine | None = None
 _session_maker: async_sessionmaker[AsyncSession] | None = None
-_config = {"db_name": "", "url": "", "site_url": ""}
+_config = {"db_name": "", "url": "", "site_url": "", "db_host": "", "db_port": 0, "db_user": "", "password_set": False}
 
 
-def _url_for(db_name: str) -> str:
-    """Seiten-DB auf demselben Server mit demselben Benutzer wie die Bot-DB."""
-    if not db_name or not settings.db_host:
+def _url_for(db_name: str, host: str = "", port: int = 0, user: str = "", password: str = "") -> str:
+    """Seiten-DB: ohne eigenen Server auf dem Server der Bot-DB mit deren Benutzer.
+    Mit eigenem Server: dessen Port (Standard 3306) und Benutzer - ohne Benutzer der der Bot-DB."""
+    if not db_name:
+        return ""
+    if host:
+        own_user = bool(user)
+        user, password = (user, password) if own_user else (settings.db_user, settings.db_password)
+        port = port or 3306
+    elif settings.db_host:
+        host, port, user, password = settings.db_host, settings.db_port, settings.db_user, settings.db_password
+    else:
         return ""
     return URL.create(
-        "mysql+asyncmy",
-        username=settings.db_user,
-        password=settings.db_password,
-        host=settings.db_host,
-        port=settings.db_port,
-        database=db_name,
+        "mysql+asyncmy", username=user, password=password, host=host, port=port, database=db_name
     ).render_as_string(hide_password=False)
 
 
@@ -231,21 +240,52 @@ async def load_config() -> dict:
     """Liest die Einstellungen (Oberflaeche vor .env) und verbindet ggf. neu."""
     db_name = await get_bot_setting(DB_NAME_KEY, "") or ""
     site_url = (await get_bot_setting(SITE_URL_KEY, "") or settings.community_site_url).rstrip("/")
-    url = _url_for(db_name) if db_name else settings.community_database_url
+    host = await get_bot_setting(DB_HOST_KEY, "") or ""
+    port = int(await get_bot_setting(DB_PORT_KEY, "0") or 0)
+    user = await get_bot_setting(DB_USER_KEY, "") or ""
+    password = await get_bot_setting(DB_PASSWORD_KEY, "") or ""
+    url = _url_for(db_name, host, port, user, password) if db_name else settings.community_database_url
     if url != _config["url"]:
         await dispose()
-    _config.update(db_name=db_name, url=url, site_url=site_url)
+    _config.update(
+        db_name=db_name, url=url, site_url=site_url, db_host=host, db_port=port, db_user=user, password_set=bool(password)
+    )
     return current_config()
 
 
-async def save_config(db_name: str, site_url: str) -> dict:
+async def save_config(
+    db_name: str,
+    site_url: str,
+    *,
+    host: str | None = None,
+    port: int | None = None,
+    user: str | None = None,
+    password: str | None = None,
+) -> dict:
+    """None = unveraendert lassen (z.B. Passwort, das die Oberflaeche nie kennt)."""
     await set_bot_setting(DB_NAME_KEY, db_name.strip())
     await set_bot_setting(SITE_URL_KEY, site_url.strip().rstrip("/"))
+    if host is not None:
+        await set_bot_setting(DB_HOST_KEY, host.strip())
+    if port is not None:
+        await set_bot_setting(DB_PORT_KEY, str(port))
+    if user is not None:
+        await set_bot_setting(DB_USER_KEY, user.strip())
+    if password is not None:
+        await set_bot_setting(DB_PASSWORD_KEY, password)
     return await load_config()
 
 
 def current_config() -> dict:
-    return {"db_name": _config["db_name"], "site_url": _config["site_url"], "enabled": enabled()}
+    return {
+        "db_name": _config["db_name"],
+        "site_url": _config["site_url"],
+        "enabled": enabled(),
+        "own_host": _config["db_host"],
+        "own_port": _config["db_port"] or None,
+        "own_user": _config["db_user"],
+        "password_set": _config["password_set"],
+    }
 
 
 def enabled() -> bool:

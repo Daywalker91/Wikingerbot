@@ -119,16 +119,19 @@ darf.
 
 Der Bot läuft ohne die Seite. Für die Anbindung (Verknüpfen, News, Events, Tickets …):
 
-1. Auf der Seite laufen die Migrationen `008_discord` und `009_amp_zugang` von selbst (beim
-   nächsten Seitenaufruf).
-2. Dem Datenbank-Benutzer des Bots eng begrenzte Rechte auf die Datenbank der Seite geben –
-   SQL mit Platzhaltern: [docs/community-grants.sql](docs/community-grants.sql) (spaltengenau,
-   der Bot sieht z.B. weder E-Mail noch Passwort-Hash). Die Seite muss dafür auf demselben
-   Datenbank-Server liegen wie die Datenbank des Bots.
+1. Auf der Seite laufen ihre Migrationen (ab `008_discord`) von selbst (beim nächsten
+   Seitenaufruf).
+2. Dem Datenbank-Benutzer, mit dem der Bot die Seite liest, eng begrenzte Rechte auf die
+   Datenbank der Seite geben – SQL mit Platzhaltern:
+   [docs/community-grants.sql](docs/community-grants.sql) (spaltengenau, der Bot sieht z.B.
+   weder E-Mail noch Passwort-Hash).
 3. In der **Bot-Oberfläche → Community** (nur Owner): Datenbankname der Seite und ihre
-   Adresse (z.B. `https://community.example.com`) eintragen, *Speichern und verbinden*. Host,
-   Benutzer und Passwort sind die aus AMP (Abschnitt *Datenbank*); ein Neustart ist nicht nötig.
-   Die Seite zeigt sofort, ob die Verbindung steht und die Rechte passen.
+   Adresse (z.B. `https://community.example.com`) eintragen, *Speichern und verbinden*. Ohne
+   weitere Angaben nutzt der Bot Server, Benutzer und Passwort aus AMP (Abschnitt *Datenbank*).
+   Liegt die Seite auf einem anderen Datenbank-Server oder soll ein eigener Benutzer sie
+   lesen: unter *Datenbank-Server der Seite* Server, Port, Benutzer und Passwort eintragen
+   (das Passwort wird nie wieder angezeigt). Ein Neustart ist nicht nötig; die Seite zeigt
+   sofort, ob die Verbindung steht und die Rechte passen.
 4. Erst danach auf der Seite `'discord_enabled' => true` setzen (in ihrer `config.local.php`) –
    vorher würde die Seite Aufträge schreiben, die niemand abholt.
 5. Die weiteren Tabs einstellen: *News*, *Events*, *Tickets*, *Rang-Sync*, *AMP-Konten*.

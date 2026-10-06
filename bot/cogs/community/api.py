@@ -1,8 +1,9 @@
 """FastAPI-Router fuer die Community-Seite der Oberflaeche (web/CommunityPage.tsx):
 Anbindung an die Datenbank der Community-Seite einstellen und pruefen.
 
-Nur Datenbankname und Adresse der Seite - Host, Benutzer und Passwort sind die
-der Bot-Datenbank (AMP-Felder DB_*) und werden hier nie angezeigt.
+Datenbankname und Adresse der Seite; optional ein eigener Server mit Port,
+Benutzer und Passwort - ohne eigenen Server gelten die der Bot-Datenbank (AMP-Felder
+DB_*). Passwoerter gehen nie an die Oberflaeche zurueck (nur "gesetzt").
 """
 
 from fastapi import APIRouter, Depends
@@ -48,9 +49,18 @@ class CommunityConfigIn(BaseModel):
     # MariaDB-Datenbanknamen: Buchstaben, Ziffern, _ und $ - nichts, was die URL verbiegt
     db_name: str = Field(default="", max_length=64, pattern=r"^[A-Za-z0-9_$]*$")
     site_url: str = Field(default="", max_length=200, pattern=r"^(https?://[^\s]+)?$")
+    # Eigener Server (leer = wie die Bot-Datenbank): Hostname oder IP, keine Leerzeichen/Schraegstriche
+    host: str = Field(default="", max_length=253, pattern=r"^[A-Za-z0-9.\-:\[\]]*$")
+    port: int | None = Field(default=None, ge=1, le=65535)
+    user: str = Field(default="", max_length=80, pattern=r"^[^\s@/:]*$")
+    password: str | None = Field(default=None, max_length=200)  # None/leer = unveraendert
+    clear_password: bool = False
 
 
 @router.put("/config")
 async def put_config(body: CommunityConfigIn, user: CurrentUser = Depends(require_level(Level.OWNER))) -> dict:
-    await community_db.save_config(body.db_name, body.site_url)
+    password = "" if body.clear_password or not body.host else (body.password or None)
+    await community_db.save_config(
+        body.db_name, body.site_url, host=body.host, port=body.port or 0, user=body.user if body.host else "", password=password
+    )
     return await _status()

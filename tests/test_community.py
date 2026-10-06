@@ -191,8 +191,12 @@ def test_url_for_uses_bot_db_server_and_user(monkeypatch):
     monkeypatch.setattr(settings, "db_password", "p#w")
     assert community_db._url_for("php") == "mysql+asyncmy://wikingerbot:p%23w@192.0.2.10:3306/php"
     assert community_db._url_for("") == ""
+    # eigener Server: mit eigenem Benutzer, sonst der der Bot-DB; Standard-Port 3306
+    assert community_db._url_for("php", "10.0.0.50", 0, "site", "g3h") == "mysql+asyncmy://site:g3h@10.0.0.50:3306/php"
+    assert community_db._url_for("php", "10.0.0.50", 3307) == "mysql+asyncmy://wikingerbot:p%23w@10.0.0.50:3307/php"
     monkeypatch.setattr(settings, "db_host", "")
     assert community_db._url_for("php") == ""  # ohne DB_HOST keine Anbindung
+    assert community_db._url_for("php", "10.0.0.50", 0, "site", "x").startswith("mysql+asyncmy://site:x@10.0.0.50")
 
 
 async def test_web_ui_config_saved_and_takes_precedence(monkeypatch):
@@ -205,6 +209,7 @@ async def test_web_ui_config_saved_and_takes_precedence(monkeypatch):
 
     monkeypatch.setattr(settings, "db_host", "127.0.0.1")
     monkeypatch.setattr(settings, "db_port", 1)  # lehnt sofort ab - kein echter Server im Test
+    monkeypatch.setattr(settings, "db_password", "bot-geheim-7")
     client = httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test")
     async with client:
         client.cookies.set("session", create_access_token(1, 1, Level.ADMIN))
@@ -214,8 +219,34 @@ async def test_web_ui_config_saved_and_takes_precedence(monkeypatch):
         data = (await client.put("/community/config", json={"db_name": "php", "site_url": "https://wikinger.example/"})).json()
         assert data["db_name"] == "php" and data["site_url"] == "https://wikinger.example" and data["enabled"]
         assert data["connected"] is False and "Nicht erreichbar" in data["message"]  # kein echter Server im Test
-        assert "password" not in str(data).lower()
+        assert settings.db_password not in str(data) and "mysql+" not in str(data)  # weder Passwort noch Verbindungs-URL
 
         data = (await client.put("/community/config", json={"db_name": "", "site_url": ""})).json()
         assert data["enabled"] is False
     await community_db.load_config()
+
+
+async def test_own_server_password_never_returned_and_kept(monkeypatch):
+    """Eigener Server in der Oberflaeche: Passwort nur "gesetzt", leer = unveraendert."""
+    import httpx
+
+    from api.main import app
+    from api.middleware.auth import create_access_token
+    from bot.core.bot_settings import get_bot_setting
+    from db.models.role import Level
+
+    monkeypatch.setattr(settings, "db_host", "127.0.0.1")
+    body = {"db_name": "php", "site_url": "", "host": "127.0.0.1", "port": 1, "user": "site", "password": "geheim-42"}
+    client = httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test")
+    async with client:
+        client.cookies.set("session", create_access_token(1, 1, Level.OWNER))
+        assert (await client.put("/community/config", json={**body, "host": "evil host/x"})).status_code == 422
+        data = (await client.put("/community/config", json=body)).json()
+        assert (data["own_host"], data["own_port"], data["own_user"], data["password_set"]) == ("127.0.0.1", 1, "site", True)
+        assert "geheim-42" not in str(data)
+        data = (await client.put("/community/config", json={**body, "password": None})).json()
+        assert data["password_set"] and await get_bot_setting(community_db.DB_PASSWORD_KEY) == "geheim-42"
+        data = (await client.put("/community/config", json={**body, "password": None, "clear_password": True})).json()
+        assert not data["password_set"]
+        await client.put("/community/config", json={"db_name": "", "site_url": ""})
+    await community_db.save_config("", "", host="", port=0, user="", password="")

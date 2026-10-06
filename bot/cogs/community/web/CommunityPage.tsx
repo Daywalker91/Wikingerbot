@@ -21,6 +21,11 @@ export default function CommunityPage() {
   const [status, setStatus] = useState<CommunityStatus | null>(null);
   const [dbName, setDbName] = useState("");
   const [siteUrl, setSiteUrl] = useState("");
+  const [host, setHost] = useState("");
+  const [port, setPort] = useState("");
+  const [dbUser, setDbUser] = useState("");
+  const [password, setPassword] = useState("");
+  const [clearPassword, setClearPassword] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -28,6 +33,11 @@ export default function CommunityPage() {
     setStatus(next);
     setDbName(next.db_name);
     setSiteUrl(next.site_url);
+    setHost(next.own_host);
+    setPort(next.own_port ? String(next.own_port) : "");
+    setDbUser(next.own_user);
+    setPassword("");
+    setClearPassword(false);
   }
 
   useEffect(() => {
@@ -41,7 +51,17 @@ export default function CommunityPage() {
     setBusy(true);
     setError(null);
     try {
-      apply(await saveCommunity(dbName, siteUrl));
+      apply(
+        await saveCommunity({
+          db_name: dbName,
+          site_url: siteUrl,
+          host: host.trim(),
+          port: port.trim() ? Number(port) : null,
+          user: dbUser.trim(),
+          password: password || null,
+          clear_password: clearPassword,
+        }),
+      );
     } catch (e) {
       setError((e as Error).message);
     } finally {
@@ -84,10 +104,36 @@ export default function CommunityPage() {
           Datenbank der Seite
           <br />
           <input value={dbName} onChange={(e) => setDbName(e.target.value)} placeholder="php" />
-          <span style={{ ...muted, marginLeft: 8 }}>
-            auf {status?.db_host ?? "dem Datenbank-Server des Bots"}, mit demselben Benutzer (AMP → Datenbank)
-          </span>
         </label>
+        <fieldset style={{ border: "1px solid var(--wb-border)", borderRadius: 6, padding: "4px 12px 12px" }}>
+          <legend style={muted}>Datenbank-Server der Seite (optional)</legend>
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
+            <input value={host} onChange={(e) => setHost(e.target.value)} placeholder={status?.db_host ?? "Server"} />
+            <input value={port} onChange={(e) => setPort(e.target.value.replace(/\D/g, ""))} placeholder="3306" style={{ width: 80 }} />
+          </div>
+          {host.trim() ? (
+            <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center", marginTop: 8 }}>
+              <input value={dbUser} onChange={(e) => setDbUser(e.target.value)} placeholder="Benutzer" autoComplete="off" />
+              <input
+                type="password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder={status?.password_set ? "gesetzt – leer = unverändert" : "Passwort"}
+                autoComplete="new-password"
+                disabled={clearPassword}
+              />
+              {status?.password_set && (
+                <label style={muted}>
+                  <input type="checkbox" checked={clearPassword} onChange={(e) => setClearPassword(e.target.checked)} /> Passwort löschen
+                </label>
+              )}
+            </div>
+          ) : null}
+          <p style={{ ...muted, margin: "8px 0 0" }}>
+            Leer = derselbe Server und Benutzer wie die Datenbank des Bots ({status?.db_host ?? "AMP → Datenbank"}). Mit eigenem
+            Server ohne Benutzer gilt ebenfalls der Benutzer des Bots. Das Passwort wird nie angezeigt.
+          </p>
+        </fieldset>
         <label style={field}>
           Adresse der Seite (für Links in Discord)
           <br />
