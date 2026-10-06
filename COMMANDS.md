@@ -84,9 +84,11 @@ Minecraft; vanilla Valheim z.B. nicht).
 | `/modlog user:` | Zeigt die komplette Moderationshistorie eines Mitglieds | Mod |
 | `/strafrolle geben mitglied: grund:` | Einschränken statt kicken: nimmt die Autorole, gibt die Strafrolle (Tab Moderation), DM mit Grund, Modlog-Eintrag | Mod |
 | `/strafrolle aufheben mitglied: grund:` | Nimmt die Strafrolle, gibt die Autorole zurück | Mod |
+| `/reset_escalation user:` | Setzt die Eskalationsstufe eines Mitglieds zurück (die nächste automatische Eskalation beginnt wieder unten in der Leiter) | Mod |
 | `/modconfig threshold value:` | Setzt die Warn-Punkte-Schwelle für automatische Eskalation (Default 3) | Owner |
 | `/modconfig ladder actions:` | Eskalations-Leiter, z.B. `timeout,strafrolle,kick,ban` | Owner |
 | `/modconfig timeout minutes:` | Setzt die Timeout-Dauer für Eskalationen in Minuten (Default 60) | Owner |
+| `/modconfig decay_days days:` | Nach wie vielen Tagen Warn-Punkte automatisch verfallen | Owner |
 | `/modconfig log_channel channel:` | Kanal, in dem jeder Bann, Kick und Timeout gemeldet wird (Mod, Grund, bei Bann der `/unban`-Befehl). Auch im Moderations-Tab einstellbar. Wer bisher keinen eigenen hatte, behält einmalig den bisherigen AutoMod-Kanal | Owner |
 
 **Rangregel**: Vor `/kick`, `/ban`, `/timeout`, `/warn` und jeder automatischen
