@@ -89,6 +89,22 @@ user_extra_roles = Table(
     Column("assigned_by", Integer),
 )
 
+# Rollenanfragen der Seite (Migration 011): pending | approved | denied
+role_requests = Table(
+    "role_requests",
+    metadata,
+    Column("id", Integer, primary_key=True),
+    Column("user_id", Integer),
+    Column("role_id", Integer),
+    Column("ticket_id", Integer),
+    Column("reason", String(1000), default=""),
+    Column("status", String(10), default="pending"),
+    Column("decided_by", Integer),
+    Column("decision_note", String(255)),
+    Column("created_at", DateTime),
+    Column("decided_at", DateTime),
+)
+
 discord_link_codes = Table(
     "discord_link_codes",
     metadata,

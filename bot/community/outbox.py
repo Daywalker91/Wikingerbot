@@ -47,6 +47,17 @@ def unregister(kind: str, handler: Handler | None = None) -> None:
         _handlers.pop(kind, None)
 
 
+async def dispatch_local(kind: str, payload: dict) -> None:
+    """Fuehrt die Zustaendigen einer Art direkt aus - fuer Aenderungen, die der Bot selbst
+    auf der Seite macht (z.B. eine genehmigte Rollenanfrage): dieselbe Wirkung wie ein
+    Auftrag der Seite, ohne den Umweg ueber bot_outbox. Fehler werden nur geloggt."""
+    for handler in list(_handlers.get(kind, [])):
+        try:
+            await handler(payload)
+        except Exception as error:
+            log.warning("%s fuer %s fehlgeschlagen: %s", kind, payload, error)
+
+
 def registered() -> list[str]:
     return sorted(_handlers)
 

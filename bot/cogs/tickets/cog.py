@@ -27,6 +27,7 @@ from discord.ext import commands
 from bot.cogs.tickets.site import (
     CATEGORIES,
     PRIORITIES,
+    SYSTEM_CATEGORIES,
     STATUSES,
     Ticket,
     TicketError,
@@ -482,7 +483,7 @@ class TicketsCog(BaseCog):
         return len(recent) >= CREATE_LIMIT
 
     @app_commands.command(name="ticket", description="Eroeffnet ein Ticket beim Support")
-    @app_commands.choices(kategorie=[app_commands.Choice(name=label, value=key) for key, label in CATEGORIES.items()])
+    @app_commands.choices(kategorie=[app_commands.Choice(name=label, value=key) for key, label in CATEGORIES.items() if key not in SYSTEM_CATEGORIES])
     async def ticket(self, interaction: discord.Interaction, kategorie: app_commands.Choice[str]) -> None:
         if not community_db.enabled():
             await interaction.response.send_message("Die Community-Seite ist nicht angebunden.", ephemeral=True)

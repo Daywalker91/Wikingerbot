@@ -502,3 +502,32 @@ Fest eingebaut: Der Bot fasst nur Konten an, die er selbst angelegt hat (ist der
 Name schon vergeben, hängt er `-<Nr>` an), vergibt nie *Super Admins* oder seine
 eigene Rolle, und das Passwort steht nur in der DM. Im Tab: Adresse des Panels für
 die DM und Rang → AMP-Rolle (Standard: kein Zugang).
+
+---
+
+## Rollenanfragen der Community-Seite (`rollenanfragen`-Cog, Tab *Rollenanfragen*)
+
+Kein Slash-Befehl. Mitglieder beantragen auf der Seite unter *Einstellungen → Rolle
+beantragen* die **nächste Rangstufe** (nie den Rang mit allen Rechten) oder eine
+**Zusatzrolle**, mit Begründung. Wer unter dem Standardrang steht, beantragt nichts.
+Grenzen: je Rolle eine offene Anfrage, eine pro Tag, höchstens vier pro Woche, nach
+einer Ablehnung dieselbe Rolle erst nach sieben Tagen.
+
+Zu jeder Anfrage legt die Seite ein Ticket der Kategorie *Rollenanfrage* an. Der Bot
+postet die Anfrage mit **Zustimmen** / **Ablehnen** in den Mod-Log-Kanal und in den
+Ticket-Thread. Entscheiden darf:
+
+| Anfrage | Wer |
+|---|---|
+| Zusatzrolle | Owner – oder ab Mod, wer die Rolle selbst hat; nur für Mitglieder bis zum eigenen Rang |
+| Rang | Owner – oder ab Mod, wer auf der Seite über dem beantragten Rang steht |
+
+Nie bei der eigenen Anfrage. „Owner“ = Bot-Stufe Owner, Discord-Administrator oder auf
+der Seite alle Rechte. Wer klickt, muss verknüpft sein.
+
+**Zustimmen** vergibt die Rolle auf der Seite; Rang-Sync und AMP-Konten ziehen sofort
+nach (z.B. Schmied → AMP-Konto, ein gesperrtes wird wieder aktiv). **Ablehnen** fragt
+nach einem Grund. Beides beantwortet und schließt das Ticket (das Mitglied bekommt es
+per DM) und steht kurz im Mod-Log. Braucht die Rechte aus `docs/community-grants.sql`
+(`role_requests`).
+

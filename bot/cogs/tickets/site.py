@@ -24,7 +24,9 @@ CATEGORIES = {
     "melden": "Spieler melden",
     "konto": "Konto & Rollen",
     "sonstiges": "Sonstiges",
+    "rollenanfrage": "Rollenanfrage",
 }
+SYSTEM_CATEGORIES = {"rollenanfrage"}  # legt nur die Seite an (Rolle beantragen) - nicht per /ticket waehlbar
 STATUSES = {
     "open": ("⚪", "Offen"),
     "in_progress": ("🔨", "In Bearbeitung"),
@@ -124,7 +126,7 @@ async def create_ticket(site_user_id: int, subject: str, category: str, body: st
     subject, body = subject.strip(), body.strip()
     if not 5 <= len(subject) <= 150:
         raise TicketError("Der Betreff muss 5–150 Zeichen lang sein.")
-    if category not in CATEGORIES:
+    if category not in CATEGORIES or category in SYSTEM_CATEGORIES:
         raise TicketError("Unbekannte Kategorie.")
     if len(body) < 10:
         raise TicketError("Beschreib dein Anliegen bitte etwas genauer (mindestens 10 Zeichen).")
