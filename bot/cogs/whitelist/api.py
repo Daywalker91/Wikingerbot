@@ -67,7 +67,7 @@ async def _get_scoped_request(
 
 @router.get("/requests", response_model=list[WhitelistRequestOut])
 async def list_requests(
-    status: Literal["pending", "approved", "denied"] = "pending",
+    status: Literal["pending", "approved", "denied", "revoked"] = "pending",
     user: CurrentUser = Depends(require_capability("whitelist.review")),
     db: AsyncSession = Depends(get_db),
 ) -> list[WhitelistRequestOut]:
@@ -145,3 +145,106 @@ async def deny_request(
     request.handled_by = user.user_id
     await db.commit()
     return ActionResult(ok=True, message="Abgelehnt")
+
+
+# --- Gruppen-Rollen (Panel-Knopf mit Bestaetigung, bot/cogs/roles/requests.py) -------------
+
+
+class GroupRequestOut(BaseModel):
+    id: int
+    user_id: Snowflake
+    user_name: str | None
+    role_id: Snowflake
+    role_name: str
+    status: Literal["pending", "approved", "denied", "revoked", "cancelled"]
+    note: str | None = None
+    decided_by: Snowflake | None = None
+    created_at: datetime
+
+
+def _guild_or_503(guild_id: int):
+    guild = runtime.bot.get_guild(guild_id) if runtime.bot else None
+    if guild is None:
+        raise HTTPException(status_code=503, detail="Der Bot ist gerade nicht mit Discord verbunden.")
+    return guild
+
+
+@router.get("/groups", response_model=list[GroupRequestOut])
+async def list_group_requests(
+    status: Literal["pending", "approved", "denied", "revoked"] = "pending",
+    user: CurrentUser = Depends(require_capability("whitelist.review")),
+    db: AsyncSession = Depends(get_db),
+) -> list[GroupRequestOut]:
+    from db.models.panel_request import PanelRoleRequest as R
+
+    rows = (
+        await db.execute(select(R).where(R.guild_id == user.guild_id, R.status == status).order_by(R.created_at.desc()).limit(200))
+    ).scalars().all()
+    guild = runtime.bot.get_guild(user.guild_id) if runtime.bot else None
+    out = []
+    for r in rows:
+        role = guild.get_role(r.role_id) if guild else None
+        member = guild.get_member(r.user_id) if guild else None
+        out.append(
+            GroupRequestOut(
+                id=r.id, user_id=r.user_id, user_name=member.display_name if member else None, role_id=r.role_id,
+                role_name=role.name if role else str(r.role_id), status=r.status, note=r.note, decided_by=r.decided_by,
+                created_at=r.created_at,
+            )
+        )
+    return out
+
+
+class _Moderator:
+    """Wer im Web entscheidet - fuer requests.decide (braucht .id und einen Namen)."""
+
+    def __init__(self, guild, user_id: int) -> None:
+        member = guild.get_member(user_id)
+        self.id, self._name = user_id, member.display_name if member else str(user_id)
+
+    def __str__(self) -> str:
+        return self._name
+
+
+@router.post("/groups/{request_id}/approve", response_model=ActionResult)
+async def approve_group_request(
+    request_id: int, user: CurrentUser = Depends(require_capability("whitelist.review"))
+) -> ActionResult:
+    from bot.cogs.roles.requests import decide
+
+    guild = _guild_or_503(user.guild_id)
+    return ActionResult(ok=True, message=await decide(guild, _Moderator(guild, user.user_id), request_id, True))
+
+
+@router.post("/groups/{request_id}/deny", response_model=ActionResult)
+async def deny_group_request(
+    request_id: int, body: DenyBody, user: CurrentUser = Depends(require_capability("whitelist.review"))
+) -> ActionResult:
+    from bot.cogs.roles.requests import decide
+
+    guild = _guild_or_503(user.guild_id)
+    return ActionResult(ok=True, message=await decide(guild, _Moderator(guild, user.user_id), request_id, False, body.reason or ""))
+
+
+@router.post("/groups/{request_id}/revoke", response_model=ActionResult)
+async def revoke_group_request(
+    request_id: int,
+    body: DenyBody,
+    user: CurrentUser = Depends(require_capability("whitelist.review")),
+    db: AsyncSession = Depends(get_db),
+) -> ActionResult:
+    """Gruppen-Rolle wieder wegnehmen - wie /whitelist entziehen mitglied: rolle:."""
+    from bot.cogs.roles.requests import APPROVED, revoke as revoke_group
+    from db.models.panel_request import PanelRoleRequest
+
+    request = await db.get(PanelRoleRequest, request_id)
+    if request is None or request.guild_id != user.guild_id:
+        raise HTTPException(status_code=404, detail="Anfrage nicht gefunden")
+    if request.status != APPROVED:
+        raise HTTPException(status_code=409, detail="Nur angenommene Anfragen lassen sich entziehen")
+    guild = _guild_or_503(user.guild_id)
+    member, role = guild.get_member(request.user_id), guild.get_role(request.role_id)
+    if member is None or role is None:
+        raise HTTPException(status_code=409, detail="Mitglied oder Rolle gibt es nicht mehr.")
+    return ActionResult(ok=True, message=await revoke_group(guild, member, role, user.user_id, body.reason))
+

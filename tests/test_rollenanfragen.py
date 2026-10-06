@@ -125,3 +125,50 @@ async def test_cancelled_request_shows_state_without_buttons(site):  # noqa: F81
     assert request_view(request) is None
     assert any("zurückgezogen" in f.value for f in request_embed(request).fields)
     assert "schon entschieden" in decision_error(request, await who(5, "Ivar", Level.OWNER))
+
+
+async def test_request_from_discord_creates_site_request_with_rules(site):  # noqa: F811
+    """Aus Discord (Panel/amp): gleiche Regeln wie das Formular der Seite, Ticket inklusive."""
+    from bot.cogs.rollenanfragen.requests import create_site_request
+
+    await setup_site()
+    async with community_db.session() as db:
+        await db.execute(community_db.role_requests.delete())  # frisch: keine Anfragen
+        await db.execute(community_db.roles.update().where(community_db.roles.c.id == KARL).values(is_default=1))
+        await db.commit()
+
+    assert (await create_site_request(2, SCHMIED))[1].startswith("Du hast")  # Lagertha hat Schmied schon
+    assert (await create_site_request(1, HUSKARL))[0] is None  # Raenge nicht aus Discord
+
+    request_id, message = await create_site_request(1, SCHMIED, "Ich kenne mich aus")
+    assert request_id and "gestellt" in message
+    request = await load(request_id)
+    assert (request.status, request.role_name, request.reason) == ("pending", "Schmied", "Ich kenne mich aus")
+    async with community_db.session() as db:
+        ticket = (await db.execute(select(community_db.tickets.c.category, community_db.tickets.c.subject).where(
+            community_db.tickets.c.id == request.ticket_id))).first()
+    assert ticket == ("rollenanfrage", "Rollenanfrage: Schmied")
+
+    assert "läuft schon" in (await create_site_request(1, SCHMIED))[1]  # eine offene je Rolle
+    async with community_db.session() as db:  # Thrall (unter dem Standardrang) beantragt nichts
+        await db.execute(insert(community_db.roles).values(id=1, slug="thrall", name="Thrall", level=10, kind="rank", color="#fff"))
+        await db.execute(community_db.users.update().where(community_db.users.c.id == 4).values(role_id=1))
+        await db.commit()
+    assert "Rang" in (await create_site_request(4, SCHMIED))[1]
+
+
+async def test_site_extra_for_role_uses_rangsync_mapping(site, db_session):  # noqa: F811
+    import json
+
+    from bot.cogs.rangsync.sync import EXTRA_CONFIG_KEY
+    from bot.cogs.rollenanfragen.requests import site_extra_for_role
+    from bot.core.guild_config import set_config
+    from db.models.guild import Guild
+
+    await setup_site()
+    db_session.add(Guild(id=1, name="Wikinger"))
+    await db_session.commit()
+    await set_config(1, EXTRA_CONFIG_KEY, json.dumps({"schmied": {"role_id": "555", "direction": "to_discord"}}), "Wikinger")
+    extra = await site_extra_for_role(1, 555)
+    assert extra is not None and extra.id == SCHMIED
+    assert await site_extra_for_role(1, 999) is None

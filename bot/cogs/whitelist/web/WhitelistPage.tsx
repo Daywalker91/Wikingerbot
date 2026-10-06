@@ -1,6 +1,16 @@
 import { useEffect, useState } from "react";
 
-import { approveRequest, denyRequest, getRequests, revokeRequest } from "./api";
+import {
+  approveGroup,
+  approveRequest,
+  denyGroup,
+  denyRequest,
+  getGroupRequests,
+  getRequests,
+  revokeGroup,
+  revokeRequest,
+  type GroupRequestItem,
+} from "./api";
 import type { WhitelistRequestItem, WhitelistStatus } from "./types";
 
 export const route = { path: "/whitelist", navLabel: "Whitelist" };
@@ -18,8 +28,20 @@ export default function WhitelistPage() {
   const [requests, setRequests] = useState<WhitelistRequestItem[] | null>(null);
   const [message, setMessage] = useState<string | null>(null);
 
+  const [groups, setGroups] = useState<GroupRequestItem[] | null>(null);
+
   async function load(targetStatus: WhitelistStatus) {
     setRequests(await getRequests(targetStatus));
+    setGroups(await getGroupRequests(targetStatus).catch(() => []));
+  }
+
+  async function groupAction(action: () => Promise<{ message: string }>) {
+    try {
+      setMessage((await action()).message);
+    } catch (error) {
+      setMessage((error as Error).message);
+    }
+    void load(status);
   }
 
   useEffect(() => {
@@ -89,6 +111,50 @@ export default function WhitelistPage() {
             {request.status === "approved" && (
               <div style={{ marginTop: 8 }}>
                 <button onClick={() => void handleRevoke(request.id)}>Entziehen</button>
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
+
+      <h2 style={{ marginTop: 32 }}>Gruppen-Rollen</h2>
+      <p style={{ color: "#999", fontSize: "0.9em" }}>
+        Anfragen über Panel-Knöpfe mit Bestätigung (z.B. Spielgruppen) – wie eine Whitelist, nur ohne Gameserver.
+      </p>
+      {groups !== null && groups.length === 0 && <p>Keine Gruppen-Anfragen mit Status „{STATUS_LABELS[status]}“.</p>}
+      <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+        {groups?.map((group) => (
+          <div key={group.id} style={{ border: "1px solid #444", borderRadius: 8, padding: "12px 16px" }}>
+            <strong>#{group.id}</strong> {group.user_name ?? group.user_id} · @{group.role_name}
+            <div style={{ color: "#999", fontSize: "0.9em" }}>
+              {new Date(group.created_at).toLocaleString()}
+              {group.note ? ` · ${group.note}` : ""}
+            </div>
+            {group.status === "pending" && (
+              <div style={{ marginTop: 8 }}>
+                <button onClick={() => void groupAction(() => approveGroup(group.id))} style={{ marginRight: 8 }}>
+                  Annehmen
+                </button>
+                <button
+                  onClick={() => {
+                    const reason = window.prompt("Begründung (bekommt das Mitglied per DM):");
+                    if (reason !== null) void groupAction(() => denyGroup(group.id, reason || undefined));
+                  }}
+                >
+                  Ablehnen
+                </button>
+              </div>
+            )}
+            {group.status === "approved" && (
+              <div style={{ marginTop: 8 }}>
+                <button
+                  onClick={() => {
+                    const reason = window.prompt("Rolle entziehen – Begründung (optional, bekommt das Mitglied per DM):");
+                    if (reason !== null) void groupAction(() => revokeGroup(group.id, reason || undefined));
+                  }}
+                >
+                  Entziehen
+                </button>
               </div>
             )}
           </div>

@@ -46,8 +46,8 @@ GRANT SELECT, INSERT ON <SITE_DB>.tickets TO '<BOT_USER>'@'<BOT_HOST>';
 GRANT UPDATE (status, assigned_to, updated_at, closed_at) ON <SITE_DB>.tickets TO '<BOT_USER>'@'<BOT_HOST>';
 GRANT SELECT, INSERT ON <SITE_DB>.ticket_messages TO '<BOT_USER>'@'<BOT_HOST>';
 
--- Rollenanfragen (Migration 011): lesen und die Entscheidung eintragen (rollenanfragen-Cog)
-GRANT SELECT ON <SITE_DB>.role_requests TO '<BOT_USER>'@'<BOT_HOST>';
+-- Rollenanfragen (Migration 011): lesen, aus Discord anlegen und die Entscheidung eintragen (rollenanfragen-Cog)
+GRANT SELECT, INSERT ON <SITE_DB>.role_requests TO '<BOT_USER>'@'<BOT_HOST>';  -- INSERT: Anfrage aus Discord (Panel, /amp)
 GRANT UPDATE (status, decided_by, decision_note, decided_at) ON <SITE_DB>.role_requests TO '<BOT_USER>'@'<BOT_HOST>';
 
 -- Wiki (nur lesen, /wiki)

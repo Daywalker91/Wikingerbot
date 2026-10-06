@@ -17,7 +17,19 @@ import re
 import discord
 from discord.ext import commands
 
-from bot.cogs.rollenanfragen.requests import APPROVED, CANCELLED, DENIED, PENDING, Approver, RoleRequest, approver_for, decide, decision_error, load
+from bot.cogs.rollenanfragen.requests import (
+    APPROVED,
+    CANCELLED,
+    DENIED,
+    PENDING,
+    Approver,
+    RoleRequest,
+    approver_for,
+    create_site_request,
+    decide,
+    decision_error,
+    load,
+)
 from bot.community import db as community_db
 from bot.community import outbox
 from bot.community.linking import user_for_discord
@@ -176,6 +188,15 @@ class RollenanfragenCog(BaseCog):
                         await self._set(THREAD_KIND, guild, request.id, thread.id, message.id)
                     except discord.HTTPException as error:
                         log.warning("Rollenanfrage #%s nicht im Ticket-Thread gepostet: %s", request.id, error)
+
+    async def request_from_discord(self, site_user_id: int, role_id: int, reason: str = "") -> str:
+        """Anfrage aus Discord (Panel-Knopf, /amp): auf der Seite anlegen und gleich posten."""
+        request_id, message = await create_site_request(site_user_id, role_id, reason)
+        if request_id is not None:
+            request = await load(request_id)
+            if request is not None:
+                await self.post_request(request)
+        return message
 
     # --- Entscheiden ------------------------------------------------------------------
 

@@ -33,7 +33,7 @@ class Capability:
 
 CAPABILITIES: dict[str, Capability] = {
     "server.control": Capability("Gameserver starten/stoppen und Konsole", Level.MOD),
-    "whitelist.review": Capability("Whitelist-Anfragen ansehen, annehmen und ablehnen", Level.MOD),
+    "whitelist.review": Capability("Whitelist- und Gruppen-Anfragen ansehen, annehmen, ablehnen und entziehen", Level.MOD),
     "banner.refresh": Capability("Banner sofort aktualisieren", Level.MOD),
 }
 

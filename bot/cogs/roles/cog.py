@@ -9,6 +9,11 @@
   ohne eigene Tabelle; die Nachricht selbst ist der Speicher. Welche
   Nachrichten Panels sind, merkt sich der Bot in guild_config "role_panels"
   (fuer den Tab Rollen der Weboberflaeche).
+- Knoepfe mit Bestaetigung ("wb:role:<id>:c"): der Klick stellt eine Anfrage wie bei
+  der Whitelist, das Team entscheidet im Whitelist-Kanal (requests.py).
+- Ist die Rolle im Rang-Sync mit einer Zusatzrolle der Community-Seite verknuepft,
+  wird jeder Klick zur Rollenanfrage auf der Seite (rollenanfragen-Cog) - dort
+  gelten deren Regeln, und z.B. das AMP-Konto haengt daran.
 
 Die Raenge/Berechtigungsrollen des Bots (guild_roles) und Rollen mit
 Verwaltungsrechten lassen sich bewusst NICHT selbst waehlen.
@@ -23,6 +28,7 @@ from discord import app_commands
 from discord.ext import commands
 from sqlalchemy import select
 
+from bot.cogs.roles.requests import GroupRequestButton, create_request
 from bot.core import punishment
 from bot.core.whitelist_gate import gated_reason, gated_roles
 from bot.core.base_cog import BaseCog
@@ -34,6 +40,7 @@ from db.session import get_db_session
 log = logging.getLogger(__name__)
 
 CUSTOM_ID_PREFIX = "wb:role:"
+CONFIRM_SUFFIX = ":c"  # Knopf mit Bestaetigung
 MAX_BUTTONS = 25  # 5 Reihen a 5 Knoepfe - Discord-Grenze pro Nachricht
 
 # Wer sich eine Rolle mit einem dieser Rechte selbst geben koennte, koennte den
@@ -86,10 +93,34 @@ def parse_message_ref(text: str) -> tuple[int | None, int] | None:
     return None
 
 
+def parse_custom_id(custom_id: str | None) -> tuple[int, bool] | None:
+    """(Rollen-ID, mit Bestaetigung) aus einer Knopf-ID - oder None."""
+    if not custom_id or not custom_id.startswith(CUSTOM_ID_PREFIX):
+        return None
+    rest = custom_id[len(CUSTOM_ID_PREFIX):]
+    confirm = rest.endswith(CONFIRM_SUFFIX)
+    rest = rest[: -len(CONFIRM_SUFFIX)] if confirm else rest
+    return (int(rest), confirm) if rest.isdigit() else None
+
+
 def role_id_from_custom_id(custom_id: str | None) -> int | None:
-    if custom_id and custom_id.startswith(CUSTOM_ID_PREFIX) and custom_id[len(CUSTOM_ID_PREFIX):].isdigit():
-        return int(custom_id[len(CUSTOM_ID_PREFIX):])
-    return None
+    parsed = parse_custom_id(custom_id)
+    return parsed[0] if parsed else None
+
+
+async def _site_role_click(interaction: discord.Interaction, member: discord.Member, role: discord.Role, extra) -> str:
+    """Knopf fuer eine Zusatzrolle der Seite: Rollenanfrage auf der Seite statt direkt vergeben."""
+    if role in member.roles:
+        return f"**{role.name}** kommt von der Community-Seite – abgeben geht dort bzw. über das Team."
+    from bot.community.linking import user_for_discord
+
+    site_user = await user_for_discord(member.id)
+    if site_user is None:
+        return f"**{role.name}** beantragst du über die Community-Seite – verknüpfe dich zuerst mit `/verknuepfen`."
+    cog = interaction.client.get_cog("RollenanfragenCog")
+    if cog is None:
+        return "Rollenanfragen sind gerade nicht verfügbar – beantrage die Rolle auf der Seite unter Einstellungen → Rolle beantragen."
+    return await cog.request_from_discord(site_user.id, extra.id)
 
 
 async def rank_role_ids(guild_id: int) -> set[int]:
@@ -149,8 +180,9 @@ def panel_embed(title: str, text: str) -> discord.Embed:
     return discord.Embed(title=title[:256], description=text[:4000], color=0x8B5A2B)
 
 
-class RoleToggleButton(discord.ui.DynamicItem[discord.ui.Button], template=r"wb:role:(?P<role_id>\d+)"):
-    """Knopf auf einem Rollen-Panel: schaltet genau eine Rolle an/aus."""
+class RoleToggleButton(discord.ui.DynamicItem[discord.ui.Button], template=r"wb:role:(?P<role_id>\d+)(?P<confirm>:c)?"):
+    """Knopf auf einem Rollen-Panel: schaltet genau eine Rolle an/aus - mit Bestaetigung
+    wird aus dem Anwaehlen eine Anfrage ans Team (Abwaehlen geht immer sofort)."""
 
     def __init__(
         self,
@@ -158,15 +190,16 @@ class RoleToggleButton(discord.ui.DynamicItem[discord.ui.Button], template=r"wb:
         label: str | None = None,
         emoji: str | discord.PartialEmoji | None = None,
         style: discord.ButtonStyle = discord.ButtonStyle.secondary,
+        confirm: bool = False,
     ) -> None:
-        super().__init__(
-            discord.ui.Button(custom_id=f"{CUSTOM_ID_PREFIX}{role_id}", label=label, emoji=emoji, style=style)
-        )
+        custom_id = f"{CUSTOM_ID_PREFIX}{role_id}{CONFIRM_SUFFIX if confirm else ''}"
+        super().__init__(discord.ui.Button(custom_id=custom_id, label=label, emoji=emoji, style=style))
         self.role_id = role_id
+        self.confirm = confirm
 
     @classmethod
     async def from_custom_id(cls, interaction: discord.Interaction, item: discord.ui.Button, match: re.Match[str]):
-        return cls(int(match["role_id"]), label=item.label, emoji=item.emoji, style=item.style)
+        return cls(int(match["role_id"]), label=item.label, emoji=item.emoji, style=item.style, confirm=bool(match["confirm"]))
 
     async def callback(self, interaction: discord.Interaction) -> None:
         guild = interaction.guild
@@ -177,11 +210,22 @@ class RoleToggleButton(discord.ui.DynamicItem[discord.ui.Button], template=r"wb:
         if role is None:
             await interaction.response.send_message("Diese Rolle gibt es nicht mehr.", ephemeral=True, delete_after=20)
             return
+        from bot.cogs.rollenanfragen.requests import site_extra_for_role
+
+        extra = await site_extra_for_role(guild.id, role.id)
+        if extra is not None:  # Zusatzrolle der Seite - immer ueber die Rollenanfrage
+            await interaction.response.defer(ephemeral=True, thinking=True)
+            await interaction.followup.send(await _site_role_click(interaction, member, role, extra), ephemeral=True)
+            return
         # Bei jedem Klick neu pruefen - die Rolle koennte seit dem Anlegen des
         # Knopfs Verwaltungsrechte bekommen haben.
         reason = await block_reason(role, guild)
         if reason:
             await interaction.response.send_message(reason, ephemeral=True, delete_after=30)
+            return
+        if self.confirm and role not in member.roles:
+            await interaction.response.defer(ephemeral=True, thinking=True)
+            await interaction.followup.send(await create_request(guild, member, role), ephemeral=True)
             return
         try:
             if role in member.roles:
@@ -201,9 +245,9 @@ def panel_buttons(message: discord.Message) -> list[RoleToggleButton]:
     buttons = []
     for row in message.components:
         for component in getattr(row, "children", []):
-            role_id = role_id_from_custom_id(getattr(component, "custom_id", None))
-            if role_id is not None:
-                buttons.append(RoleToggleButton(role_id, component.label, component.emoji, component.style))
+            parsed = parse_custom_id(getattr(component, "custom_id", None))
+            if parsed is not None:
+                buttons.append(RoleToggleButton(parsed[0], component.label, component.emoji, component.style, confirm=parsed[1]))
     return buttons
 
 
@@ -227,10 +271,10 @@ class RolesCog(BaseCog):
     panel_group = app_commands.Group(name="panel", description="Nachrichten mit Rollen-Knoepfen", parent=roles_group)
 
     async def cog_load(self) -> None:
-        self.bot.add_dynamic_items(RoleToggleButton)
+        self.bot.add_dynamic_items(RoleToggleButton, GroupRequestButton)
 
     async def cog_unload(self) -> None:
-        self.bot.remove_dynamic_items(RoleToggleButton)
+        self.bot.remove_dynamic_items(RoleToggleButton, GroupRequestButton)
 
     # --- Autorole --------------------------------------------------------------
 
@@ -366,6 +410,7 @@ class RolesCog(BaseCog):
         rolle="Rolle, die der Knopf an-/abschaltet",
         beschriftung="Text auf dem Knopf (sonst der Rollenname)",
         emoji="Optional ein Emoji, z.B. 🎮",
+        bestaetigung="Klick stellt nur eine Anfrage, das Team bestätigt (wie eine Whitelist-Anfrage)",
     )
     @require_role(Level.ADMIN)
     async def panel_button(
@@ -375,6 +420,7 @@ class RolesCog(BaseCog):
         rolle: discord.Role,
         beschriftung: str | None = None,
         emoji: str | None = None,
+        bestaetigung: bool = False,
     ) -> None:
         guild = interaction.guild
         reason = await block_reason(rolle, guild)
@@ -395,7 +441,9 @@ class RolesCog(BaseCog):
                 delete_after=20,
             )
             return
-        buttons.append(RoleToggleButton(rolle.id, (beschriftung or rolle.name)[:80], emoji.strip() if emoji else None))
+        buttons.append(
+            RoleToggleButton(rolle.id, (beschriftung or rolle.name)[:80], emoji.strip() if emoji else None, confirm=bestaetigung)
+        )
         try:
             await message.edit(view=build_view(buttons))
         except discord.HTTPException as error:

@@ -64,7 +64,12 @@ async def _read_panel(guild: discord.Guild, channel_id: int, message_id: int) ->
         "title": (embed.title or "") if embed else "",
         "text": (embed.description or "") if embed else "",
         "buttons": [
-            {"role_id": str(b.role_id), "label": b.item.label or "", "emoji": str(b.item.emoji) if b.item.emoji else ""}
+            {
+                "role_id": str(b.role_id),
+                "label": b.item.label or "",
+                "emoji": str(b.item.emoji) if b.item.emoji else "",
+                "confirm": b.confirm,
+            }
             for b in panel_buttons(message)
         ],
     }
@@ -109,6 +114,7 @@ class PanelButton(BaseModel):
     role_id: Snowflake
     label: str = Field("", max_length=80)
     emoji: str = Field("", max_length=64)
+    confirm: bool = False  # Klick = Anfrage, das Team bestaetigt
 
 
 class Panel(BaseModel):
@@ -136,7 +142,7 @@ async def _view(guild: discord.Guild, buttons: list[PanelButton]) -> discord.ui.
             raise HTTPException(400, "Unbekannte Rolle.")
         if blocked.get(role.id):
             raise HTTPException(400, blocked[role.id])
-        items.append(RoleToggleButton(role.id, (b.label.strip() or role.name)[:80], b.emoji.strip() or None))
+        items.append(RoleToggleButton(role.id, (b.label.strip() or role.name)[:80], b.emoji.strip() or None, confirm=b.confirm))
     return build_view(items) if items else None
 
 

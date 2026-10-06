@@ -27,6 +27,7 @@ from bot.cogs.ampkonten.accounts import (
     handle_disable,
     handle_request,
     handle_reset,
+    load_requirement,
     site_member,
     write_site_status,
 )
@@ -83,7 +84,12 @@ class AmpKontenCog(BaseCog):
             )
             return
         url = await get_bot_setting(URL_KEY, "") or ""
-        await interaction.followup.send(embed=access_embed(summary, url), ephemeral=True)
+        view = None
+        if summary.missing_extra and not summary.missing_extra_pending and self.bot.get_cog("RollenanfragenCog"):
+            role_id = await required_role_id()
+            if role_id:
+                view = RequestExtraView(site_user.id, role_id, summary.missing_extra)
+        await interaction.followup.send(embed=access_embed(summary, url), view=view or discord.utils.MISSING, ephemeral=True)
 
     # --- Auftraege ---------------------------------------------------------------
 
@@ -159,6 +165,37 @@ class AmpKontenCog(BaseCog):
             return True
         except discord.HTTPException:
             return False
+
+
+async def required_role_id() -> int | None:
+    """Seiten-ID der Zusatzrolle, die fuer AMP vorausgesetzt ist (z.B. Schmied)."""
+    from sqlalchemy import select
+
+    slug = await load_requirement()
+    if not slug:
+        return None
+    r = community_db.roles
+    async with community_db.session() as db:
+        return (await db.execute(select(r.c.id).where(r.c.slug == slug))).scalar_one_or_none()
+
+
+class RequestExtraView(discord.ui.View):
+    """/amp: fehlende Zusatzrolle direkt beantragen (Rollenanfrage auf der Seite)."""
+
+    def __init__(self, site_user_id: int, role_id: int, role_name: str) -> None:
+        super().__init__(timeout=600)
+        self.site_user_id, self.role_id = site_user_id, role_id
+        self.request_button.label = f"{role_name} beantragen"[:80]
+
+    @discord.ui.button(emoji="📨", style=discord.ButtonStyle.primary)
+    async def request_button(self, interaction: discord.Interaction, button: discord.ui.Button) -> None:
+        cog = interaction.client.get_cog("RollenanfragenCog")
+        if cog is None:
+            await interaction.response.send_message("Rollenanfragen sind gerade nicht verfügbar.", ephemeral=True)
+            return
+        await interaction.response.defer(ephemeral=True, thinking=True)
+        # doppeltes Klicken faengt die Regel "eine offene Anfrage je Rolle" ab
+        await interaction.followup.send(await cog.request_from_discord(self.site_user_id, self.role_id), ephemeral=True)
 
 
 def access_embed(summary: AccessSummary, url: str) -> discord.Embed:

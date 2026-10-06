@@ -325,14 +325,32 @@ class WhitelistCog(BaseCog):
         _, summary = await _resolve_request(request_id, False, interaction.user, reason)
         await send_temp_followup(interaction, summary)
 
-    @whitelist_group.command(name="entziehen", description="Entzieht eine Freigabe samt Discord-Rolle des Servers")
-    @app_commands.describe(mitglied="Mitglied", server="Server (instance_name)", grund="Begruendung (bekommt das Mitglied per DM)")
+    @whitelist_group.command(name="entziehen", description="Entzieht eine Freigabe (Server oder Gruppen-Rolle) samt Discord-Rolle")
+    @app_commands.describe(
+        mitglied="Mitglied",
+        server="Server (instance_name) - ODER:",
+        rolle="Gruppen-Rolle ohne Server (z.B. eine Spielgruppe aus einem Panel mit Bestätigung)",
+        grund="Begruendung (bekommt das Mitglied per DM)",
+    )
     @app_commands.autocomplete(server=_autocomplete_any_server)
     @require_capability("whitelist.review")
     async def whitelist_revoke_cmd(
-        self, interaction: discord.Interaction, mitglied: discord.Member, server: str, grund: str | None = None
+        self,
+        interaction: discord.Interaction,
+        mitglied: discord.Member,
+        server: str | None = None,
+        rolle: discord.Role | None = None,
+        grund: str | None = None,
     ) -> None:
         await interaction.response.defer(ephemeral=True)
+        if (server is None) == (rolle is None):
+            await send_temp_followup(interaction, "Bitte genau eins angeben: `server` oder `rolle`.")
+            return
+        if rolle is not None:
+            from bot.cogs.roles.requests import revoke as revoke_group
+
+            await send_temp_followup(interaction, await revoke_group(interaction.guild, mitglied, rolle, interaction.user.id, grund))
+            return
         async with get_db_session() as db:
             server_row = (
                 await db.execute(select(Server).where(Server.guild_id == interaction.guild_id, Server.instance_name == server))

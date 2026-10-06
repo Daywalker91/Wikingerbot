@@ -11,6 +11,7 @@ export interface PanelButton {
   role_id: string;
   label: string;
   emoji: string;
+  confirm?: boolean; // Klick = Anfrage, das Team bestaetigt (wie eine Whitelist-Anfrage)
 }
 
 export interface Panel {

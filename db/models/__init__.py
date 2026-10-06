@@ -14,6 +14,7 @@ from db.models.web_session import WebSession
 from db.models.stats import StatsDaily, StatsMemberDaily
 from db.models.community_post import CommunityPost
 from db.models.amp_account import AmpAccount
+from db.models.panel_request import PanelRoleRequest
 
 __all__ = [
     "Guild",
@@ -38,4 +39,5 @@ __all__ = [
     "StatsMemberDaily",
     "CommunityPost",
     "AmpAccount",
+    "PanelRoleRequest",
 ]

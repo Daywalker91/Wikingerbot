@@ -13,7 +13,7 @@ Genehmigt vergibt der Bot die Rolle auf der Seite; Rang-Sync und AMP-Konten zieh
 """
 
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from sqlalchemy import func, insert, select, update
 from sqlalchemy.orm import aliased
@@ -98,6 +98,91 @@ async def recent(limit: int = 50) -> list[RoleRequest]:
     async with community_db.session() as db:
         rows = (await db.execute(_query().order_by(community_db.role_requests.c.id.desc()).limit(limit))).all()
     return [_to_request(r) for r in rows]
+
+
+# --- Anfrage aus Discord stellen (Panel-Knopf, /amp) -------------------------------------
+# Gleiche Regeln wie das Formular der Seite (src/role_requests.php der Community-Seite):
+# nur Zusatzrollen, die man noch nicht hat; nicht unter dem Standardrang; je Rolle eine
+# offene Anfrage, eine pro Tag, vier pro Woche, nach Ablehnung sieben Tage Pause.
+PER_DAY, PER_WEEK, DENIED_COOLDOWN_DAYS = 1, 4, 7
+
+
+async def site_extra_for_role(guild_id: int, discord_role_id: int):
+    """Zusatzrolle der Seite, die im Rang-Sync mit dieser Discord-Rolle verknuepft ist - oder None."""
+    if not community_db.enabled():
+        return None
+    from bot.cogs.rangsync.sync import load_extra_mapping
+
+    try:
+        extras = await load_extra_mapping(guild_id)
+    except Exception:  # Seite gerade nicht erreichbar / ohne Zusatzrollen
+        return None
+    return next((e for e in extras if e.role_id == discord_role_id), None)
+
+
+async def create_site_request(site_user_id: int, role_id: int, reason: str = "") -> tuple[int | None, str]:
+    """Legt Rollenanfrage + Ticket auf der Seite an. (Anfrage-ID oder None, Text fuer das Mitglied)."""
+    q, r, u, x = community_db.role_requests, community_db.roles, community_db.users, community_db.user_extra_roles
+    t, m = community_db.tickets, community_db.ticket_messages
+    async with community_db.session() as db:
+        role = (await db.execute(select(r.c.id, r.c.name, r.c.kind).where(r.c.id == role_id))).first()
+        if role is None or role.kind != "extra":
+            return None, "Diese Rolle kann man nicht beantragen."
+        member = (
+            await db.execute(
+                select(u.c.id, u.c.is_banned, r.c.level).select_from(u.join(r, r.c.id == u.c.role_id)).where(u.c.id == site_user_id)
+            )
+        ).first()
+        default_level = (
+            await db.execute(select(r.c.level).where(r.c.kind == "rank", r.c.is_default == 1).order_by(r.c.level).limit(1))
+        ).scalar_one_or_none()
+        if member is None or member.is_banned:
+            return None, "Dein Konto auf der Seite ist gesperrt."
+        if default_level is not None and int(member.level or 0) < int(default_level):
+            return None, "Mit deinem jetzigen Rang kannst du keine Rollen beantragen."
+        if (await db.execute(select(x.c.role_id).where(x.c.user_id == site_user_id, x.c.role_id == role_id))).first():
+            return None, f"Du hast **{role.name}** schon."
+        mine = q.c.user_id == site_user_id
+        now = func.now()
+        db_now = _as_datetime((await db.execute(select(func.now()))).scalar_one())  # Uhr der Seiten-DB
+        if (await db.execute(select(q.c.id).where(mine, q.c.role_id == role_id, q.c.status == PENDING).limit(1))).first():
+            return None, f"Für **{role.name}** läuft schon eine Anfrage – das Team entscheidet."
+        recent_denial = (
+            await db.execute(
+                select(q.c.id).where(
+                    mine, q.c.role_id == role_id, q.c.status == DENIED,
+                    q.c.decided_at > db_now - timedelta(days=DENIED_COOLDOWN_DAYS),
+                ).limit(1)
+            )
+        ).first()
+        if recent_denial:
+            return None, f"**{role.name}** wurde vor Kurzem abgelehnt – eine neue Anfrage geht erst nach {DENIED_COOLDOWN_DAYS} Tagen."
+        day = (await db.execute(select(func.count()).where(mine, q.c.created_at > db_now - timedelta(days=1)))).scalar_one()
+        if day >= PER_DAY:
+            return None, "Du kannst eine Rollenanfrage pro Tag stellen – versuch es morgen wieder."
+        week = (await db.execute(select(func.count()).where(mine, q.c.created_at > db_now - timedelta(days=7)))).scalar_one()
+        if week >= PER_WEEK:
+            return None, f"Du hast diese Woche schon {PER_WEEK} Rollenanfragen gestellt – bitte warte ein paar Tage."
+
+        body = f"Ich beantrage Zusatzrolle **{role.name}**.\n\n" + (f"Begründung: {reason}" if reason else "Ohne Begründung (aus Discord beantragt).")
+        ticket = await db.execute(
+            insert(t).values(
+                user_id=site_user_id, subject=f"Rollenanfrage: {role.name}"[:150], category="rollenanfrage",
+                status="open", priority="normal", created_at=now, updated_at=now,
+            )
+        )
+        ticket_id = ticket.inserted_primary_key[0]
+        await db.execute(insert(m).values(ticket_id=ticket_id, user_id=site_user_id, body=body, is_internal=0, created_at=now))
+        created = await db.execute(
+            insert(q).values(user_id=site_user_id, role_id=role_id, ticket_id=ticket_id, reason=reason[:1000], status=PENDING, created_at=now)
+        )
+        await db.commit()  # Ticket, Nachricht und Anfrage gemeinsam
+    return created.inserted_primary_key[0], f"Anfrage für **{role.name}** gestellt – das Team entscheidet, du bekommst Bescheid per DM."
+
+
+def _as_datetime(value) -> datetime:
+    """NOW() der Datenbank - MariaDB liefert datetime, SQLite (Tests) einen Text."""
+    return value if isinstance(value, datetime) else datetime.fromisoformat(str(value))
 
 
 async def approver_for(site_user_id: int, username: str, bot_level: Level, discord_admin: bool = False) -> Approver:

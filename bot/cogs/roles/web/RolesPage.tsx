@@ -146,12 +146,20 @@ function ButtonsEditor({
     <div style={{ margin: "8px 0" }}>
       <div>
         Knöpfe <span style={muted}>(höchstens {data.max_buttons}, je 5 pro Reihe)</span>
+        <div style={muted}>
+          Mit „Bestätigung“ stellt ein Klick nur eine Anfrage – das Team entscheidet im Whitelist-Kanal (wie bei der Whitelist).
+          Rollen, die im Rang-Sync zu einer Zusatzrolle der Seite gehören (z.B. Schmied), werden immer als Rollenanfrage auf der
+          Seite gestellt.
+        </div>
       </div>
       {buttons.map((b, i) => (
         <div key={b.role_id} style={row}>
           <span style={{ minWidth: 140 }}>@{roleName(data, b.role_id)}</span>
           <input value={b.emoji} onChange={(e) => set(i, { emoji: e.target.value })} placeholder="Emoji" style={{ width: 70 }} />
           <input value={b.label} onChange={(e) => set(i, { label: e.target.value })} placeholder={roleName(data, b.role_id)} maxLength={80} />
+          <label style={muted} title="Klick stellt nur eine Anfrage – das Team bestätigt im Whitelist-Kanal">
+            <input type="checkbox" checked={!!b.confirm} onChange={(e) => set(i, { confirm: e.target.checked })} /> Bestätigung
+          </label>
           <button onClick={() => move(i, -1)} disabled={i === 0}>
             ↑
           </button>

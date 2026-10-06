@@ -83,6 +83,7 @@ roles = Table(
     # Migration 010 der Seite: 'rank' (genau einer pro Mitglied) oder 'extra' (Zusatzrolle)
     Column("kind", String(10), server_default="rank"),
     Column("color", String(7)),
+    Column("is_default", SmallInteger, default=0),  # Standardrang neuer Mitglieder (z.B. Karl)
 )
 
 # Zusatzrollen der Mitglieder (Migration 010 der Seite)

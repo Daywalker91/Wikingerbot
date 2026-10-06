@@ -124,7 +124,7 @@ es beim (Wieder-)Beitritt außerdem den Rang der Seite.
 | `/whitelist list status:` | Listet Anfragen nach Status (Default: `pending`) | Mod\* |
 | `/whitelist approve request_id:` | Genehmigt eine Anfrage (Fallback zum Accept-Button) | Mod\* |
 | `/whitelist deny request_id: reason:` | Lehnt eine Anfrage ab (Fallback zum Deny-Button) | Mod\* |
-| `/whitelist entziehen mitglied: server: grund:` | Entzieht eine Freigabe: AMP-Eintrag und Discord-Rolle weg, DM mit Grund. Die Rolle bleibt, solange eine Freigabe für einen anderen Server mit derselben Rolle besteht. Auch im Tab *Whitelist* (Knopf *Entziehen*) | Mod\* |
+| `/whitelist entziehen mitglied: server: rolle: grund:` | Entzieht eine Freigabe: mit `server` AMP-Eintrag und Discord-Rolle weg (die Rolle bleibt, solange eine Freigabe für einen anderen Server mit derselben Rolle besteht); mit `rolle` eine Gruppen-Rolle (Panel mit Bestätigung, auch von Hand vergebene). DM mit Grund. Auch im Tab *Whitelist* (Knopf *Entziehen*) | Mod\* |
 | `/whitelist donator user: enabled:` | Setzt/entfernt den Donator-Status eines Nutzers (zeigt sich als Stern-Badge auf Bannern von Servern, bei denen dieser Nutzer freigeschaltet ist) | Owner |
 
 Anfragen erscheinen im konfigurierten Kanal als Embed mit **Annehmen**/
@@ -247,6 +247,20 @@ Rollen/Kanäle/Server verwalten, Bannen, Kicken, Timeout, …) und – bei den
 Knöpfen – die Berechtigungsrollen des Bots (Mod/Admin/…). Braucht das Bot-Recht
 **Rollen verwalten**.
 
+**Mit Bestätigung** (Haken pro Knopf bzw. `bestaetigung:`): Ein Klick gibt die Rolle
+nicht sofort, sondern stellt eine **Gruppen-Anfrage** – wie eine Whitelist, nur ohne
+Gameserver (z.B. für eine Spielgruppe). Sie erscheint im Whitelist-Kanal mit
+*Annehmen/Ablehnen*; entscheiden darf, wer Whitelist-Anfragen bearbeiten darf
+(Fähigkeit `whitelist.review`), nie bei der eigenen Anfrage. Ergebnis per DM, wieder
+wegnehmen mit `/whitelist entziehen mitglied: rolle:` oder im Tab *Whitelist*
+(Abschnitt *Gruppen-Rollen*). Abwählen geht immer sofort. Grenzen: je Rolle eine offene
+Anfrage, eine pro Tag, höchstens vier pro Woche, nach Ablehnung sieben Tage Pause.
+
+**Zusatzrollen der Community-Seite** (im Rang-Sync mit einer Discord-Rolle verknüpft,
+z.B. Schmied): Ein Klick auf deren Knopf wird immer zur **Rollenanfrage auf der Seite**
+(mit Ticket, Regeln der Rollenanfragen, z.B. AMP-Konto nach Zustimmung) – verknüpfte
+Mitglieder; abgeben geht über die Seite bzw. das Team.
+
 Alles hier geht auch im Tab *Rollen* der Weboberfläche: Autoroles wählen, Panels
 anlegen, Titel/Text ändern, Knöpfe hinzufügen, entfernen und umsortieren. Panels,
 die vor dem Tab per Befehl erstellt wurden, lassen sich dort per Link übernehmen.
@@ -257,7 +271,7 @@ die vor dem Tab per Befehl erstellt wurden, lassen sich dort per Link übernehme
 | `/rollen auto entfernen rolle:` | Rolle nicht mehr automatisch vergeben | Admin |
 | `/rollen auto liste` | Zeigt die Autoroles, mit Warnung bei nicht vergebbaren | Admin |
 | `/rollen panel erstellen kanal: titel: text:` | Postet die Panel-Nachricht | Admin |
-| `/rollen panel knopf nachricht: rolle: beschriftung: emoji:` | Knopf hinzufügen (max. 25 pro Panel); `nachricht` = Link oder ID | Admin |
+| `/rollen panel knopf nachricht: rolle: beschriftung: emoji: bestaetigung:` | Knopf hinzufügen (max. 25 pro Panel); `nachricht` = Link oder ID; `bestaetigung: True` = Klick stellt nur eine Anfrage (siehe unten) | Admin |
 | `/rollen panel entfernen nachricht: rolle:` | Knopf entfernen | Admin |
 
 ---
@@ -473,7 +487,7 @@ Seite eine Discord-Rolle und eine Richtung (beide / nur Discord → Seite / nur 
 
 | Command | Beschreibung | Level |
 |---|---|---|
-| `/amp` | Eigener AMP-Zugang (nur für dich sichtbar): Panel-Adresse, Stand (aktiv mit Benutzer und Rolle, beantragt, gesperrt, keins) und der nächste Schritt – z.B. fehlende Zusatzrolle mit Link zu *Rolle beantragen*, oder wo man ein neues Passwort anfordert | Member |
+| `/amp` | Eigener AMP-Zugang (nur für dich sichtbar): Panel-Adresse, Stand (aktiv mit Benutzer und Rolle, beantragt, gesperrt, keins) und der nächste Schritt – z.B. fehlende Zusatzrolle mit Link zu *Rolle beantragen*, oder wo man ein neues Passwort anfordert; fehlt die Zusatzrolle, gibt es einen Knopf, um sie direkt zu beantragen (Rollenanfrage auf der Seite) | Member |
 
 Mitglieder beantragen auf der Community-Seite unter *Einstellungen →
 AMP-Zugang* ein Konto (nur verknüpft). Der Bot legt es an, gibt ihm die AMP-Rolle
