@@ -15,6 +15,7 @@ from db.models.stats import StatsDaily, StatsMemberDaily
 from db.models.community_post import CommunityPost
 from db.models.amp_account import AmpAccount
 from db.models.panel_request import PanelRoleRequest
+from db.models.server_notice import ServerNotice
 
 __all__ = [
     "Guild",
@@ -40,4 +41,5 @@ __all__ = [
     "CommunityPost",
     "AmpAccount",
     "PanelRoleRequest",
+    "ServerNotice",
 ]

@@ -57,6 +57,8 @@ DESIRED_PERMISSIONS: list[str] = [
     "Core.RoleManagement.ViewRoles",
     "Core.UserManagement.*",
     "-Core.Scheduler.*",
+    # Zeitplan nur lesen: geplante Neustarts/Wartungen in Discord ankuendigen (servernews)
+    "Core.Scheduler.ViewSchedule",
     "-Core.AuditLog.*",
     "-Core.Special.*",
     "-Core.AppManagement.UpdateApplication",

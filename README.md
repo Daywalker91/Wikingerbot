@@ -146,6 +146,7 @@ Wikingerbot/
 │       │   └── web/             # React-Seiten: Dashboard, Server
 │       ├── moderation/          # /kick /ban /timeout /warn /strafrolle /modlog /modconfig + Web-Seite
 │       ├── welcome/             # /welcome ... (Begruessung, DM, Abschied) + Web-Seite
+│       ├── servernews/          # /wartung ... Neustarts/Wartungen/Ausfaelle ankuendigen, AMP-Zeitplan (+ Web-Seite)
 │       ├── roles/               # /rollen ... (Autorole, Selbstwahl-Knoepfe, Knoepfe mit Bestaetigung) + Web-Seite
 │       │   └── requests.py      # Gruppen-Anfragen (Panel-Knopf mit Bestaetigung) - wie eine Whitelist
 │       ├── music/               # /musik ... /musikconfig ... (Radio, Dateien, Podcasts) + Web-Seite
@@ -267,6 +268,7 @@ der Tabellen:
 | `ModLogEntry` / `Warning` | `modlog.py` | Moderationshistorie, Verwarnungen mit Punktesystem |
 | `WhitelistRequest` | `whitelist.py` | Whitelist-Anfragen inkl. Review-Nachricht |
 | `PanelRoleRequest` | `panel_request.py` | Gruppen-Anfragen über Panel-Knöpfe mit Bestätigung |
+| `ServerNotice` | `server_notice.py` | Angekündigte Neustarts/Wartungen (von Hand oder aus dem AMP-Zeitplan) |
 | `GuildConfig` | `config.py` | Key-Value-Konfiguration pro Guild |
 | `BotSetting` | `bot_setting.py` | Key-Value-Konfiguration global (nicht guild-gebunden), z.B. `sync_globally_on_startup` |
 | `WebSession` | `web_session.py` | Anmeldungen an der Web-Oberfläche (gehashte Refresh-Tokens) |
@@ -328,6 +330,7 @@ verlässt, verliert die Rechte sofort.
 | `banner` | Status-Banner als Karten (Embed oder Bild), Steam-Artwork, Banner-Gruppen (kombiniert/einzeln), Editor-UI | ✅ fertig |
 | `roles` | Autorole (nach Regel-Screening), Selbstwahl-Rollen per Knopf, Knöpfe mit Bestätigung, eigener Tab | ✅ fertig |
 | `welcome` | Begrüßung mit Platzhaltern, Willkommens-DM, Abschiedsmeldung | ✅ fertig |
+| `servernews` | Neustarts/Wartungen ankündigen (von Hand oder aus dem AMP-Zeitplan), Erinnerungen, Hinweis im Spiel, „läuft wieder“, Ausfälle | ✅ fertig |
 
 **Spätere Cogs (v2+):**
 
@@ -372,6 +375,7 @@ verlässt, verliert die Rechte sofort.
 | Rollenanfragen | Letzte Rollenanfragen der Seite mit Stand (Mod) |
 | Community | Anbindung an die Community-Seite, optional eigener Datenbank-Server (Owner) |
 | Server | AMP-Instanzen anlegen/entfernen, Standard-Spieladresse, Start/Stop, Console-Log |
+| Server-News | Kanal, Ping, Vorlaufzeiten, Hinweis im Spiel je Server, Ankündigungen, Vorschau des AMP-Zeitplans (Admin) |
 | Moderation | ModLog ansehen, Verwarnungen, gebannte User, Strafrolle, Mod-Log-Kanal |
 | Whitelist | Server- und Gruppen-Anfragen annehmen, ablehnen, entziehen |
 | Benutzer | User-Datenbank, Rollen, Steam-IDs |

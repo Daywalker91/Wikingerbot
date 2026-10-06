@@ -567,3 +567,34 @@ Verfasser, Kategorie, Anfang des Texts und ein Knopf **Hier lesen**. Antworten n
 Nur Kategorien, die jeder lesen darf – interne Bereiche erscheinen nie in Discord.
 Kanal und Ping-Rolle im Tab *Forum*, dort auch ältere Themen von Hand ankündigen.
 
+---
+
+## Server-News: Neustarts, Wartungen, Ausfälle (`servernews`-Cog, Tab *Server-News*)
+
+| Command | Beschreibung | Level |
+|---|---|---|
+| `/wartung neustart name: start: grund:` | Neustart ankündigen; zur Zeit startet der Bot den Server neu. `start` = Minuten ab jetzt (`15`) oder Uhrzeit (`20:00`) | Mod\* |
+| `/wartung plane name: start: dauer: grund:` | Wartung ankündigen; zur Zeit stoppt der Bot den Server | Mod\* |
+| `/wartung liste` | Angekündigte Neustarts und Wartungen mit Nummer | Mod\* |
+| `/wartung abbrechen nummer:` | Absagen (steht schon eine Meldung im Kanal, kommt „abgesagt“) | Mod\* |
+| `/wartung ende name:` | Wartung beenden: startet den Server, danach „läuft wieder“ | Mod\* |
+
+\* Fähigkeit „Gameserver starten/stoppen“ (Standard ab Mod, weitere Rollen im Tab *Einstellungen*).
+
+Meldungen gehen in den Kanal aus dem Tab *Server-News*. Die **Vorlaufzeiten** sind frei
+einstellbar (z.B. `60, 15, 5` Minuten); nur die erste Meldung pingt die eingestellte Rolle,
+die übrigen erinnern. Zur Zeit: „startet jetzt neu“ bzw. „Wartung hat begonnen“, danach
+„läuft wieder“ mit Verbinden-Adresse. Nicht angekündigte Ausfälle werden ohne Ping
+gemeldet (abschaltbar).
+
+**AMP-Zeitplan:** Zeit-Trigger in AMP mit Neustart, Update oder Stopp kann der Bot vorher
+ankündigen (ausgeführt von AMP). Erst im Tab mit *Zeitpläne lesen* prüfen, ob die Zeiten
+stimmen, dann einschalten. Trigger, die auf Ereignisse reagieren (z.B. „Update
+verfügbar“), lassen sich nicht vorhersagen – sie erscheinen als nicht angekündigter
+Neustart. Der Bot braucht dafür in AMP das Recht `Core.Scheduler.ViewSchedule`; er trägt
+es sich selbst ein, wenn sein AMP-Benutzer beim Start kurz *Super Admins* hat.
+
+**Hinweis im Spiel:** Pro Server ein Konsolenbefehl mit `{text}` (z.B. `say {text}`,
+`broadcast {text}`), den der Bot bei jeder Meldung zusätzlich schickt. Jedes Spiel macht
+das anders – mit *Testen* im Tab prüfen; leer = nur Discord.
+
