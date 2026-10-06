@@ -471,7 +471,11 @@ Seite eine Discord-Rolle und eine Richtung (beide / nur Discord → Seite / nur 
 
 ## AMP-Konten (`ampkonten`-Cog, Tab *AMP-Konten*, nur Owner)
 
-Keine Befehle. Mitglieder beantragen auf der Community-Seite unter *Einstellungen →
+| Command | Beschreibung | Level |
+|---|---|---|
+| `/amp` | Eigener AMP-Zugang (nur für dich sichtbar): Panel-Adresse, Stand (aktiv mit Benutzer und Rolle, beantragt, gesperrt, keins) und der nächste Schritt – z.B. fehlende Zusatzrolle mit Link zu *Rolle beantragen*, oder wo man ein neues Passwort anfordert | Member |
+
+Mitglieder beantragen auf der Community-Seite unter *Einstellungen →
 AMP-Zugang* ein Konto (nur verknüpft). Der Bot legt es an, gibt ihm die AMP-Rolle
 ihres Rangs und schickt das Startpasswort per Discord-DM – beim ersten Login muss es
 geändert werden. *Passwort vergessen* auf der Seite schickt ein neues. Ändert sich

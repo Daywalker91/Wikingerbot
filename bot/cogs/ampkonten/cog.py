@@ -14,12 +14,15 @@ ihn unter Einstellungen -> AMP-Zugang sieht. Einstellungen im Tab "AMP-Konten".
 import logging
 
 import discord
+from discord import app_commands
 from discord.ext import commands
 
 from bot.cogs.ampkonten.accounts import (
     URL_KEY,
+    AccessSummary,
     AmpError,
     Outcome,
+    access_summary,
     apply_rank,
     handle_disable,
     handle_request,
@@ -27,7 +30,9 @@ from bot.cogs.ampkonten.accounts import (
     site_member,
     write_site_status,
 )
+from bot.community import db as community_db
 from bot.community import outbox
+from bot.community.linking import user_for_discord
 from bot.core.amp_client import amp_client
 from bot.core.base_cog import BaseCog
 from bot.core.bot_settings import get_bot_setting
@@ -61,6 +66,24 @@ class AmpKontenCog(BaseCog):
         outbox.unregister("amp.disable", self._on_disable)
         outbox.unregister("user.role", self._on_rank)
         outbox.unregister("user.extra_roles", self._on_rank)
+
+    # --- /amp -------------------------------------------------------------------
+
+    @app_commands.command(name="amp", description="Dein AMP-Zugang: Adresse, Stand und nächster Schritt")
+    async def amp_cmd(self, interaction: discord.Interaction) -> None:
+        if not community_db.enabled():
+            await interaction.response.send_message("Die Community-Seite ist gerade nicht angebunden.", ephemeral=True)
+            return
+        await interaction.response.defer(ephemeral=True, thinking=True)
+        site_user = await user_for_discord(interaction.user.id)
+        summary = await access_summary(site_user.id) if site_user else None
+        if summary is None:
+            await interaction.followup.send(
+                "Der AMP-Zugang gehört zu deinem Konto auf der Seite – verknüpfe dich zuerst mit `/verknuepfen`.", ephemeral=True
+            )
+            return
+        url = await get_bot_setting(URL_KEY, "") or ""
+        await interaction.followup.send(embed=access_embed(summary, url), ephemeral=True)
 
     # --- Auftraege ---------------------------------------------------------------
 
@@ -132,6 +155,46 @@ class AmpKontenCog(BaseCog):
             return True
         except discord.HTTPException:
             return False
+
+
+def access_embed(summary: AccessSummary, url: str) -> discord.Embed:
+    """Antwort auf /amp: Adresse, eigener Stand, naechster Schritt (mit Links zur Seite)."""
+    amp_link = community_db.site_link("settings", tab="amp")
+    roles_link = community_db.site_link("settings", tab="rollen")
+    amp_page = f"[Einstellungen → AMP-Zugang]({amp_link})" if amp_link else "Einstellungen → AMP-Zugang"
+    roles_page = f"[Rolle beantragen]({roles_link})" if roles_link else "Einstellungen → Rolle beantragen"
+    embed = discord.Embed(title="🖥️ Dein AMP-Zugang", color=COLOR)
+    embed.add_field(name="Adresse", value=url or "– noch nicht eingestellt", inline=False)
+
+    if summary.state == "active":
+        text = f"✅ Aktiv – Benutzer `{summary.amp_username}`"
+        if summary.role_name:
+            text += f" · Rolle **{summary.role_name}**"
+        embed.add_field(name="Stand", value=text, inline=False)
+        embed.add_field(name="Passwort vergessen?", value=f"Neues anfordern unter {amp_page} – es kommt per DM.", inline=False)
+        return embed
+    if summary.state == "requested":
+        embed.add_field(name="Stand", value="⏳ Beantragt – die Zugangsdaten kommen gleich per DM.", inline=False)
+        return embed
+
+    state = "🔒 Gesperrt" if summary.state == "disabled" else "Noch kein Konto"
+    if summary.site_note and summary.state == "disabled":
+        state += f" – {summary.site_note}"
+    embed.add_field(name="Stand", value=state[:1000], inline=False)
+    if summary.missing_extra and summary.missing_extra_pending:
+        step = f"Deine Anfrage für die Zusatzrolle **{summary.missing_extra}** läuft – das Team entscheidet."
+    elif summary.missing_extra:
+        step = f"Dir fehlt die Zusatzrolle **{summary.missing_extra}** – beantragen unter {roles_page}."
+    elif not summary.role_name:
+        step = "Dein Rang hat (noch) keinen AMP-Zugang."
+    elif summary.state == "disabled":
+        step = f"Du erfüllst die Voraussetzungen wieder – beantrage den Zugang neu unter {amp_page}."
+    else:
+        step = f"Beantragen unter {amp_page} – die Zugangsdaten kommen per DM."
+    if summary.missing_extra and summary.state == "disabled":
+        step += " Mit der Rolle wird dein Konto automatisch wieder aktiv."
+    embed.add_field(name="Nächster Schritt", value=step, inline=False)
+    return embed
 
 
 async def setup(bot: commands.Bot) -> None:

@@ -206,3 +206,43 @@ async def test_required_extra_role_then_rank_decides(site, db_session):  # noqa:
         await db.commit()
     disabled = await apply_rank(amp, 1)
     assert disabled.status == "disabled" and "Schmied" in disabled.note and amp.users["Ragnar"]["Disabled"]
+
+
+async def test_amp_command_summary_and_next_step(site, db_session):  # noqa: F811
+    """/amp: Stand und naechster Schritt - fehlende Zusatzrolle, laufende Anfrage, aktiv, gesperrt."""
+    from bot.cogs.ampkonten.accounts import REQUIRES_KEY, access_summary
+    from bot.cogs.ampkonten.cog import access_embed
+
+    await seed({"huskarl": "r-mod"})
+    await set_bot_setting(REQUIRES_KEY, "schmied")
+    async with community_db.session() as db:
+        await db.execute(insert(community_db.roles).values(id=9, slug="schmied", name="Schmied", level=60, kind="extra", color="#000"))
+        await db.commit()
+
+    summary = await access_summary(1)
+    assert (summary.state, summary.missing_extra, summary.missing_extra_pending) == ("none", "Schmied", False)
+    text = " ".join(f.value for f in access_embed(summary, "https://amp.example").fields)
+    assert "https://amp.example" in text and "Zusatzrolle **Schmied**" in text and "tab=rollen" in text
+
+    async with community_db.session() as db:  # Rollenanfrage laeuft
+        await db.execute(insert(community_db.role_requests).values(id=1, user_id=1, role_id=9, reason="", status="pending"))
+        await db.commit()
+    assert (await access_summary(1)).missing_extra_pending
+
+    async with community_db.session() as db:  # zugestimmt: Schmied bekommen -> Konto anlegen
+        await db.execute(update(community_db.role_requests).values(status="approved"))
+        await db.execute(insert(community_db.user_extra_roles).values(user_id=1, role_id=9))
+        await db.commit()
+    amp = FakeAMP()
+    await handle_request(amp, 1)
+    active = await access_summary(1)
+    assert (active.state, active.amp_username, active.role_name) == ("active", "Ragnar", "Mod")
+    assert "Passwort vergessen?" in [f.name for f in access_embed(active, "").fields]
+
+    async with community_db.session() as db:  # Schmied weg -> gesperrt, Hinweis auf Reaktivierung
+        await db.execute(community_db.user_extra_roles.delete())
+        await db.commit()
+    await apply_rank(amp, 1)
+    disabled = await access_summary(1)
+    assert disabled.state == "disabled"
+    assert "wieder aktiv" in " ".join(f.value for f in access_embed(disabled, "").fields)

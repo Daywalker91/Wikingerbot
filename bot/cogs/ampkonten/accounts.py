@@ -170,6 +170,61 @@ async def write_site_status(site_user_id: int, outcome: Outcome) -> None:
         await db.commit()
 
 
+@dataclass
+class AccessSummary:
+    """Stand fuer /amp: was hat das Mitglied, was fehlt, was ist der naechste Schritt."""
+
+    state: str  # active | disabled | requested | none
+    amp_username: str | None
+    role_name: str | None  # AMP-Rolle, die der Rang gibt (None: kein Zugang)
+    site_note: str  # Hinweis des Bots auf der Seite (z.B. warum abgelehnt)
+    missing_extra: str | None  # Name der fehlenden Zusatzrolle
+    missing_extra_pending: bool  # dafuer laeuft schon eine Rollenanfrage
+
+
+async def access_summary(site_user_id: int) -> AccessSummary | None:
+    member = await site_member(site_user_id)
+    if member is None or member.deleted:
+        return None
+    account = await own_account(site_user_id)
+    role_id, missing = await role_for(member)
+    roles, _ = await available_roles(None)
+    names = {rid: name for name, rid in roles.items()}
+    u = community_db.users
+    async with community_db.session() as db:
+        status, note = (
+            await db.execute(select(u.c.amp_status, u.c.amp_note).where(u.c.id == site_user_id))
+        ).first() or (None, None)
+    if account is not None:
+        state = "disabled" if account.disabled else "active"
+    else:
+        state = "requested" if status == "requested" else "none"
+    pending = False
+    if missing:
+        required = await load_requirement()
+        q, r = community_db.role_requests, community_db.roles
+        try:
+            async with community_db.session() as db:
+                pending = (
+                    await db.execute(
+                        select(q.c.id)
+                        .select_from(q.join(r, r.c.id == q.c.role_id))
+                        .where(q.c.user_id == site_user_id, r.c.slug == required, q.c.status == "pending")
+                        .limit(1)
+                    )
+                ).first() is not None
+        except Exception:  # Rollenanfragen gibt es auf dieser Seite (noch) nicht
+            pending = False
+    return AccessSummary(
+        state=state,
+        amp_username=account.amp_username if account else None,
+        role_name=names.get(role_id) if role_id else None,
+        site_note=note or "",
+        missing_extra=missing,
+        missing_extra_pending=pending,
+    )
+
+
 # --- AMP ------------------------------------------------------------------------------
 
 
