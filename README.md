@@ -20,7 +20,7 @@ optional gekoppelt an eine eigene Community-Webseite.*
 | Phase 3 | React-WebUI | ✅ läuft im Bot-Prozess (optional https über einen Reverse-Proxy): Dashboard, Server, Moderation, Whitelist, Einstellungen und je ein Tab pro Cog; Benutzer-Seite offen |
 | — | Betrieb in AMP: eigene Vorlage, Migrationen beim Start, MariaDB getestet ([AMP.md](AMP.md)) | ✅ fertig |
 | Phase 4 | `welcome`, `roles`, `music`, `stats`, `automod` | ✅ fertig (Tests ohne Discord; live in Discord noch zu prüfen) |
-| Phase 5 | Kopplung mit der Community-Seite als eigene, abschaltbare Cogs: `community`, `news`, `events`, `tickets`, `rangsync`, `wiki`, `ampkonten`, `rollenanfragen` | ✅ fertig (Tests ohne Discord; im Betrieb erprobt: Anbindung, Verknüpfung) |
+| Phase 5 | Kopplung mit der Community-Seite als eigene, abschaltbare Cogs: `community`, `news`, `events`, `tickets`, `rangsync`, `wiki`, `forum`, `ampkonten`, `rollenanfragen` | ✅ fertig (Tests ohne Discord; im Betrieb erprobt: Anbindung, Verknüpfung) |
 | — | Discord-Community-Funktionen: Ankündigungskanal, Mitgliedschaftsprüfung, Ticket-Forum mit Tags | ✅ fertig |
 
 Phase 1–3 sind gegen einen echten AMP-Server und einen Discord-Server live erprobt (nicht nur Unit-Tests). Die Cogs aus Phase 4 und 5 sind mit Unit-Tests abgesichert (Befehle laden, Regeln, Datenbank, echter FFmpeg-Lauf, nachgebaute Discord-/AMP-/Seiten-Gegenstellen); im Betrieb erprobt sind davon bisher die Anbindung und Verknüpfung.
@@ -29,7 +29,7 @@ Grundsatz: Der Bot läuft auch **ohne** die Community-Seite – alles, was mit i
 
 ### Community-Seite (optional)
 
-Die Community-Cogs (`community`, `news`, `events`, `tickets`, `rangsync`, `wiki`, `ampkonten`, `rollenanfragen`)
+Die Community-Cogs (`community`, `news`, `events`, `tickets`, `rangsync`, `wiki`, `forum`, `ampkonten`, `rollenanfragen`)
 arbeiten mit einer Community-Webseite zusammen – über deren Datenbank, nicht über HTTP: Die Seite
 schreibt Aufträge in eine Tabelle `bot_outbox`, der Bot holt sie ab und schreibt nur in wenige,
 spaltengenau freigegebene Tabellen zurück. Erwartet wird das Datenbankschema der zugehörigen
@@ -157,6 +157,7 @@ Wikingerbot/
 │       ├── tickets/             # Tickets: Staff-Threads, DMs, /ticket (+ Web-Seite)
 │       ├── rangsync/            # Raenge der Seite <-> Discord-Rollen (+ Web-Seite)
 │       ├── wiki/cog.py          # /wiki (Suche im Wiki der Seite)
+│       ├── forum/               # Neue Forum-Themen der Seite ankuendigen, /forum (+ Web-Seite)
 │       ├── ampkonten/           # AMP-Konten fuer Mitglieder der Seite, /amp, Gameserver-Rollen in AMP (+ Web-Seite)
 │       ├── rollenanfragen/      # Rollenanfragen der Seite: Zustimmen/Ablehnen in Discord (+ Web-Seite)
 │       ├── whitelist/           # /whitelist ... (Server- und Gruppen-Freigaben) + Web-Seite
@@ -343,7 +344,8 @@ verlässt, verliert die Rechte sofort.
 |---|---|
 | `community` | Konto-Verknüpfung (`/verknuepfen`, `/profil`), Aufträge der Seite abholen, Tab Community |
 | `news` / `events` | News und Events der Seite in Discord, Zusagen per Knopf, natives Discord-Event |
-| `tickets` | Ticket-Forum mit Tags, Antworten im Thread, DMs ans Mitglied, `/ticket` |
+| `tickets` | Ticket-Forum mit Tags, eigenes Forum/Ping je Kategorie, Antworten im Thread, DMs ans Mitglied, `/ticket` |
+| `forum` | Neue Forum-Themen der Seite in Discord ankündigen („Hier lesen“), `/forum` |
 | `rangsync` | Ränge und Zusatzrollen der Seite ↔ Discord-Rollen |
 | `wiki` | `/wiki` – Suche im Wiki der Seite |
 | `ampkonten` | AMP-Konten für Mitglieder (Startpasswort per DM), `/amp`, Gameserver-Rollen in AMP einrichten |
@@ -363,7 +365,8 @@ verlässt, verliert die Rechte sofort.
 | AutoMod | Discords AutoMod → Warn-Punkte, eigene Regeln, Folgen, Ausnahmen, Alarmkanal (Admin) |
 | News | News-Kanal, Ping-Rolle, neueste News mit Discord-Stand (Admin) |
 | Events | Event-Kanal, Ping-Rolle, natives Discord-Event, nächste Events mit Discord-Stand (Admin) |
-| Tickets | Staff-Kanal, Ping-Rolle, DMs, offene Tickets mit Thread-Stand (Admin) |
+| Tickets | Staff-Kanal, Ping-Rolle, eigenes Forum/Ping je Kategorie, DMs, offene Tickets mit Thread-Stand (Admin) |
+| Forum | Kanal und Ping-Rolle für Ankündigungen neuer Forum-Themen, neueste Themen (Admin) |
 | Rang-Sync | Rang ↔ Discord-Rolle und Richtung, Ersteller für System-Tickets, alles abgleichen (Owner) |
 | AMP-Konten | Panel-Adresse, Rang → AMP-Rolle, angelegte Konten (Owner) |
 | Rollenanfragen | Letzte Rollenanfragen der Seite mit Stand (Mod) |
@@ -447,7 +450,7 @@ nach `web/dist` entpacken. Fertige Docker-/Kubernetes-Dateien gibt es (noch) nic
 - welcome, roles, music, stats, automod
 
 **Phase 5 — Community-Seite** ✅
-- `community` (Konto-Verknüpfung, Aufträge der Seite), `news`, `events`, `tickets`, `rangsync`, `wiki`, `ampkonten`, `rollenanfragen`
+- `community` (Konto-Verknüpfung, Aufträge der Seite), `news`, `events`, `tickets`, `rangsync`, `wiki`, `forum`, `ampkonten`, `rollenanfragen`
 - Zusatzrollen der Seite mit Sync nach Discord, Fähigkeiten an Rollen binden ([docs/PLAN_ZUSATZROLLEN.md](docs/PLAN_ZUSATZROLLEN.md))
 
 **Geplant**

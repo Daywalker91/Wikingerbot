@@ -49,6 +49,22 @@ from db.session import get_db_session
 
 log = logging.getLogger("wikingerbot.tickets")
 
+ROUTES_KEY = "tickets_routes"  # {Kategorie: {"channel_id": ..., "ping_role_id": ...}} - eigenes Forum/Ping je Kategorie
+
+
+async def route_for(guild_id: int, category: str) -> tuple[int | None, int | None]:
+    """(Kanal, Ping-Rolle) fuer eine Ticket-Kategorie: eigene Einstellung, sonst der Standard."""
+    import json
+
+    try:
+        routes = json.loads(await get_config(guild_id, ROUTES_KEY, "{}") or "{}")
+    except json.JSONDecodeError:
+        routes = {}
+    entry = routes.get(category) or {}
+    channel = entry.get("channel_id") or await get_config(guild_id, "tickets_channel_id")
+    role = entry.get("ping_role_id") or (None if entry.get("channel_id") else await get_config(guild_id, "tickets_ping_role_id"))
+    return (int(channel) if channel else None), (int(role) if role else None)
+
 THREAD_KIND = "ticket"  # channel_id = Elternkanal, message_id = Thread-ID (= ID der Startnachricht)
 CURSOR_KIND = "ticket_cursor"  # message_id = zuletzt in den Thread gespiegelte Nachricht der Seite
 DM_CURSOR_KIND = "ticket_dm"  # message_id = zuletzt fuer DMs gepruefte Nachricht (beim ersten Server gespeichert)
@@ -266,8 +282,8 @@ class TicketsCog(BaseCog):
             return []
         done = []
         for guild in self.bot.guilds:
-            channel_id = await get_config(guild.id, "tickets_channel_id")
-            channel = guild.get_channel(int(channel_id)) if channel_id else None
+            channel_id, _ = await route_for(guild.id, ticket.category)
+            channel = guild.get_channel(channel_id) if channel_id else None
             thread = await self._thread(guild, ticket_id)
             if thread is None:
                 if channel is None:
@@ -286,8 +302,8 @@ class TicketsCog(BaseCog):
 
     async def _create_thread(self, guild: discord.Guild, channel, ticket: Ticket) -> discord.Thread:
         embed, view = status_embed(ticket), thread_view(ticket)
-        role_id = await get_config(guild.id, "tickets_ping_role_id")
-        role = guild.get_role(int(role_id)) if role_id else None
+        _, role_id = await route_for(guild.id, ticket.category)
+        role = guild.get_role(role_id) if role_id else None
         mentions = discord.AllowedMentions(roles=[role] if role else False, users=False, everyone=False)
         if isinstance(channel, discord.ForumChannel):
             created = await channel.create_thread(

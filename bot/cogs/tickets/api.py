@@ -2,13 +2,16 @@
 Staff-Kanal (Text oder Forum), Ping-Rolle, DMs an/aus, offene Tickets mit
 Thread-Stand. Discord-IDs als Text."""
 
+import json
+
 import discord
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
 from api.middleware.auth import CurrentUser, require_level
 from api.types import Snowflake
-from bot.cogs.tickets.site import STATUSES, open_tickets
+from bot.cogs.tickets.cog import ROUTES_KEY
+from bot.cogs.tickets.site import CATEGORIES, STATUSES, open_tickets
 from bot.community import db as community_db
 from bot.core import runtime
 from bot.core.guild_config import get_config, set_config
@@ -19,10 +22,16 @@ from db.session import get_db_session
 router = APIRouter(prefix="/tickets", tags=["tickets"])
 
 
+class TicketRoute(BaseModel):
+    channel_id: Snowflake | None = None  # leer = Standard-Kanal
+    ping_role_id: Snowflake | None = None  # leer = Standard-Ping (nur ohne eigenen Kanal)
+
+
 class TicketSettings(BaseModel):
     channel_id: Snowflake | None = None
     ping_role_id: Snowflake | None = None
     dm: bool = True
+    routes: dict[str, TicketRoute] = {}
 
 
 @router.get("/config")
@@ -40,7 +49,9 @@ async def get_tickets(user: CurrentUser = Depends(require_level(Level.ADMIN))) -
             channel_id=int(channel) if channel else None,
             ping_role_id=int(role) if role else None,
             dm=await get_config(gid, "tickets_dm", "true") == "true",
+            routes=_load_routes(await get_config(gid, ROUTES_KEY, "{}")),
         ).model_dump(mode="json"),
+        "categories": [{"key": k, "label": v} for k, v in CATEGORIES.items()],
         "channels": channels,
         "roles": [{"id": str(r.id), "name": r.name} for r in guild.roles if not r.is_default() and not r.managed] if guild else [],
         "community_enabled": community_db.enabled(),
@@ -83,7 +94,21 @@ async def put_tickets(body: TicketSettings, user: CurrentUser = Depends(require_
     await set_config(user.guild_id, "tickets_channel_id", str(body.channel_id) if body.channel_id else "", name)
     await set_config(user.guild_id, "tickets_ping_role_id", str(body.ping_role_id) if body.ping_role_id else "", name)
     await set_config(user.guild_id, "tickets_dm", "true" if body.dm else "false", name)
+    routes = {
+        key: {"channel_id": str(r.channel_id) if r.channel_id else None, "ping_role_id": str(r.ping_role_id) if r.ping_role_id else None}
+        for key, r in body.routes.items()
+        if key in CATEGORIES and (r.channel_id or r.ping_role_id)
+    }
+    await set_config(user.guild_id, ROUTES_KEY, json.dumps(routes), name)
     return {"ok": True}
+
+
+def _load_routes(raw: str | None) -> dict:
+    try:
+        stored = json.loads(raw or "{}")
+    except json.JSONDecodeError:
+        return {}
+    return {k: TicketRoute(**v) for k, v in stored.items() if k in CATEGORIES and isinstance(v, dict)}
 
 
 @router.post("/{ticket_id}/sync")

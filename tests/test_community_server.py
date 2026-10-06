@@ -4,10 +4,12 @@ und Tags im Ticket-Forum."""
 from types import SimpleNamespace
 
 import discord
+from sqlalchemy import insert
 
 from bot.cogs.tickets.cog import TicketsCog
 from bot.cogs.tickets.site import change_status, create_ticket
 from bot.cogs.welcome.cog import WelcomeCog
+from bot.community import db as community_db
 from bot.community.announce import publish_if_announcement
 from bot.core.guild_config import set_config
 from db.models.guild import Guild
@@ -159,6 +161,9 @@ async def test_forum_tags_created_and_follow_status(site, db_session, monkeypatc
     team_tag = discord.ForumTag(name="Dringend")
     team_tag.id = 42
     cog, guild = await _forum_cog(db_session, monkeypatch, tags=[team_tag])
+    async with community_db.session() as db:  # Gameserver-Tickets bearbeitet, wer ticket.server hat
+        await db.execute(insert(community_db.role_permissions).values(role_id=5, permission="ticket.server"))
+        await db.commit()
 
     tid = await create_ticket(MEMBER, "Server down", "server", "Valheim startet nicht")
     await cog.sync_ticket(tid)

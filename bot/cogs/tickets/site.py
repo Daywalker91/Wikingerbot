@@ -71,8 +71,24 @@ async def has_permission(site_user_id: int, permission: str) -> bool:
     return await community_db.has_permission(site_user_id, permission)
 
 
-async def is_staff(site_user_id: int) -> bool:
-    return await has_permission(site_user_id, "ticket.manage")
+# Wer welche Kategorie bearbeitet (wie TICKET_CATEGORY_PERMISSIONS der Seite): eigenes
+# Recht je Bereich, sonst Support (ticket.manage).
+CATEGORY_PERMISSIONS = {"melden": "ticket.reports", "server": "ticket.server", "rollenanfrage": "ticket.roles"}
+STAFF_PERMISSIONS = ("ticket.manage", *CATEGORY_PERMISSIONS.values())
+
+
+def category_permission(category: str) -> str:
+    return CATEGORY_PERMISSIONS.get(category, "ticket.manage")
+
+
+async def is_staff(site_user_id: int, category: str | None = None) -> bool:
+    """Darf Tickets dieser Kategorie bearbeiten - ohne Kategorie: irgendeine."""
+    if category is not None:
+        return await has_permission(site_user_id, category_permission(category))
+    for permission in STAFF_PERMISSIONS:
+        if await has_permission(site_user_id, permission):
+            return True
+    return False
 
 
 async def fetch_ticket(ticket_id: int) -> Ticket | None:
@@ -158,7 +174,7 @@ async def add_reply(ticket_id: int, site_user_id: int, body: str, internal: bool
     ticket = await fetch_ticket(ticket_id)
     if ticket is None:
         raise TicketError("Dieses Ticket gibt es nicht mehr.")
-    staff = await is_staff(site_user_id)
+    staff = await is_staff(site_user_id, ticket.category)
     owner = ticket.user_id == site_user_id
     if not staff and not owner:
         raise TicketError("Dieses Ticket gehört dir nicht.")
@@ -190,7 +206,7 @@ async def change_status(ticket_id: int, site_user_id: int, username: str, action
     ticket = await fetch_ticket(ticket_id)
     if ticket is None:
         raise TicketError("Dieses Ticket gibt es nicht mehr.")
-    staff = await is_staff(site_user_id)
+    staff = await is_staff(site_user_id, ticket.category)
     if not staff and not (action in ("close", "reopen") and ticket.user_id == site_user_id):
         raise TicketError("Das darf nur der Support.")
     t = community_db.tickets

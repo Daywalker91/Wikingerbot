@@ -20,7 +20,7 @@ export default function TicketsPage() {
   const { user } = useAuth();
   const isAdmin = user?.level === "admin" || user?.level === "owner";
   const [data, setData] = useState<TicketsData | null>(null);
-  const [settings, setSettings] = useState<TicketSettings>({ channel_id: null, ping_role_id: null, dm: true });
+  const [settings, setSettings] = useState<TicketSettings>({ channel_id: null, ping_role_id: null, dm: true, routes: {} });
   const [note, setNote] = useState<string | null>(null);
 
   const load = useCallback(async () => {
@@ -89,6 +89,46 @@ export default function TicketsPage() {
             ))}
           </select>
         </div>
+        <h3 style={{ margin: "16px 0 4px" }}>Je Kategorie</h3>
+        <p style={muted}>
+          Eigenes Forum und eigener Ping für einzelne Kategorien – z.B. Meldungen nur für die Moderation. Leer = Staff-Kanal und Ping
+          von oben. Wer was sieht, regeln die Rechte der Foren in Discord; wer Tickets bearbeiten darf, die Rechte auf der Seite.
+        </p>
+        <table style={{ borderCollapse: "collapse", marginBottom: 8 }}>
+          <tbody>
+            {data.categories.map((cat) => {
+              const route = settings.routes[cat.key] ?? { channel_id: null, ping_role_id: null };
+              const setRoute = (change: Partial<typeof route>) =>
+                setSettings({ ...settings, routes: { ...settings.routes, [cat.key]: { ...route, ...change } } });
+              return (
+                <tr key={cat.key}>
+                  <td style={{ padding: "4px 8px 4px 0" }}>{cat.label}</td>
+                  <td style={{ padding: 4 }}>
+                    <select value={route.channel_id ?? ""} onChange={(e) => setRoute({ channel_id: e.target.value || null })}>
+                      <option value="">– Staff-Kanal –</option>
+                      {data.channels.map((c) => (
+                        <option key={c.id} value={c.id}>
+                          {c.forum ? "🗂️ " : "#"}
+                          {c.name}
+                        </option>
+                      ))}
+                    </select>
+                  </td>
+                  <td style={{ padding: 4 }}>
+                    <select value={route.ping_role_id ?? ""} onChange={(e) => setRoute({ ping_role_id: e.target.value || null })}>
+                      <option value="">{route.channel_id ? "– niemand –" : "– wie oben –"}</option>
+                      {data.roles.map((r) => (
+                        <option key={r.id} value={r.id}>
+                          @{r.name}
+                        </option>
+                      ))}
+                    </select>
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
         <div style={row}>
           <label>
             <input type="checkbox" checked={settings.dm} onChange={(e) => setSettings({ ...settings, dm: e.target.checked })} /> Mitglieder per

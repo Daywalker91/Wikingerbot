@@ -51,7 +51,7 @@ async def test_create_validation(site):  # noqa: F811
 
 async def test_status_rules_like_the_site(site):  # noqa: F811
     await setup_site()
-    tid = await create_ticket(MEMBER, "Server down", "server", "Valheim startet nicht mehr")
+    tid = await create_ticket(MEMBER, "Server down", "technik", "Valheim startet nicht mehr")
     assert (await fetch_ticket(tid)).status == "open"
 
     await add_reply(tid, STAFF, "Schau ich mir an")
@@ -167,7 +167,7 @@ async def test_mirror_site_thread_dm(site, db_session, monkeypatch):  # noqa: F8
     await set_config(1, "tickets_channel_id", "600")
     cog, guild, member = make_cog()
 
-    tid = await create_ticket(MEMBER, "Server down", "server", "Valheim startet nicht")
+    tid = await create_ticket(MEMBER, "Server down", "technik", "Valheim startet nicht")
     assert await cog.sync_ticket(tid) == ["Wikinger: Thread angelegt", "Wikinger: 1 Nachricht(en) gespiegelt"]
     [thread] = guild.threads.values()
     assert thread.name == "#1 Server down"

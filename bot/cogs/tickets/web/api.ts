@@ -1,9 +1,15 @@
 import { apiFetch } from "@/api/client";
 
+export interface TicketRoute {
+  channel_id: string | null;
+  ping_role_id: string | null;
+}
+
 export interface TicketSettings {
   channel_id: string | null;
   ping_role_id: string | null;
   dm: boolean;
+  routes: Record<string, TicketRoute>; // eigenes Forum/Ping je Kategorie
 }
 
 export interface OpenTicket {
@@ -18,6 +24,7 @@ export interface OpenTicket {
 
 export interface TicketsData {
   settings: TicketSettings;
+  categories: { key: string; label: string }[];
   channels: { id: string; name: string; forum: boolean }[];
   roles: { id: string; name: string }[];
   community_enabled: boolean;

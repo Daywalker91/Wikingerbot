@@ -203,6 +203,35 @@ ticket_messages = Table(
     Column("created_at", DateTime),
 )
 
+# Forum der Seite (nur lesen - Ankuendigung neuer Themen in Discord)
+forum_categories = Table(
+    "forum_categories",
+    metadata,
+    Column("id", Integer, primary_key=True),
+    Column("name", String(80)),
+    Column("min_read_level", SmallInteger, default=0),  # 0 = auch Gaeste
+)
+
+forum_threads = Table(
+    "forum_threads",
+    metadata,
+    Column("id", Integer, primary_key=True),
+    Column("category_id", Integer),
+    Column("user_id", Integer),
+    Column("title", String(150)),
+    Column("created_at", DateTime),
+)
+
+forum_posts = Table(
+    "forum_posts",
+    metadata,
+    Column("id", Integer, primary_key=True),
+    Column("thread_id", Integer),
+    Column("user_id", Integer),
+    Column("body", Text),
+    Column("created_at", DateTime),
+)
+
 wiki_pages = Table(
     "wiki_pages",
     metadata,

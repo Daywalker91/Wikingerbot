@@ -50,6 +50,11 @@ GRANT SELECT, INSERT ON <SITE_DB>.ticket_messages TO '<BOT_USER>'@'<BOT_HOST>';
 GRANT SELECT, INSERT ON <SITE_DB>.role_requests TO '<BOT_USER>'@'<BOT_HOST>';  -- INSERT: Anfrage aus Discord (Panel, /amp)
 GRANT UPDATE (status, decided_by, decision_note, decided_at) ON <SITE_DB>.role_requests TO '<BOT_USER>'@'<BOT_HOST>';
 
+-- Forum (nur lesen - Ankuendigung neuer Themen, /forum)
+GRANT SELECT (id, name, min_read_level) ON <SITE_DB>.forum_categories TO '<BOT_USER>'@'<BOT_HOST>';
+GRANT SELECT (id, category_id, user_id, title, created_at) ON <SITE_DB>.forum_threads TO '<BOT_USER>'@'<BOT_HOST>';
+GRANT SELECT (id, thread_id, user_id, body, created_at) ON <SITE_DB>.forum_posts TO '<BOT_USER>'@'<BOT_HOST>';
+
 -- Wiki (nur lesen, /wiki)
 GRANT SELECT ON <SITE_DB>.wiki_pages TO '<BOT_USER>'@'<BOT_HOST>';
 

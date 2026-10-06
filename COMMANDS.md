@@ -418,6 +418,11 @@ Voll gespiegelt zwischen Seite und Discord:
 - Jedes Ticket bekommt einen **Thread im Staff-Kanal** (Textkanal oder Forum). Die
   Startnachricht zeigt Status, Kategorie, Mitglied und Zuständigen und hat die Knöpfe
   **Übernehmen**, **Schließen**, **Wieder öffnen**.
+- **Je Kategorie** lässt sich im Tab ein eigenes Forum und ein eigener Ping festlegen –
+  z.B. „Spieler melden“ in ein Forum nur für die Moderation, „Gameserver“ zu den
+  Schmieden. Wer Tickets einer Kategorie bearbeiten darf, regelt die Seite: Support
+  (`ticket.manage`), Meldungen (`ticket.reports`), Gameserver (`ticket.server`),
+  Rollenanfragen (`ticket.roles`).
 - Im **Forum** bekommt jeder Beitrag einen Status-Tag (Offen, In Bearbeitung,
   Wartet auf Antwort, Geschlossen) und einen Kategorie-Tag, filterbar im Forum.
   Fehlende Tags legt der Bot an, wenn er dort **Kanäle verwalten** darf – sonst
@@ -548,4 +553,17 @@ nach (z.B. Schmied → AMP-Konto, ein gesperrtes wird wieder aktiv). **Ablehnen*
 nach einem Grund. Beides beantwortet und schließt das Ticket (das Mitglied bekommt es
 per DM) und steht kurz im Mod-Log. Braucht die Rechte aus `docs/community-grants.sql`
 (`role_requests`).
+
+---
+
+## Forum der Community-Seite (`forum`-Cog, Tab *Forum*)
+
+| Command | Beschreibung | Level |
+|---|---|---|
+| `/forum` | Die neuesten Themen im Forum der Seite (nur für dich sichtbar) | Member |
+
+Neue Themen im Forum der Seite werden im eingestellten Kanal kurz angekündigt: Titel,
+Verfasser, Kategorie, Anfang des Texts und ein Knopf **Hier lesen**. Antworten nicht.
+Nur Kategorien, die jeder lesen darf – interne Bereiche erscheinen nie in Discord.
+Kanal und Ping-Rolle im Tab *Forum*, dort auch ältere Themen von Hand ankündigen.
 
