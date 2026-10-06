@@ -121,10 +121,10 @@ nachträglichen Wechseln):
   gemeinsamem Hintergrund/Theme/Farben/Unschärfe für die ganze Gruppe;
   jedes Mitglied bekommt darin ein kompaktes Panel. Die gruppenweiten
   Befehle `/bannergroup theme` / `background` / `customize` wirken hier.
-- **`separate`** (wie GatekeeperV2s Banner Groups): jedes Mitglied bekommt
-  sein **eigenes** vollständiges Banner-Bild/-Embed — mit seinem **eigenen**
+- **`separate`**: jedes Mitglied bekommt sein **eigenes** vollständiges
+  Banner (Karte mit Adresse und Bild bzw. Status) — mit seinem **eigenen**
   Steam-Artwork/Theme/Farben, exakt wie ein Einzel-Banner — alle zusammen
-  als mehrere Anhänge/Embeds in **einer** Nachricht. Die gruppenweiten
+  als Karten untereinander in **einer** Nachricht. Die gruppenweiten
   `theme`/`background`/`customize`-Befehle wirken hier **nicht**, da jedes
   Mitglied seine eigene Optik behält (dafür `/banner theme` usw. direkt am
   Mitgliedsserver nutzen, auch wenn er in einer Gruppe steckt).

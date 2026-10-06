@@ -123,7 +123,7 @@ def _shadow_text(
     fill: tuple[int, int, int, int] = (255, 255, 255, 255),
 ) -> None:
     """Zeichnet Text mit einem kleinen Schlagschatten statt einem deckenden Balken -
-    damit das Hintergrundbild ueberall sichtbar bleibt (siehe GatekeeperV2s banner_creator.py)."""
+    damit das Hintergrundbild ueberall sichtbar bleibt."""
     x, y = xy
     draw.text((x + 2, y + 2), text, font=font, fill=(0, 0, 0, 170))
     draw.text((x, y), text, font=font, fill=fill)

@@ -1,7 +1,6 @@
 """Eigene AMP-Rolle "WikingerBot" - der Bot richtet sie beim Start selbst ein.
 
-Idee wie bei GatekeeperV2 (eigene Umsetzung): Man gibt dem AMP-Benutzer des
-Bots einmalig "Super Admins". Beim Start legt der Bot dann seine eigene Rolle
+Man gibt dem AMP-Benutzer des Bots einmalig "Super Admins". Beim Start legt der Bot dann seine eigene Rolle
 mit genau den Rechten an, die er braucht, nimmt sich selbst hinein und gibt
 "Super Admins" wieder ab (ausser AMP_KEEP_SUPER_ADMIN ist gesetzt).
 

@@ -80,8 +80,8 @@ einsortiert werden, die der Bot verwalten soll:
 
 Das ist eine Discord-API-Einschränkung (ein Bot kann keine Rollen zuweisen/entfernen
 oder Mitglieder moderieren, die eine höhere oder gleich hohe Rolle als der Bot selbst
-haben) und lässt sich nicht per Code umgehen — GatekeeperV2 löst das genauso wenig
-automatisch, es ist bei jedem Discord-Bot ein einmaliger manueller Schritt.
+haben) und lässt sich nicht per Code umgehen – bei jedem Discord-Bot ein einmaliger
+manueller Schritt.
 
 ---
 

@@ -201,7 +201,7 @@ Ein Server gehört zu maximal einer Gruppe. Zwei Layouts stehen zur Wahl:
   Hintergrund/Theme/Farben/Unschärfe für die ganze Gruppe; jedes Mitglied
   bekommt darin ein eigenes kompaktes Panel (Status, Spieler, Verbinden,
   Whitelist-Badge).
-- **`separate`** (wie GatekeeperV2): jedes Mitglied bekommt sein **eigenes**
+- **`separate`**: jedes Mitglied bekommt sein **eigenes**
   vollständiges Banner-Bild/-Embed (mit seinem eigenen Steam-Artwork/Theme/
   Farben, exakt wie ein Einzel-Banner) — alle zusammen als Karten
   untereinander in einer gemeinsamen Nachricht, jede mit ihrer Adresse. Die gruppenweiten `theme`/

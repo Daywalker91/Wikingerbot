@@ -1,7 +1,6 @@
 # WikingerBot in AMP betreiben
 
-Der Bot läuft als eigene AMP-Instanz – nach dem Vorbild der offiziellen
-GatekeeperV2-Vorlage. Die Vorlage liegt im Repo
+Der Bot läuft als eigene AMP-Instanz aus einer eigenen Vorlage. Die Vorlage liegt im Repo
 [Daywalker91/AMPTemplate](https://github.com/Daywalker91/AMPTemplate) und wird in AMP
 als *Configuration Repository* eingebunden.
 
@@ -49,7 +48,7 @@ Alle Einstellungen (Token, Datenbank, AMP-Zugang) sind Eingabefelder in AMP unte
 
 ## Die AMP-Rolle des Bots
 
-Nach dem Vorbild von GatekeeperV2 richtet sich der Bot seine Rechte selbst ein
+Der Bot richtet sich seine Rechte in AMP selbst ein
 (`bot/core/amp_role.py`):
 
 1. Hat der AMP-Benutzer des Bots **Super Admins**, legt der Bot beim Start die Rolle

@@ -12,7 +12,7 @@ class BannerGroupLayout(str, enum.Enum):
     # Ein gestapeltes Bild/Embed mit gemeinsamem Hintergrund/Theme fuer die ganze Gruppe.
     COMBINED = "combined"
     # Ein eigenes Bild/Embed pro Mitglied (mit dessen eigenem Artwork/Theme), alle als
-    # separate Anhaenge/Embeds in einer gemeinsamen Nachricht - wie GatekeeperV2s Banner Groups.
+    # Karten (Embeds) in einer gemeinsamen Nachricht.
     SEPARATE = "separate"
 
 

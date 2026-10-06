@@ -34,7 +34,7 @@ arbeiten mit einer Community-Webseite zusammen – über deren Datenbank, nicht 
 schreibt Aufträge in eine Tabelle `bot_outbox`, der Bot holt sie ab und schreibt nur in wenige,
 spaltengenau freigegebene Tabellen zurück. Erwartet wird das Datenbankschema der zugehörigen
 PHP-Community-Seite (eigenes Projekt; Tabellen wie `users`, `roles`, `news`, `events`, `tickets`,
-`wiki_pages` und die Migrationen `008_discord`/`009_amp_zugang`). Die nötigen Datenbank-Rechte
+`wiki_pages` und ihre Migrationen ab `008_discord`, u.a. Zusatzrollen und Rollenanfragen). Die nötigen Datenbank-Rechte
 stehen in [docs/community-grants.sql](docs/community-grants.sql), die Einrichtung in
 [AMP.md](AMP.md#community-seite-anbinden-optional). Ohne Seite bleiben diese Cogs untätig.
 
@@ -42,7 +42,7 @@ stehen in [docs/community-grants.sql](docs/community-grants.sql), die Einrichtun
 
 ## Projektziel
 
-Ablösung von GatekeeperV2, Red Discord Bot und Sinusbot durch einen einheitlichen, selbst entwickelten Bot mit:
+Ein einheitlicher, selbst entwickelter Bot statt mehrerer Einzel-Bots (Gameserver-Verwaltung, Moderation, Musik) mit:
 - Einheitlichem Berechtigungssystem
 - Einheitlicher Datenbank
 - Discord Slash-Commands als primäres Interface
@@ -129,17 +129,25 @@ Wikingerbot/
 │   │   ├── guild_config.py     # GuildConfig get/set
 │   │   ├── bot_settings.py     # BotSetting get/set (globale, nicht guild-gebundene Schalter)
 │   │   ├── steam_art.py        # Steam-Store-Artwork ueber die App-ID (aus AMPs DisplayImageSource) - von amp+banner-Cog genutzt
+│   │   ├── capabilities.py     # Faehigkeiten: einzelne Aufgaben zusaetzlich an Discord-Rollen binden
+│   │   ├── punishment.py       # Strafrolle (merkt sie sich auch beim Wiederbeitritt)
+│   │   ├── whitelist_gate.py   # Rollen von Servern mit Whitelist nur per Freigabe
+│   │   ├── server_address.py   # Verbinden-Adresse (Host + Spiel-Port aus AMP)
+│   │   ├── amp_role.py         # eigene AMP-Rolle des Bots
+│   │   ├── runtime.py          # laufender Bot fuer die API (gleicher Prozess)
 │   │   └── discord_utils.py    # send_temp_followup (auto-loeschende Ephemeral-Replies)
 │   ├── community/              # gemeinsam fuer die Community-Cogs: Seiten-DB, Outbox-Verteiler, Verknuepfung, System-Tickets
 │   └── cogs/
-│       ├── admin/cog.py        # /bot cog ..., /bot sync, /bot sync_on_startup
+│       ├── admin/               # /bot cog ..., /bot sync, /bot web + Tab Einstellungen (Stufen, Faehigkeiten, Cogs)
 │       ├── amp/
-│       │   ├── cog.py           # /server ... (Start/Stop/Status/Console/Chat-Bridge/Filter/Steam-AppID)
-│       │   ├── api.py           # FastAPI-Router: GET /servers (Dashboard-Daten)
-│       │   └── web/             # React-Seite: DashboardPage.tsx, api.ts, ServerCard.tsx, types.ts
-│       ├── moderation/cog.py   # /kick /ban /timeout /warn /modlog /modconfig
+│       │   ├── cog.py           # /server ... (Start/Stop/Status/Console/Chat-Bridge/Filter/Steam-AppID/Whitelist)
+│       │   ├── registry.py      # Server anlegen/uebernehmen/entfernen
+│       │   ├── api.py           # FastAPI-Router: Dashboard, Server-Tab
+│       │   └── web/             # React-Seiten: Dashboard, Server
+│       ├── moderation/          # /kick /ban /timeout /warn /strafrolle /modlog /modconfig + Web-Seite
 │       ├── welcome/             # /welcome ... (Begruessung, DM, Abschied) + Web-Seite
-│       ├── roles/cog.py         # /rollen auto ... /rollen panel ... (Autorole, Selbstwahl-Knoepfe)
+│       ├── roles/               # /rollen ... (Autorole, Selbstwahl-Knoepfe, Knoepfe mit Bestaetigung) + Web-Seite
+│       │   └── requests.py      # Gruppen-Anfragen (Panel-Knopf mit Bestaetigung) - wie eine Whitelist
 │       ├── music/               # /musik ... /musikconfig ... (Radio, Dateien, Podcasts) + Web-Seite
 │       ├── stats/               # /stats ... (Aktivitaet, Mitgliederzaehler)
 │       ├── automod/             # /automod ... (Discords AutoMod + eigene Regeln) + Web-Seite
@@ -149,9 +157,9 @@ Wikingerbot/
 │       ├── tickets/             # Tickets: Staff-Threads, DMs, /ticket (+ Web-Seite)
 │       ├── rangsync/            # Raenge der Seite <-> Discord-Rollen (+ Web-Seite)
 │       ├── wiki/cog.py          # /wiki (Suche im Wiki der Seite)
-│       ├── ampkonten/           # AMP-Konten fuer Mitglieder der Seite (+ Web-Seite)
+│       ├── ampkonten/           # AMP-Konten fuer Mitglieder der Seite, /amp, Gameserver-Rollen in AMP (+ Web-Seite)
 │       ├── rollenanfragen/      # Rollenanfragen der Seite: Zustimmen/Ablehnen in Discord (+ Web-Seite)
-│       ├── whitelist/cog.py    # /whitelist ...
+│       ├── whitelist/           # /whitelist ... (Server- und Gruppen-Freigaben) + Web-Seite
 │       └── banner/              # /banner ... /bannergroup ... (Status-Banner, Editor-UI)
 │           ├── cog.py           # Commands, Views, Posting-/Update-Loop
 │           ├── themes.py        # Eingebaute Verlaufs-Themes, Presets, Blur-Level
@@ -160,6 +168,7 @@ Wikingerbot/
 │
 ├── api/                         # FastAPI Backend
 │   ├── main.py                  # CORS, sammelt Cog-Router ein
+│   ├── server.py                # Web-Oberflaeche im Bot-Prozess (API unter /api, Frontend unter /)
 │   ├── cog_routers.py           # discover_cog_routers() - analog zu discover_cogs() fuer Discord-Cogs
 │   ├── routers/
 │   │   ├── health.py
@@ -256,9 +265,10 @@ der Tabellen:
 | `ConsolePattern` / `ConsolePatternOverride` | `console_pattern.py` | Eigene Regex-Muster / deaktivierte eingebaute Muster |
 | `ModLogEntry` / `Warning` | `modlog.py` | Moderationshistorie, Verwarnungen mit Punktesystem |
 | `WhitelistRequest` | `whitelist.py` | Whitelist-Anfragen inkl. Review-Nachricht |
+| `PanelRoleRequest` | `panel_request.py` | Gruppen-Anfragen über Panel-Knöpfe mit Bestätigung |
 | `GuildConfig` | `config.py` | Key-Value-Konfiguration pro Guild |
 | `BotSetting` | `bot_setting.py` | Key-Value-Konfiguration global (nicht guild-gebunden), z.B. `sync_globally_on_startup` |
-| `WebSession` | `web_session.py` | Refresh-Tokens für den WebUI-Login (Phase 3, noch ungenutzt) |
+| `WebSession` | `web_session.py` | Anmeldungen an der Web-Oberfläche (gehashte Refresh-Tokens) |
 | `StatsDaily` / `StatsMemberDaily` | `stats.py` | Tageszähler der Statistik (nur Anzahlen) |
 | `CommunityPost` | `community_post.py` | Welche Discord-Nachricht/welcher Thread zu welchem Beitrag der Community-Seite gehört |
 | `AmpAccount` | `amp_account.py` | Vom Bot angelegte AMP-Konten (nur diese fasst er an) |
@@ -294,27 +304,50 @@ Für `discord.ui.View`-Button-Callbacks (z.B. Whitelist-Accept/Deny,
 Warn-Eskalations-Buttons) gibt es das Pendant `check_level_interaction(...)`,
 da `require_role` auf `app_commands.Command` zugeschnitten ist.
 
+**Fähigkeiten** (`bot/core/capabilities.py`): Einzelne Aufgaben haben eine
+Standard-Stufe und lassen sich zusätzlich an Discord-Rollen binden (Tab
+*Einstellungen*) – z.B. Gameserver starten (`server.control`), Whitelist- und
+Gruppen-Anfragen bearbeiten (`whitelist.review`), Banner aktualisieren
+(`banner.refresh`). Geprüft mit `require_capability(...)`.
+
+In der Web-Oberfläche gilt die Stufe **live**: Sie wird bei jedem Aufruf aus den
+aktuellen Discord-Rollen bestimmt – wer eine Rolle verliert oder den Server
+verlässt, verliert die Rechte sofort.
+
 ---
 
 ## Cogs (v1)
 
-| Cog | Ersetzt | Features | Status |
-|---|---|---|---|
-| `amp` | GatekeeperV2 | Start/Stop/Status, Console-/Chat-Bridge, Konsolen-Filter, Event-Kanal | ✅ fertig |
-| `moderation` | Red (teilweise) | Kick/Ban/Warn/Timeout, ModLog, automatische Warn-Eskalation | ✅ fertig |
-| `whitelist` | GatekeeperV2 | Anfragen über Accept/Deny-Buttons, AMP-Whitelist, Rollen-Vergabe | ✅ fertig (kein Auto-Approve, immer Mod-Freigabe) |
-| `banner` | GatekeeperV2 | Embed-/Bild-Status-Banner, Steam-Artwork, Banner-Gruppen (kombiniert/einzeln), Editor-UI | ✅ fertig |
-| `roles` | Red (teilweise) | Autorole (nach Regel-Screening), Selbstwahl-Rollen per Knopf, eigener Tab | ✅ fertig |
-| `welcome` | Red (teilweise) | Begrüßung mit Platzhaltern, Willkommens-DM, Abschiedsmeldung | ✅ fertig |
+| Cog | Features | Status |
+|---|---|---|
+| `admin` | Cogs laden/entladen, Slash-Commands syncen, Link zur Web-Oberfläche, Tab Einstellungen | ✅ fertig |
+| `amp` | Start/Stop/Status, Console-/Chat-Bridge, Konsolen-Filter, Event-Kanal, Whitelist pro Server | ✅ fertig |
+| `moderation` | Kick/Ban/Warn/Timeout, Strafrolle, ModLog, automatische Warn-Eskalation | ✅ fertig |
+| `whitelist` | Anfragen über Annehmen/Ablehnen-Knöpfe, AMP-Whitelist, Rollen-Vergabe, Entziehen; dazu Gruppen-Rollen ohne Server | ✅ fertig (kein Auto-Approve, immer Freigabe) |
+| `banner` | Status-Banner als Karten (Embed oder Bild), Steam-Artwork, Banner-Gruppen (kombiniert/einzeln), Editor-UI | ✅ fertig |
+| `roles` | Autorole (nach Regel-Screening), Selbstwahl-Rollen per Knopf, Knöpfe mit Bestätigung, eigener Tab | ✅ fertig |
+| `welcome` | Begrüßung mit Platzhaltern, Willkommens-DM, Abschiedsmeldung | ✅ fertig |
 
 **Spätere Cogs (v2+):**
 
 | Cog | Features | Status |
 |---|---|---|
-| `music` | Ersetzt Sinusbot: Radio-Streams (inkl. .m3u/.pls), eigene Dateien, Podcasts (RSS) – bewusst ohne YouTube, Spotify und Aufnahme | ✅ fertig |
+| `music` | Radio-Streams (inkl. .m3u/.pls), eigene Dateien, Podcasts (RSS) – bewusst ohne YouTube, Spotify und Aufnahme; nie Abrufe ins interne Netz | ✅ fertig |
 | `stats` | Beitritte/Austritte, Nachrichten, Voice-Zeit, Top-Mitglieder, Mitgliederzähler-Kanal – nur Anzahlen, nie Inhalte | ✅ fertig |
 | `automod` | Warn-Punkte aus Discords AutoMod (früher in `moderation`) und eigene Regeln, die Discord nicht kann: Flut, Wiederholung, Großbuchstaben, Emojis, Link-Allowlist, junge Konten; eigener Tab | ✅ fertig |
 | `trivia` | Quiz-System | vorerst nicht geplant |
+
+**Community-Cogs** (nur mit angebundener Community-Seite, sonst untätig):
+
+| Cog | Features |
+|---|---|
+| `community` | Konto-Verknüpfung (`/verknuepfen`, `/profil`), Aufträge der Seite abholen, Tab Community |
+| `news` / `events` | News und Events der Seite in Discord, Zusagen per Knopf, natives Discord-Event |
+| `tickets` | Ticket-Forum mit Tags, Antworten im Thread, DMs ans Mitglied, `/ticket` |
+| `rangsync` | Ränge und Zusatzrollen der Seite ↔ Discord-Rollen |
+| `wiki` | `/wiki` – Suche im Wiki der Seite |
+| `ampkonten` | AMP-Konten für Mitglieder (Startpasswort per DM), `/amp`, Gameserver-Rollen in AMP einrichten |
+| `rollenanfragen` | Rang/Zusatzrolle beantragen (Seite, Panel-Knopf oder `/amp`), Zustimmen/Ablehnen in Discord |
 
 ---
 
@@ -324,22 +357,23 @@ da `require_role` auf `app_commands.Command` zugeschnitten ist.
 |---|---|
 | Dashboard | Server-Übersicht, Online-Status, Spielerzahlen |
 | Musik | Jetzt läuft, Steuerung, Radio/Podcasts/Dateien abspielen; Admin: Sender und Podcasts |
-| Rollen | Autoroles, Selbstwahl-Panels anlegen und bearbeiten (Admin) |
+| Rollen | Autoroles, Selbstwahl-Panels anlegen und bearbeiten, Knöpfe mit Bestätigung (Admin) |
 | Banner | Banner pro Server und Banner-Gruppen mit Live-Vorschau (Owner) |
 | Begrüßung | Begrüßung, DM und Abschied mit Vorschau (Admin) |
 | AutoMod | Discords AutoMod → Warn-Punkte, eigene Regeln, Folgen, Ausnahmen, Alarmkanal (Admin) |
-| Community | Anbindung an die Community-Seite (Owner) |
 | News | News-Kanal, Ping-Rolle, neueste News mit Discord-Stand (Admin) |
 | Events | Event-Kanal, Ping-Rolle, natives Discord-Event, nächste Events mit Discord-Stand (Admin) |
 | Tickets | Staff-Kanal, Ping-Rolle, DMs, offene Tickets mit Thread-Stand (Admin) |
 | Rang-Sync | Rang ↔ Discord-Rolle und Richtung, Ersteller für System-Tickets, alles abgleichen (Owner) |
 | AMP-Konten | Panel-Adresse, Rang → AMP-Rolle, angelegte Konten (Owner) |
 | Rollenanfragen | Letzte Rollenanfragen der Seite mit Stand (Mod) |
+| Community | Anbindung an die Community-Seite, optional eigener Datenbank-Server (Owner) |
 | Server | AMP-Instanzen anlegen/entfernen, Standard-Spieladresse, Start/Stop, Console-Log |
-| Moderation | ModLog ansehen, Verwarnungen, gebannte User |
-| Whitelist | Anfragen verwalten, genehmigen/ablehnen |
+| Moderation | ModLog ansehen, Verwarnungen, gebannte User, Strafrolle, Mod-Log-Kanal |
+| Whitelist | Server- und Gruppen-Anfragen annehmen, ablehnen, entziehen |
 | Benutzer | User-Datenbank, Rollen, Steam-IDs |
-| Einstellungen | Rollen-Zuordnung (Discord-Rolle → Bot-Stufe), Übersicht der Cogs |
+| Einstellungen | Rollen-Zuordnung (Discord-Rolle → Bot-Stufe), Fähigkeiten, Cogs laden/entladen |
+| Login | Anmeldung per Discord, nur für Mitglieder des Discord-Servers |
 
 Aktueller Stand: Alle Seiten außer „Benutzer“ sind fertig. Im Betrieb läuft die
 Oberfläche im Bot-Prozess (`api/server.py`: API unter `/api`, gebautes Frontend
@@ -376,7 +410,7 @@ einziger Berührungspunkt sind die beiden Ports plus `cors_origins`/
 ## Hosting
 
 ### AMP-Instanz (empfohlen, fertige Vorlage)
-AMP-Vorlage nach dem Vorbild von GatekeeperV2 im Repo
+Eigene AMP-Vorlage im Repo
 [Daywalker91/AMPTemplate](https://github.com/Daywalker91/AMPTemplate): Code als ZIP von
 `main`, eigenes venv, Einstellungen als Eingabefelder in AMP (AMP schreibt daraus die
 `.env`), Datenbank-Migrationen beim Start. Anleitung: [AMP.md](AMP.md).
@@ -399,7 +433,7 @@ nach `web/dist` entpacken. Fertige Docker-/Kubernetes-Dateien gibt es (noch) nic
 - FastAPI Grundstruktur
 
 **Phase 2 — Kern-Cogs** ✅
-- AMP Cog (ersetzt GatekeeperV2) inkl. Konsolen-Filter + Event-Kanal
+- AMP Cog inkl. Konsolen-Filter + Event-Kanal
 - Moderation Cog
 - Whitelist Cog
 - Banner Cog (Embed/Bild, Steam-Artwork, Banner-Gruppen, Editor-UI)
@@ -414,9 +448,9 @@ nach `web/dist` entpacken. Fertige Docker-/Kubernetes-Dateien gibt es (noch) nic
 
 **Phase 5 — Community-Seite** ✅
 - `community` (Konto-Verknüpfung, Aufträge der Seite), `news`, `events`, `tickets`, `rangsync`, `wiki`, `ampkonten`, `rollenanfragen`
+- Zusatzrollen der Seite mit Sync nach Discord, Fähigkeiten an Rollen binden ([docs/PLAN_ZUSATZROLLEN.md](docs/PLAN_ZUSATZROLLEN.md))
 
 **Geplant**
-- Zusatzrollen (Support, Wiki, News, …) auf der Seite, Sync mit Discord, Befehle an Rollen binden: [docs/PLAN_ZUSATZROLLEN.md](docs/PLAN_ZUSATZROLLEN.md)
 - mehrere Discord-Server mit je eigener Community-Seite: [docs/PLAN_MEHRERE_SERVER.md](docs/PLAN_MEHRERE_SERVER.md)
 
 ---
