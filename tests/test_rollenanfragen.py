@@ -111,3 +111,17 @@ async def test_approve_rank_promotes_deny_keeps_rank(site):  # noqa: F811
     async with community_db.session() as db:
         rank = (await db.execute(select(community_db.users.c.role_id).where(community_db.users.c.id == 2))).scalar_one()
     assert rank == HUSKARL  # abgelehnt: bleibt Huskarl
+
+
+async def test_cancelled_request_shows_state_without_buttons(site):  # noqa: F811
+    """Mitglied hat sein Ticket geschlossen: Anfrage zurueckgezogen, keine Knoepfe, niemand entscheidet mehr."""
+    from bot.cogs.rollenanfragen.cog import request_embed, request_view
+
+    await setup_site()
+    async with community_db.session() as db:
+        await db.execute(community_db.role_requests.update().where(community_db.role_requests.c.id == 1).values(status="cancelled"))
+        await db.commit()
+    request = await load(1)
+    assert request_view(request) is None
+    assert any("zurückgezogen" in f.value for f in request_embed(request).fields)
+    assert "schon entschieden" in decision_error(request, await who(5, "Ivar", Level.OWNER))

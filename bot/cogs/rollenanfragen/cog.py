@@ -17,7 +17,7 @@ import re
 import discord
 from discord.ext import commands
 
-from bot.cogs.rollenanfragen.requests import APPROVED, DENIED, PENDING, Approver, RoleRequest, approver_for, decide, decision_error, load
+from bot.cogs.rollenanfragen.requests import APPROVED, CANCELLED, DENIED, PENDING, Approver, RoleRequest, approver_for, decide, decision_error, load
 from bot.community import db as community_db
 from bot.community import outbox
 from bot.community.linking import user_for_discord
@@ -32,7 +32,7 @@ log = logging.getLogger("wikingerbot.rollenanfragen")
 
 MODLOG_KIND = "rolereq"  # Nachricht im Mod-Log
 THREAD_KIND = "rolereq_thread"  # Nachricht im Ticket-Thread
-COLORS = {PENDING: 0xE0B96B, APPROVED: 0x3BA55C, DENIED: 0xD9534F}
+COLORS = {PENDING: 0xE0B96B, APPROVED: 0x3BA55C, DENIED: 0xD9534F, CANCELLED: 0x8A9296}
 
 
 def request_embed(request: RoleRequest) -> discord.Embed:
@@ -52,6 +52,8 @@ def request_embed(request: RoleRequest) -> discord.Embed:
     elif request.status == DENIED:
         text = f"❌ Abgelehnt von {request.decided_name or '?'}" + (f": {request.decision_note}" if request.decision_note else "")
         embed.add_field(name="Entscheidung", value=text[:1000], inline=False)
+    elif request.status == CANCELLED:
+        embed.add_field(name="Entscheidung", value="↩️ Vom Mitglied zurückgezogen (Ticket geschlossen)", inline=False)
     else:
         rule = "wer die Rolle selbst hat (ab Mod)" if request.role_kind == "extra" else "wer über dem Rang steht (ab Mod)"
         embed.set_footer(text=f"Entscheiden: König oder {rule} – nie bei der eigenen Anfrage")
@@ -143,7 +145,10 @@ class RollenanfragenCog(BaseCog):
 
     async def _on_request(self, payload: dict) -> None:
         request = await load(int(payload["request_id"]))
-        if request is None or request.status != PENDING:
+        if request is None:
+            return
+        if request.status != PENDING:  # z.B. zurueckgezogen: Knoepfe weg, Stand zeigen
+            await self._refresh_messages(request)
             return
         await self.post_request(request)
 
@@ -214,6 +219,22 @@ class RollenanfragenCog(BaseCog):
                 await tickets.sync_ticket(request.ticket_id)  # Antwort + Schliessen spiegeln, DM ans Mitglied
             except Exception as error:
                 log.warning("Ticket #%s nach Entscheidung nicht abgeglichen: %s", request.ticket_id, error)
+        await self._refresh_messages(request)
+        for guild in self.bot.guilds:
+            channel = await self._modlog(guild)
+            if channel is not None:
+                icon, verb = ("✅", "zugestimmt") if request.status == APPROVED else ("❌", "abgelehnt")
+                who = f"<@{request.discord_id}>" if request.discord_id else request.username
+                text = f"{icon} Rollenanfrage **{request.role_name}** für {who} – {verb} von {actor.mention}"
+                if request.status == DENIED and request.decision_note:
+                    text += f": {request.decision_note}"
+                try:
+                    await channel.send(text[:2000], allowed_mentions=discord.AllowedMentions.none())
+                except discord.HTTPException:
+                    pass
+
+    async def _refresh_messages(self, request: RoleRequest) -> None:
+        """Gepostete Anfrage (Mod-Log, Ticket-Thread) auf den aktuellen Stand bringen."""
         embed = request_embed(request)
         for guild in self.bot.guilds:
             for kind in (MODLOG_KIND, THREAD_KIND):
@@ -226,17 +247,6 @@ class RollenanfragenCog(BaseCog):
                 try:
                     message = await channel.fetch_message(mapping.message_id)
                     await message.edit(embed=embed, view=None)
-                except discord.HTTPException:
-                    pass
-            channel = await self._modlog(guild)
-            if channel is not None:
-                icon, verb = ("✅", "zugestimmt") if request.status == APPROVED else ("❌", "abgelehnt")
-                who = f"<@{request.discord_id}>" if request.discord_id else request.username
-                text = f"{icon} Rollenanfrage **{request.role_name}** für {who} – {verb} von {actor.mention}"
-                if request.status == DENIED and request.decision_note:
-                    text += f": {request.decision_note}"
-                try:
-                    await channel.send(text[:2000], allowed_mentions=discord.AllowedMentions.none())
                 except discord.HTTPException:
                     pass
 

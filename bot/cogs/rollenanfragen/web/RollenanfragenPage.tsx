@@ -14,7 +14,7 @@ const card: CSSProperties = {
 const muted: CSSProperties = { color: "var(--wb-text-muted)", fontSize: "0.9em" };
 const cell: CSSProperties = { padding: "6px 8px", borderBottom: "1px solid var(--wb-border)", verticalAlign: "top" };
 
-const STATUS: Record<string, string> = { pending: "⏳ offen", approved: "✅ zugestimmt", denied: "❌ abgelehnt" };
+const STATUS: Record<string, string> = { pending: "⏳ offen", approved: "✅ zugestimmt", denied: "❌ abgelehnt", cancelled: "↩️ zurückgezogen" };
 
 /** Rollenanfragen der Seite - nur Anzeige; entschieden wird in Discord. */
 export default function RollenanfragenPage() {

@@ -6,7 +6,7 @@ export interface RoleRequestRow {
   rank: string;
   role: string;
   kind: "rank" | "extra";
-  status: "pending" | "approved" | "denied";
+  status: "pending" | "approved" | "denied" | "cancelled";
   reason: string;
   decided_by: string | null;
   note: string | null;

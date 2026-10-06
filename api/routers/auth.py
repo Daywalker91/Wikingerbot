@@ -1,3 +1,4 @@
+import secrets
 from datetime import datetime, timedelta, timezone
 from urllib.parse import urlencode
 
@@ -6,6 +7,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response
 from fastapi.responses import PlainTextResponse, RedirectResponse
 
 from api.middleware.auth import (
+    OAUTH_NONCE_COOKIE,
     SESSION_COOKIE,
     CurrentUser,
     create_access_token,
@@ -82,7 +84,8 @@ async def login(request: Request, guild_id: int = Query(...)):
             "Seite OAuth2) und den Bot neu starten.",
             status_code=503,
         )
-    state = create_state_token(guild_id)
+    nonce = secrets.token_urlsafe(16)
+    state = create_state_token(guild_id, nonce)
     params = {
         "client_id": client_id(),
         "redirect_uri": redirect_uri(request),
@@ -90,7 +93,13 @@ async def login(request: Request, guild_id: int = Query(...)):
         "scope": "identify guilds.members.read",
         "state": state,
     }
-    return RedirectResponse(f"{DISCORD_API}/oauth2/authorize?{urlencode(params)}")
+    response = RedirectResponse(f"{DISCORD_API}/oauth2/authorize?{urlencode(params)}")
+    # Bindet die Anmeldung an diesen Browser (Lax: kommt beim Ruecksprung von Discord mit)
+    response.set_cookie(
+        OAUTH_NONCE_COOKIE, nonce, max_age=600, httponly=True, samesite="lax",
+        secure=(settings.frontend_url or str(request.url)).startswith("https://"),
+    )
+    return response
 
 
 def login_error(reason: str) -> RedirectResponse:
@@ -102,7 +111,10 @@ def login_error(reason: str) -> RedirectResponse:
 async def callback(request: Request, state: str = "", code: str = "", error: str = "") -> RedirectResponse:
     if error or not code:  # z.B. bei Discord auf "Abbrechen" getippt
         return login_error("denied")
-    guild_id = verify_state_token(state)
+    try:
+        guild_id = verify_state_token(state, request.cookies.get(OAUTH_NONCE_COOKIE, ""))
+    except HTTPException:  # abgelaufen oder in einem anderen Browser begonnen
+        return login_error("failed")
 
     async with httpx.AsyncClient() as client:
         token_resp = await client.post(

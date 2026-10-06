@@ -21,7 +21,7 @@ from sqlalchemy.orm import aliased
 from bot.community import db as community_db
 from db.models.role import Level, level_at_least
 
-PENDING, APPROVED, DENIED = "pending", "approved", "denied"
+PENDING, APPROVED, DENIED, CANCELLED = "pending", "approved", "denied", "cancelled"  # cancelled: Ticket vom Mitglied geschlossen
 
 
 @dataclass

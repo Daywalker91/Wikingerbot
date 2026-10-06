@@ -46,7 +46,14 @@ class WikingerBot(commands.Bot):
         intents = discord.Intents.default()
         intents.members = True
         intents.message_content = True
-        super().__init__(command_prefix="!", intents=intents)
+        # Sichere Grundeinstellung: nie @everyone/@here oder Rollen anpingen, ausser eine
+        # Nachricht erlaubt es ausdruecklich (News-/Event-/Ticket-Ping). Sonst koennten
+        # Eingaben von Mitgliedern (z.B. ein Spielername "@everyone") alle anpingen.
+        super().__init__(
+            command_prefix="!",
+            intents=intents,
+            allowed_mentions=discord.AllowedMentions(everyone=False, roles=False, users=True, replied_user=True),
+        )
 
     async def setup_hook(self) -> None:
         self.tree.on_error = self._on_app_command_error

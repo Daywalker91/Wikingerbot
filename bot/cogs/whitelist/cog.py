@@ -187,9 +187,11 @@ class WhitelistCog(BaseCog):
     @app_commands.autocomplete(server=_autocomplete_server)
     @require_role(Level.MEMBER)
     async def whitelist_request_cmd(
-        self, interaction: discord.Interaction, server: str, ign: str | None = None
+        self, interaction: discord.Interaction, server: str, ign: app_commands.Range[str, 2, 64] | None = None
     ) -> None:
         await interaction.response.defer(ephemeral=True)
+        if ign is not None:
+            ign = " ".join(ign.split())  # keine Zeilenumbrueche/Tabs im Namen
 
         async with get_db_session() as db:
             result = await db.execute(

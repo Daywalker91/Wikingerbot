@@ -10,6 +10,7 @@ from bot.core.config import settings
 from db.models.role import Level, level_at_least
 
 SESSION_COOKIE = "session"
+OAUTH_NONCE_COOKIE = "oauth_nonce"
 
 
 @dataclass
@@ -31,24 +32,29 @@ def create_access_token(user_id: int, guild_id: int, level: Level) -> str:
     return jwt.encode(payload, settings.jwt_secret, algorithm=settings.jwt_algorithm)
 
 
-def create_state_token(guild_id: int) -> str:
-    """Signierter, kurzlebiger State-Token fuer den OAuth2-Redirect (CSRF-Schutz)."""
+def create_state_token(guild_id: int, nonce: str | None = None) -> str:
+    """Signierter, kurzlebiger State-Token fuer den OAuth2-Redirect (CSRF-Schutz).
+    nonce steht zusaetzlich in einem Cookie des Browsers (OAUTH_NONCE_COOKIE) - so gilt
+    der Rueckweg nur fuer den Browser, der die Anmeldung begonnen hat."""
     payload = {
         "guild_id": guild_id,
-        "nonce": secrets.token_urlsafe(16),
+        "nonce": nonce or secrets.token_urlsafe(16),
         "exp": datetime.now(timezone.utc) + timedelta(minutes=10),
         "type": "oauth_state",
     }
     return jwt.encode(payload, settings.jwt_secret, algorithm=settings.jwt_algorithm)
 
 
-def verify_state_token(state: str) -> int:
+def verify_state_token(state: str, nonce: str | None = None) -> int:
+    """guild_id aus dem State. Mit nonce: muss zum Cookie des Browsers passen."""
     try:
         payload = jwt.decode(state, settings.jwt_secret, algorithms=[settings.jwt_algorithm])
     except JWTError as exc:
         raise HTTPException(status_code=400, detail="Ungueltiger oder abgelaufener state-Parameter") from exc
     if payload.get("type") != "oauth_state":
         raise HTTPException(status_code=400, detail="Ungueltiger state-Parameter")
+    if nonce is not None and not secrets.compare_digest(str(payload.get("nonce", "")), nonce):
+        raise HTTPException(status_code=400, detail="Anmeldung wurde in einem anderen Browser begonnen")
     return int(payload["guild_id"])
 
 

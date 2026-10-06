@@ -176,6 +176,9 @@ def test_login_callback_hints_instead_of_error_page(monkeypatch):
 
     real_client = httpx.AsyncClient
     monkeypatch.setattr(httpx, "AsyncClient", lambda *a, **k: real_client(transport=httpx.MockTransport(discord)))
-    state = create_state_token(1)
+    state = create_state_token(1, "nonce-abc")
+    foreign = client.get(f"/api/auth/callback?code=c&state={state}", follow_redirects=False)
+    assert foreign.headers["location"] == "/login?error=failed"  # in einem anderen Browser begonnen (kein Cookie)
+    client.cookies.set("oauth_nonce", "nonce-abc")
     outsider = client.get(f"/api/auth/callback?code=c&state={state}", follow_redirects=False)
     assert outsider.headers["location"] == "/login?error=not_member"
