@@ -140,15 +140,17 @@ async def test_cog_dm_and_site_status(site, db_session):  # noqa: F811
     sent = []
 
     class User:
-        async def send(self, embed):
-            sent.append(embed)
+        async def send(self, content=None, *, embed=None):
+            sent.append(embed or content)
 
+    amp = FakeAMP()
     bot = SimpleNamespace(get_user=lambda uid: User() if uid == 4242 else None)
-    cog = AmpKontenCog(bot, core_call=FakeAMP())
+    cog = AmpKontenCog(bot, core_call=amp)
     await cog._on_request({"user_id": 1})
     assert await site_status() == ("Ragnar", "active", None)
     fields = {f.name: f.value for f in sent[0].fields}
-    assert fields["Benutzer"] == "`Ragnar`" and fields["Startpasswort"].startswith("||")
+    assert fields["Benutzer"] == "Ragnar" and "nächsten Nachricht" in fields["Startpasswort"]
+    assert sent[1] == amp.users["Ragnar"]["password"]  # Passwort allein, ohne Formatierung - sauber kopierbar
 
 
 async def test_undeliverable_dm_leaves_hint(site, db_session):  # noqa: F811

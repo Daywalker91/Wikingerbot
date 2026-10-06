@@ -146,12 +146,16 @@ class AmpKontenCog(BaseCog):
             )
             if url:
                 embed.add_field(name="Adresse", value=url, inline=False)
-            embed.add_field(name="Benutzer", value=f"`{outcome.amp_username}`")
-            embed.add_field(name="Startpasswort", value=f"||`{outcome.password}`||")
+            embed.add_field(name="Benutzer", value=outcome.amp_username or "–")
+            embed.add_field(name="Startpasswort", value="kommt in der nächsten Nachricht – lange drücken → Text kopieren")
         else:
             embed = discord.Embed(title="🔒 AMP-Zugang gesperrt", description=outcome.note or "Dein AMP-Konto ist gesperrt.", color=COLOR)
         try:
             await user.send(embed=embed)
+            if outcome.password:
+                # eigene Nachricht ohne Formatierung: Kopieren liefert genau das Passwort
+                # (Spoiler/Code im Embed kopiert Discord mit ||` `|| mit)
+                await user.send(outcome.password)
             return True
         except discord.HTTPException:
             return False
