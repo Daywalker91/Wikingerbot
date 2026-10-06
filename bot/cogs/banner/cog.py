@@ -1,5 +1,6 @@
 import asyncio
 import io
+import logging
 import time
 from pathlib import Path
 from types import SimpleNamespace
@@ -29,6 +30,7 @@ from db.models.whitelist import WhitelistRequest, WhitelistStatus
 from db.session import get_db_session
 
 BACKGROUND_DIR = Path("data/banner_backgrounds")
+log = logging.getLogger("wikingerbot.banner")
 MAX_UPLOAD_BYTES = 8 * 1024 * 1024
 ALLOWED_CONTENT_TYPES = {"image/png", "image/jpeg", "image/webp"}
 MAX_GROUP_MEMBERS = 6
@@ -388,8 +390,13 @@ class BannerCog(BaseCog):
         if server.banner_message_id:
             try:
                 message = await channel.fetch_message(server.banner_message_id)
-            except discord.HTTPException:
-                message = None
+            except discord.NotFound:
+                message = None  # wirklich geloescht -> neu posten
+            except discord.HTTPException as error:
+                # Discord hakt gerade (Ausfall, Rate-Limit ...) - NICHT neu posten, sonst bleibt die
+                # alte Nachricht stehen und es gibt zwei Banner; naechster Durchlauf versucht es wieder
+                log.warning("Banner-Nachricht gerade nicht abrufbar (%s) - naechster Versuch", error)
+                return
 
         if message is not None:
             await message.edit(content=content, embed=embed, attachments=[file] if file is not None else [])
@@ -487,8 +494,13 @@ class BannerCog(BaseCog):
         if group.message_id:
             try:
                 message = await channel.fetch_message(group.message_id)
-            except discord.HTTPException:
-                message = None
+            except discord.NotFound:
+                message = None  # wirklich geloescht -> neu posten
+            except discord.HTTPException as error:
+                # Discord hakt gerade (Ausfall, Rate-Limit ...) - NICHT neu posten, sonst bleibt die
+                # alte Nachricht stehen und es gibt zwei Banner; naechster Durchlauf versucht es wieder
+                log.warning("Banner-Nachricht gerade nicht abrufbar (%s) - naechster Versuch", error)
+                return
 
         if message is not None:
             await message.edit(content=content, embeds=embeds, attachments=files)
