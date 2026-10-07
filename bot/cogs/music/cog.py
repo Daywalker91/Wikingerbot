@@ -21,6 +21,8 @@ from bot.cogs.music.sources import (
     check_public_url,
     check_public_urls,
     fetch_playlist_entries,
+    needs_ffmpeg_network,
+    open_stream,
     fetch_feed,
     files_in_folder,
     list_audio_files,
@@ -41,6 +43,7 @@ STREAM_BEFORE_OPTIONS = (
     "-protocol_whitelist http,https,tcp,tls,crypto"
 )
 FILE_BEFORE_OPTIONS = "-protocol_whitelist file"
+PIPE_BEFORE_OPTIONS = ""  # Stream kommt von Python ueber stdin
 
 
 def voice_error_text(error: Exception) -> str:
@@ -151,6 +154,7 @@ class MusicCog(BaseCog):
     def __init__(self, bot: commands.Bot) -> None:
         super().__init__(bot)
         self.players: dict[int, GuildPlayer] = {}
+        self._streams: dict[int, object] = {}  # Guild -> von Python geoeffneter Stream (Response)
 
     async def cog_load(self) -> None:
         # Ordner gleich anlegen, damit er im AMP-Dateimanager zu sehen ist
@@ -173,15 +177,20 @@ class MusicCog(BaseCog):
 
     # --- Wiedergabe ------------------------------------------------------------
 
-    def _source(self, track: Track, volume: float) -> discord.AudioSource:
-        before = FILE_BEFORE_OPTIONS if track.kind == "file" else STREAM_BEFORE_OPTIONS
+    def _source(self, track: Track, volume: float, stream=None) -> discord.AudioSource:
+        """stream: von Python geoeffneter Response - FFmpeg liest dann von stdin (pipe)."""
+        if stream is not None:
+            source, before, pipe = stream.raw, PIPE_BEFORE_OPTIONS, True
+        else:
+            source, pipe = track.source, False
+            before = FILE_BEFORE_OPTIONS if track.kind == "file" else STREAM_BEFORE_OPTIONS
         if opus_available():
-            audio = discord.FFmpegPCMAudio(track.source, executable=ffmpeg_executable(), before_options=before, options="-vn")
+            audio = discord.FFmpegPCMAudio(source, pipe=pipe, executable=ffmpeg_executable(), before_options=before, options="-vn")
             return discord.PCMVolumeTransformer(audio, volume=volume)
         # Ohne Opus-Bibliothek im System (z.B. schlanke Linux-Container): FFmpeg kodiert selbst
         # nach Opus. Lautstaerke dann als Filter - eine Aenderung gilt ab dem naechsten Titel.
         return discord.FFmpegOpusAudio(
-            track.source, executable=ffmpeg_executable(), before_options=before, options=f"-vn -af volume={volume:.2f}"
+            source, pipe=pipe, executable=ffmpeg_executable(), before_options=before, options=f"-vn -af volume={volume:.2f}"
         )
 
     async def _play_next(self, guild_id: int) -> None:
@@ -191,10 +200,17 @@ class MusicCog(BaseCog):
         if voice is None or not voice.is_connected() or voice.is_playing() or voice.is_paused():
             return
         while (track := player.next()) is not None:
+            stream = None
             try:
-                source = self._source(track, player.volume)
-            except Exception as error:  # z.B. Datei inzwischen geloescht
+                if track.kind == "stream" and not needs_ffmpeg_network(track.source):
+                    stream = await asyncio.to_thread(open_stream, track.source)
+                    self._close_stream(guild_id)
+                    self._streams[guild_id] = stream
+                source = self._source(track, player.volume, stream)
+            except Exception as error:  # z.B. Datei inzwischen geloescht, Stream nicht erreichbar
                 log.warning("Kann %s nicht abspielen: %s", track.title, error)
+                if stream is not None:
+                    stream.close()
                 continue
             try:
                 voice.play(source, after=lambda error, gid=guild_id: self._after(gid, error))
@@ -204,10 +220,19 @@ class MusicCog(BaseCog):
             log.info("Spiele %s", track.title)
             return
 
+    def _close_stream(self, guild_id: int) -> None:
+        stream = self._streams.pop(guild_id, None)
+        if stream is not None:
+            try:
+                stream.close()
+            except Exception:
+                pass
+
     def _after(self, guild_id: int, error: Exception | None) -> None:
         # laeuft im Audio-Thread von discord.py, nicht im Event-Loop
         if error:
             log.warning("Wiedergabe-Fehler: %s", error)
+        self._close_stream(guild_id)
         asyncio.run_coroutine_threadsafe(self._play_next(guild_id), self.bot.loop)
 
     async def _voice_check(self, interaction: discord.Interaction) -> discord.VoiceChannel | None:

@@ -56,6 +56,47 @@ async def check_public_url(url: str) -> None:
 
 
 MAX_REDIRECTS = 5
+STREAM_TIMEOUT = (10, 60)  # Verbinden, dann hoechstens 60 s ohne Daten
+
+
+def check_public_url_sync(url: str) -> None:
+    """Wie check_public_url, aber blockierend (fuer den Audio-Thread)."""
+    parsed = urlparse(url)
+    if parsed.scheme not in {"http", "https"} or not parsed.hostname:
+        raise SourceError("Nur http- und https-Adressen.")
+    try:
+        infos = socket.getaddrinfo(parsed.hostname, parsed.port or 443, type=socket.SOCK_STREAM)
+    except socket.gaierror:
+        raise SourceError(f"{parsed.hostname} ist nicht auffindbar.") from None
+    if not infos or not all(is_public_ip(info[4][0]) for info in infos):
+        raise SourceError("Adressen im internen Netz sind nicht erlaubt.")
+
+
+def needs_ffmpeg_network(url: str) -> bool:
+    """HLS (.m3u8) holt FFmpeg selbst (viele Teilstuecke) - alles andere laedt Python."""
+    return urlparse(url).path.lower().endswith(".m3u8")
+
+
+def open_stream(url: str):
+    """Stream in Python oeffnen (blockierend, im Thread aufrufen) und den Response liefern;
+    FFmpeg bekommt dann nur noch die Daten ueber eine Pipe. So muss FFmpeg weder Namen
+    aufloesen noch TLS sprechen - statische FFmpeg-Builds stuerzen daran in manchen
+    Containern ab - und jede Weiterleitung wird gegen interne Adressen geprueft."""
+    import requests
+
+    session = requests.Session()
+    for _ in range(MAX_REDIRECTS + 1):
+        check_public_url_sync(url)
+        response = session.get(url, stream=True, allow_redirects=False, timeout=STREAM_TIMEOUT, headers={"User-Agent": USER_AGENT})
+        if response.is_redirect and response.headers.get("location"):
+            url = str(httpx.URL(url).join(response.headers["location"]))
+            response.close()
+            continue
+        if response.status_code != 200:
+            response.close()
+            raise SourceError(f"Stream nicht abrufbar (HTTP {response.status_code}).")
+        return response
+    raise SourceError("Zu viele Weiterleitungen.")
 
 
 async def fetch_limited(url: str, max_bytes: int, *, too_big: str | None = None) -> tuple[int, bytes]:
