@@ -73,3 +73,25 @@ async def test_existing_message_is_edited(db_session):
     cog, server_id = await _setup(db_session, channel)
     await cog._post_or_refresh_server(server_id)
     assert channel.edited == [123] and channel.sent == []
+
+
+async def test_unchanged_banner_is_not_edited_every_minute(db_session):
+    """Gleicher Inhalt: keine Bearbeitung (sonst Rate-Limits); nach Aenderung wieder."""
+    channel = FakeChannel()
+    cog, server_id = await _setup(db_session, channel)
+    await cog._post_or_refresh_server(server_id)
+    await cog._post_or_refresh_server(server_id)
+    assert channel.edited == [123]  # nur einmal
+
+    async def changed(server):
+        return discord.Embed(title="Valheim", description="Verbinden: `neu`"), None, None
+
+    cog._build_server_payload = changed
+    await cog._post_or_refresh_server(server_id)
+    assert channel.edited == [123, 123]
+
+
+def test_coarse_uptime():
+    from bot.cogs.banner.embed import coarse_uptime
+
+    assert [coarse_uptime(v) for v in ("00:05:00", "1h 23m", "1.02:03:04", "26:00:00", "")] == ["< 1 Std", "1 Std", "1 T 2 Std", "1 T 2 Std", ""]

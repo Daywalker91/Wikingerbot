@@ -31,6 +31,24 @@ from db.session import get_db_session
 
 BACKGROUND_DIR = Path("data/banner_backgrounds")
 log = logging.getLogger("wikingerbot.banner")
+RECHECK_SECONDS = 600
+
+
+def _digest(content, embeds, files) -> str:
+    """Fingerabdruck eines Banners - ohne Zeitstempel des Embeds, mit den Bildbytes."""
+    import hashlib
+    import json as _json
+
+    h = hashlib.sha256(str(content or "").encode())
+    for embed in embeds:
+        if embed is not None:
+            data = embed.to_dict()
+            data.pop("timestamp", None)
+            h.update(_json.dumps(data, sort_keys=True, default=str).encode())
+    for file in files:
+        if file is not None and hasattr(file.fp, "getvalue"):
+            h.update(file.fp.getvalue())
+    return h.hexdigest()
 MAX_UPLOAD_BYTES = 8 * 1024 * 1024
 ALLOWED_CONTENT_TYPES = {"image/png", "image/jpeg", "image/webp"}
 MAX_GROUP_MEMBERS = 6
@@ -267,6 +285,9 @@ class BannerCog(BaseCog):
     def __init__(self, bot: commands.Bot) -> None:
         super().__init__(bot)
         self._failures: dict[tuple[str, int], int] = {}
+        # Fingerabdruck des zuletzt gesendeten Banners + wann zuletzt geprueft: unveraenderte
+        # Banner nicht jede Minute neu bearbeiten (sonst bremst Discord mit Rate-Limits)
+        self._digests: dict[tuple[str, int], tuple[str, float]] = {}
         self._backoff_until: dict[tuple[str, int], float] = {}
 
     async def cog_load(self) -> None:
@@ -385,6 +406,9 @@ class BannerCog(BaseCog):
             return
 
         embed, file, content = await self._build_server_payload(server)
+        key, digest = ("server", server_id), _digest(content, [embed], [file])
+        if server.banner_message_id and self._unchanged(key, digest):
+            return
 
         message = None
         if server.banner_message_id:
@@ -400,9 +424,11 @@ class BannerCog(BaseCog):
 
         if message is not None:
             await message.edit(content=content, embed=embed, attachments=[file] if file is not None else [])
+            self._digests[key] = (digest, time.monotonic())
             return
 
         message = await channel.send(content=content, embed=embed, file=file)
+        self._digests[key] = (digest, time.monotonic())
         async with get_db_session() as db:
             db_server = await db.get(Server, server_id)
             db_server.banner_message_id = message.id
@@ -489,6 +515,9 @@ class BannerCog(BaseCog):
         embeds, files, content = await self._build_group_payload(group)
         if not embeds and not files:
             return
+        key, digest = ("group", group_id), _digest(content, embeds, files)
+        if group.message_id and self._unchanged(key, digest):
+            return
 
         message = None
         if group.message_id:
@@ -504,13 +533,21 @@ class BannerCog(BaseCog):
 
         if message is not None:
             await message.edit(content=content, embeds=embeds, attachments=files)
+            self._digests[key] = (digest, time.monotonic())
             return
 
         message = await channel.send(content=content, embeds=embeds, files=files)
+        self._digests[key] = (digest, time.monotonic())
         async with get_db_session() as db:
             db_group = await db.get(BannerGroup, group_id)
             db_group.message_id = message.id
             await db.commit()
+
+    def _unchanged(self, key: tuple[str, int], digest: str) -> bool:
+        """Gleicher Banner wie zuletzt gesendet - und hoechstens 10 Minuten her (dann wird die
+        Nachricht trotzdem abgerufen, um eine in Discord geloeschte neu zu posten)."""
+        last = self._digests.get(key)
+        return last is not None and last[0] == digest and time.monotonic() - last[1] < RECHECK_SECONDS
 
     @tasks.loop(seconds=60)
     async def banner_loop(self) -> None:

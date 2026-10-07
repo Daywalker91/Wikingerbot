@@ -204,7 +204,9 @@ def _draw_panel(
     # Die Verbinden-Adresse steht bereits als eigener, kopierbarer Text ueber der
     # Nachricht (siehe BannerCog._build_server_payload) - hier nicht nochmal duplizieren.
     if hasattr(status, "Uptime") and status.Uptime:
-        _shadow_text(draw, (padding, top + height - 24), f"Uptime: {status.Uptime}", font_body, fill=text_color)
+        from bot.cogs.banner.embed import coarse_uptime
+
+        _shadow_text(draw, (padding, top + height - 24), f"Läuft seit {coarse_uptime(status.Uptime)}", font_body, fill=text_color)
 
     _draw_badges(
         draw,

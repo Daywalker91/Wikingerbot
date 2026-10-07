@@ -1,5 +1,7 @@
 """Embed-Rendering fuer die Embed-Variante des Server-Banners."""
 
+import re
+
 import discord
 
 STATE_EMOJI = {
@@ -9,6 +11,29 @@ STATE_EMOJI = {
     "Suspended": "\N{LARGE RED CIRCLE}",
 }
 DEFAULT_STATE_EMOJI = "\N{LARGE YELLOW CIRCLE}"
+
+
+def coarse_uptime(value) -> str:
+    """Laufzeit grob ("5 Std", "2 T 3 Std", "< 1 Std") - aendert sich hoechstens stuendlich,
+    damit der Banner nicht jede Minute neu gezeichnet und bearbeitet werden muss.
+    Versteht "1.02:03:04" / "02:03:04" (wie AMP) und "1d 2h 3m" / "1h 23m"."""
+    text = str(value or "").strip()
+    if not text:
+        return ""
+    hours = None
+    match = re.fullmatch(r"(?:(\d+)[.:])?(\d+):(\d+):(\d+)(?:\.\d+)?", text)
+    if match:
+        hours = int(match[1] or 0) * 24 + int(match[2])
+    else:
+        parts = dict((unit, int(num)) for num, unit in re.findall(r"(\d+)\s*([dhm])", text.lower()))
+        if parts:
+            hours = parts.get("d", 0) * 24 + parts.get("h", 0)
+    if hours is None:
+        return text
+    if hours < 1:
+        return "< 1 Std"
+    days, rest = divmod(hours, 24)
+    return f"{days} T {rest} Std" if days else f"{rest} Std"
 
 
 def address_line(host: str | None) -> str | None:
@@ -52,7 +77,7 @@ def build_embed(
     if players is not None:
         embed.add_field(name="Spieler", value=f"{players[0]}/{players[1]}", inline=True)
     if getattr(status, "Uptime", None):
-        embed.add_field(name="Uptime", value=status.Uptime, inline=True)
+        embed.add_field(name="Läuft seit", value=coarse_uptime(status.Uptime), inline=True)
     if whitelist_count is not None:
         embed.add_field(name="Whitelist", value=_whitelist_field(whitelist_count, has_donator), inline=False)
     embed.timestamp = discord.utils.utcnow()
