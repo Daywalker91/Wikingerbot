@@ -292,11 +292,13 @@ erlaubt sind mp3, ogg, opus, flac, wav, m4a, aac.
 | `/musik ordner ordner: zufall:` | Reiht alle Dateien eines Ordners ein | Member |
 | `/musik podcast feed: folge:` | Spielt eine Podcast-Folge, ohne Auswahl die neueste | Member |
 | `/musik url url:` | Stream, .m3u/.pls oder Audiodatei von einer Adresse (keine internen Adressen) | Mod |
+| `/musik playlist url: zufall:` | Alle Titel einer .m3u/.pls-Playlist einreihen (bis 200, z.B. von GitHub – Raw-Adresse) | Mod |
 | `/musik pause` · `weiter` · `skip` · `stopp` | Wiedergabe steuern; `stopp` leert die Warteschlange und verlässt den Kanal | im Kanal / Mod |
 | `/musik lautstaerke wert:` | 0–100, Standard 50 | im Kanal / Mod |
 | `/musik mischen` | Mischt die Warteschlange | im Kanal / Mod |
 | `/musik warteschlange` | Was läuft und was kommt | Member |
-| `/musikconfig sender_hinzufuegen name: url:` | Radiosender eintragen (Stream oder .m3u/.pls) | Admin |
+| `/musikconfig sender_hinzufuegen name: url:` | Radiosender eintragen (Stream oder .m3u/.pls); gleiche Adresse oder gleicher Name wird abgelehnt | Admin |
+| `/musikconfig sender_import url:` | Alle Sender einer .m3u/.pls-Liste eintragen (Namen aus der Liste, bis 200; vorhandene Adressen werden übersprungen). Auch im Tab *Musik* | Admin |
 | `/musikconfig sender_entfernen name:` · `sender_liste` | Sender entfernen / anzeigen | Admin / Member |
 | `/musikconfig podcast_abonnieren name: url:` | Podcast per RSS-Feed eintragen | Admin |
 | `/musikconfig podcast_entfernen name:` | Podcast entfernen | Admin |

@@ -22,3 +22,29 @@ async def test_redirect_into_internal_network_is_blocked(monkeypatch):
     monkeypatch.setattr(sources.httpx, "AsyncClient", lambda **kw: real(transport=httpx.MockTransport(handler), **kw))
     with pytest.raises(sources.SourceError, match="internen Netz"):
         await sources.resolve_stream_url("https://radio.example/live.m3u")
+
+
+def test_parse_playlist_entries_m3u_and_pls():
+    from bot.cogs.music.sources import parse_playlist_entries
+
+    m3u = "#EXTM3U\n#EXTINF:-1 tvg-logo=\"x\",Radio Bob\nhttps://stream.example/bob.mp3\n\n#EXTINF:-1,Rock Antenne\nhttps://rock.example/live\nhttps://stream.example/bob.mp3\nhttps://files.example/Mein_Lied.mp3\n"
+    assert parse_playlist_entries(m3u) == [
+        ("Radio Bob", "https://stream.example/bob.mp3"),
+        ("Rock Antenne", "https://rock.example/live"),
+        ("Mein Lied", "https://files.example/Mein_Lied.mp3"),
+    ]
+    pls = "[playlist]\nFile1=https://a.example/1\nTitle1=Eins\nFile2=https://b.example/2\nNumberOfEntries=2\n"
+    assert parse_playlist_entries(pls) == [("Eins", "https://a.example/1"), ("2", "https://b.example/2")]
+
+
+def test_station_duplicates_are_refused():
+    from bot.cogs.music.cog import import_stations, station_conflict
+
+    stations = {"Radio Bob": "https://stream.example/bob.mp3"}
+    assert "schon als" in station_conflict(stations, "Bob 2", "HTTPS://Stream.example/bob.mp3/")
+    assert "gibt es schon" in station_conflict(stations, "radio bob", "https://andere.example/x")
+    assert station_conflict(stations, "Neu", "https://neu.example/live") is None
+
+    added, known = import_stations(stations, [("Radio Bob", "https://stream.example/bob.mp3"), ("Radio Bob", "https://other.example/bob"), ("Jazz", "https://jazz.example")])
+    assert (added, known) == (2, 1)
+    assert stations["Radio Bob (2)"] == "https://other.example/bob" and "Jazz" in stations

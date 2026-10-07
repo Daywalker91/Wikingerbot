@@ -21,6 +21,8 @@ export const control = (action: ControlAction, value?: number) =>
 export const getConfig = () => apiFetch<MusicConfig>("/music/config");
 export const addStation = (name: string, url: string) =>
   apiFetch("/music/stations", { method: "POST", ...json({ name, url }) });
+export const importStations = (url: string) =>
+  apiFetch<{ message: string }>("/music/stations/import", { method: "POST", ...json({ url }) });
 export const removeStation = (name: string) =>
   apiFetch(`/music/stations/${encodeURIComponent(name)}`, { method: "DELETE" });
 export const addPodcast = (name: string, url: string) =>

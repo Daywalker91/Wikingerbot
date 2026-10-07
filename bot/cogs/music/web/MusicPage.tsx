@@ -5,6 +5,7 @@ import { useAuth } from "@/auth/useAuth";
 import {
   addPodcast,
   addStation,
+  importStations,
   control,
   getConfig,
   getEpisodes,
@@ -306,6 +307,7 @@ function Files({
 function AdminSettings({ onChange }: { onChange: () => void }) {
   const [config, setConfig] = useState<MusicConfig | null>(null);
   const [station, setStation] = useState({ name: "", url: "" });
+  const [importUrl, setImportUrl] = useState("");
   const [podcast, setPodcast] = useState({ name: "", url: "" });
   const [note, setNote] = useState<string | null>(null);
 
@@ -314,15 +316,17 @@ function AdminSettings({ onChange }: { onChange: () => void }) {
     void load();
   }, [load]);
 
-  async function act(action: () => Promise<unknown>, success: string) {
+  async function act(action: () => Promise<unknown>, success: string | ((result: unknown) => string)): Promise<boolean> {
     setNote(null);
     try {
-      await action();
-      setNote(success);
+      const result = await action();
+      setNote(typeof success === "function" ? success(result) : success);
       await load();
       onChange();
+      return true;
     } catch (error) {
       setNote((error as Error).message);
+      return false;
     }
   }
 
@@ -350,14 +354,31 @@ function AdminSettings({ onChange }: { onChange: () => void }) {
         <button
           disabled={!station.name || !station.url}
           onClick={() =>
-            void act(() => addStation(station.name, station.url), `${station.name} eingetragen.`).then(() =>
-              setStation({ name: "", url: "" }),
+            void act(() => addStation(station.name, station.url), `${station.name} eingetragen.`).then(
+              (ok) => ok && setStation({ name: "", url: "" }),
             )
           }
         >
           Hinzufügen
         </button>
       </div>
+      <div style={{ ...row, flexWrap: "wrap" }}>
+        <input
+          placeholder="Sender-Liste importieren: Adresse einer .m3u/.pls (GitHub: Raw-Adresse)"
+          style={{ flex: 1, minWidth: 320 }}
+          value={importUrl}
+          onChange={(e) => setImportUrl(e.target.value)}
+        />
+        <button
+          disabled={!importUrl.startsWith("http")}
+          onClick={() =>
+            void act(() => importStations(importUrl), (r) => (r as { message: string }).message).then((ok) => ok && setImportUrl(""))
+          }
+        >
+          Importieren
+        </button>
+      </div>
+      <p style={muted}>Doppelte Sender (gleiche Adresse oder gleicher Name) werden nicht angelegt.</p>
 
       <h3>Podcasts</h3>
       {config.podcasts.map((p) => (

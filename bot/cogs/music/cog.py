@@ -19,6 +19,8 @@ from bot.cogs.music.sources import (
     MUSIC_DIR,
     SourceError,
     check_public_url,
+    check_public_urls,
+    fetch_playlist_entries,
     fetch_feed,
     files_in_folder,
     list_audio_files,
@@ -59,6 +61,43 @@ async def _get_json(guild_id: int, key: str) -> dict:
 
 async def _set_json(guild: discord.Guild, key: str, value: dict) -> None:
     await set_config(guild.id, key, json.dumps(value), guild.name)
+
+
+def normalize_url(url: str) -> str:
+    """Zum Vergleich: ohne Leerzeichen, Schema/Host klein, ohne abschliessenden Schraegstrich."""
+    from urllib.parse import urlsplit, urlunsplit
+
+    parts = urlsplit(url.strip())
+    return urlunsplit((parts.scheme.lower(), parts.netloc.lower(), parts.path.rstrip("/"), parts.query, ""))
+
+
+def station_conflict(stations: dict, name: str, url: str) -> str | None:
+    """Warum dieser Sender nicht neu eingetragen wird - oder None. Schutz vor Doppelten."""
+    wanted = normalize_url(url)
+    for existing, existing_url in stations.items():
+        if normalize_url(existing_url) == wanted:
+            return f"Diese Adresse ist schon als **{existing}** eingetragen."
+    if name.strip().casefold() in {n.casefold() for n in stations}:
+        return f"Einen Sender **{name.strip()}** gibt es schon – anderen Namen wählen oder den alten erst entfernen."
+    return None
+
+
+def import_stations(stations: dict, entries: list[tuple[str, str]]) -> tuple[int, int]:
+    """Eintraege einer Sender-Liste in `stations` (Name -> Adresse) uebernehmen.
+    Gleiche Adresse = schon da; gleicher Name mit anderer Adresse bekommt " (2)" usw."""
+    urls = {normalize_url(u) for u in stations.values()}
+    added = known = 0
+    for title, url in entries:
+        if normalize_url(url) in urls:
+            known += 1
+            continue
+        name, n = title[:100] or "Sender", 2
+        while name in stations:
+            name, n = f"{title[:94]} ({n})", n + 1
+        stations[name] = url
+        urls.add(normalize_url(url))
+        added += 1
+    return added, known
 
 
 def _choices(values: list[str], current: str) -> list[app_commands.Choice[str]]:
@@ -441,6 +480,30 @@ class MusicCog(BaseCog):
             return
         await self._enqueue(interaction, channel, [Track(url.rsplit("/", 1)[-1][:80] or url, stream, "stream", interaction.user.id, "URL")])
 
+    @music_group.command(name="playlist", description="Reiht alle Titel einer .m3u/.pls-Playlist ein (z.B. von GitHub, Raw-Adresse)")
+    @app_commands.describe(url="http(s)-Adresse der Playlist", zufall="In zufaelliger Reihenfolge")
+    @require_role(Level.MOD)
+    async def play_playlist(self, interaction: discord.Interaction, url: str, zufall: bool = False) -> None:
+        channel = await self._voice_check(interaction)
+        if channel is None:
+            return
+        await interaction.response.defer(thinking=True)
+        try:
+            entries = await fetch_playlist_entries(url)
+            await check_public_urls([u for _, u in entries])
+        except SourceError as error:
+            await interaction.followup.send(str(error), ephemeral=True)
+            return
+        except Exception as error:
+            await interaction.followup.send(f"Playlist nicht abrufbar: {error}", ephemeral=True)
+            return
+        if zufall:
+            import random
+
+            random.shuffle(entries)
+        tracks = [Track(title, address, "stream", interaction.user.id, "Playlist") for title, address in entries]
+        await self._enqueue(interaction, channel, tracks)
+
     @music_group.command(name="podcast", description="Spielt eine Podcast-Folge (ohne Auswahl: die neueste)")
     @app_commands.autocomplete(feed=_ac_feed, folge=_ac_episode)
     async def play_podcast(self, interaction: discord.Interaction, feed: str, folge: str | None = None) -> None:
@@ -542,9 +605,34 @@ class MusicCog(BaseCog):
             await interaction.response.send_message("Die Adresse muss mit http:// oder https:// beginnen.", ephemeral=True)
             return
         stations = await _get_json(interaction.guild_id, "music_stations")
-        stations[name[:100]] = url
+        conflict = station_conflict(stations, name, url)
+        if conflict:
+            await interaction.response.send_message(conflict, ephemeral=True, delete_after=30)
+            return
+        stations[name.strip()[:100]] = url.strip()
         await _set_json(interaction.guild, "music_stations", stations)
         await interaction.response.send_message(f"Sender **{name}** eingetragen.", ephemeral=True, delete_after=20)
+
+    @config_group.command(name="sender_import", description="Traegt alle Sender einer .m3u/.pls-Liste ein (z.B. von GitHub, Raw-Adresse)")
+    @app_commands.describe(url="http(s)-Adresse der Sender-Liste")
+    @require_role(Level.ADMIN)
+    async def station_import(self, interaction: discord.Interaction, url: str) -> None:
+        await interaction.response.defer(ephemeral=True, thinking=True)
+        try:
+            entries = await fetch_playlist_entries(url)
+        except SourceError as error:
+            await interaction.followup.send(str(error), ephemeral=True)
+            return
+        except Exception as error:
+            await interaction.followup.send(f"Liste nicht abrufbar: {error}", ephemeral=True)
+            return
+        stations = await _get_json(interaction.guild_id, "music_stations")
+        added, known = import_stations(stations, entries)
+        await _set_json(interaction.guild, "music_stations", stations)
+        await interaction.followup.send(
+            f"{added} Sender eingetragen" + (f", {known} waren schon da" if known else "") + ". Abspielen mit `/musik radio sender:`.",
+            ephemeral=True,
+        )
 
     @config_group.command(name="sender_entfernen", description="Entfernt einen Radiosender")
     @app_commands.autocomplete(name=_ac_station)

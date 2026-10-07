@@ -9,6 +9,7 @@ nicht geprueft (z.B. ein eigener Icecast im LAN).
 
 import asyncio
 import ipaddress
+import re
 import socket
 import time
 from dataclasses import dataclass
@@ -108,6 +109,70 @@ async def resolve_stream_url(url: str) -> str:
         raise SourceError("In der Playlist des Senders steht keine Stream-Adresse.")
     await check_public_url(stream)
     return stream
+
+
+# --- Ganze Playlisten (Sender-Sammlung importieren / als Warteschlange) -----------
+
+MAX_LIST_BYTES = 1024 * 1024
+MAX_LIST_ENTRIES = 200
+
+
+def parse_playlist_entries(text: str) -> list[tuple[str, str]]:
+    """Alle (Titel, Adresse) einer .m3u/.m3u8- oder .pls-Liste - Titel aus #EXTINF bzw.
+    TitleN=, sonst der Dateiname. Nur http(s)-Adressen, ohne Doppelte, hoechstens MAX_LIST_ENTRIES."""
+    entries, seen = [], set()
+    pending_title = None
+    pls_titles, pls_files = {}, {}
+    for raw in text.splitlines():
+        line = raw.strip()
+        if not line:
+            continue
+        if line.upper().startswith("#EXTINF"):
+            pending_title = line.split(",", 1)[1].strip() if "," in line else None
+            continue
+        match = re.match(r"(?i)^(file|title)(\d+)=(.*)$", line)
+        if match:
+            (pls_files if match[1].lower() == "file" else pls_titles)[match[2]] = match[3].strip()
+            continue
+        if line.startswith("#"):
+            continue
+        if line.startswith(("http://", "https://")) and line not in seen:
+            seen.add(line)
+            entries.append((pending_title or _title_from_url(line), line))
+        pending_title = None
+    for key in sorted(pls_files, key=lambda k: int(k)):
+        url = pls_files[key]
+        if url.startswith(("http://", "https://")) and url not in seen:
+            seen.add(url)
+            entries.append((pls_titles.get(key) or _title_from_url(url), url))
+    return entries[:MAX_LIST_ENTRIES]
+
+
+def _title_from_url(url: str) -> str:
+    name = urlparse(url).path.rsplit("/", 1)[-1]
+    return (name.rsplit(".", 1)[0].replace("_", " ").replace("%20", " ") or urlparse(url).hostname or url)[:100]
+
+
+async def fetch_playlist_entries(url: str) -> list[tuple[str, str]]:
+    """Playlist abrufen (nie ins interne Netz) und alle Eintraege liefern.
+    Die Adressen der Eintraege prueft, wer sie abspielt (check_public_url)."""
+    status, body = await fetch_limited(url, MAX_LIST_BYTES, too_big="Die Playlist ist zu groß (höchstens 1 MB).")
+    if status != 200:
+        raise SourceError(f"Playlist nicht abrufbar (HTTP {status}).")
+    entries = parse_playlist_entries(body.decode("utf-8", errors="replace"))
+    if not entries:
+        raise SourceError("In der Datei stehen keine http(s)-Adressen – ist es wirklich eine .m3u/.pls? Bei GitHub die „Raw“-Adresse nehmen.")
+    return entries
+
+
+async def check_public_urls(urls: list[str]) -> None:
+    """Wie check_public_url fuer viele Adressen - jeden Host nur einmal aufloesen."""
+    checked = set()
+    for url in urls:
+        key = (urlparse(url).scheme, urlparse(url).hostname, urlparse(url).port)
+        if key not in checked:
+            await check_public_url(url)
+            checked.add(key)
 
 
 # --- Podcasts ---------------------------------------------------------------------

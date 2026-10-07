@@ -166,10 +166,37 @@ class StationIn(BaseModel):
 
 @router.post("/stations")
 async def add_station(body: StationIn, user: CurrentUser = Depends(require_level(Level.ADMIN))) -> dict:
+    from bot.cogs.music.cog import station_conflict
+
     stations = await _json(user.guild_id, "music_stations")
-    stations[body.name] = body.url
+    conflict = station_conflict(stations, body.name, body.url)
+    if conflict:
+        raise HTTPException(409, conflict.replace("**", ""))
+    stations[body.name.strip()] = body.url.strip()
     await _save_json(user.guild_id, "music_stations", stations)
     return {"ok": True}
+
+
+class StationImport(BaseModel):
+    url: str = Field(pattern="^https?://", max_length=500)
+
+
+@router.post("/stations/import")
+async def import_station_list(body: StationImport, user: CurrentUser = Depends(require_level(Level.ADMIN))) -> dict:
+    """Alle Sender einer .m3u/.pls-Liste eintragen (gleiche Adressen werden uebersprungen)."""
+    from bot.cogs.music.cog import import_stations
+    from bot.cogs.music.sources import SourceError, fetch_playlist_entries
+
+    try:
+        entries = await fetch_playlist_entries(body.url)
+    except SourceError as error:
+        raise HTTPException(400, str(error)) from None
+    except Exception as error:
+        raise HTTPException(502, f"Liste nicht abrufbar: {str(error).splitlines()[0][:200]}") from None
+    stations = await _json(user.guild_id, "music_stations")
+    added, known = import_stations(stations, entries)
+    await _save_json(user.guild_id, "music_stations", stations)
+    return {"ok": True, "message": f"{added} Sender eingetragen" + (f", {known} waren schon da" if known else "") + "."}
 
 
 @router.delete("/stations/{name}")
