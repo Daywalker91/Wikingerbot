@@ -8,6 +8,7 @@ Zahlen dieser Groesse nicht exakt darstellen.
 
 import json
 
+import discord
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 
@@ -115,6 +116,10 @@ async def play(body: PlayIn, user: CurrentUser = Depends(get_current_user)) -> d
         added = await cog.start_tracks(guild, channel, tracks)
     except SourceError as error:
         raise HTTPException(400, str(error)) from error
+    except (TimeoutError, discord.ClientException) as error:  # Sprachverbindung kam nicht zustande
+        from bot.cogs.music.cog import voice_error_text
+
+        raise HTTPException(502, voice_error_text(error)) from error
     except Exception as error:
         raise HTTPException(502, f"Abspielen fehlgeschlagen: {error}") from error
     return {"added": added}

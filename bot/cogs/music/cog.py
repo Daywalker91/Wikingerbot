@@ -43,6 +43,38 @@ STREAM_BEFORE_OPTIONS = (
 FILE_BEFORE_OPTIONS = "-protocol_whitelist file"
 
 
+def voice_error_text(error: Exception) -> str:
+    """Verstaendliche Meldung, warum der Bot nicht in den Sprachkanal kommt (und Log-Eintrag)."""
+    if isinstance(error, asyncio.TimeoutError):
+        log.warning(
+            "Sprachverbindung: Zeitueberschreitung - die Anmeldung klappt, aber die Tonverbindung (UDP) "
+            "kommt nicht durch. Meist blockiert eine Firewall/NAT ausgehendes UDP zu Discord "
+            "(Ports 50000-65535) oder der Container hat kein UDP nach aussen."
+        )
+        return (
+            "Ich komme in den Kanal, aber die Tonverbindung zu Discord kommt nicht zustande (Zeitüberschreitung). "
+            "Das liegt meist an der Firewall/dem Netzwerk des Bot-Servers (ausgehendes UDP) – Details stehen im Log."
+        )
+    log.warning("Sprachverbindung fehlgeschlagen: %s", error)
+    return "Ich komme nicht in den Sprachkanal (fehlen mir dort Rechte?)."
+
+
+def opus_available() -> bool:
+    """Ist die Opus-Bibliothek fuer discord.py geladen? Unter Windows bringt discord.py sie mit,
+    unter Linux muss sie im System sein (libopus) - sonst False, dann kodiert FFmpeg selbst."""
+    if discord.opus.is_loaded():
+        return True
+    import ctypes.util
+
+    for name in filter(None, (ctypes.util.find_library("opus"), "libopus.so.0", "libopus.so")):
+        try:
+            discord.opus.load_opus(name)
+            return True
+        except Exception:
+            continue
+    return False
+
+
 def ffmpeg_executable() -> str:
     system = shutil.which("ffmpeg")
     if system:
@@ -123,6 +155,10 @@ class MusicCog(BaseCog):
     async def cog_load(self) -> None:
         # Ordner gleich anlegen, damit er im AMP-Dateimanager zu sehen ist
         MUSIC_DIR.mkdir(parents=True, exist_ok=True)
+        if opus_available():
+            log.info("Musik: Opus-Bibliothek gefunden, FFmpeg: %s", ffmpeg_executable())
+        else:
+            log.info("Musik: keine Opus-Bibliothek im System - FFmpeg (%s) kodiert selbst", ffmpeg_executable())
         self.idle_check.start()
         self.podcast_check.start()
 
@@ -139,8 +175,14 @@ class MusicCog(BaseCog):
 
     def _source(self, track: Track, volume: float) -> discord.AudioSource:
         before = FILE_BEFORE_OPTIONS if track.kind == "file" else STREAM_BEFORE_OPTIONS
-        audio = discord.FFmpegPCMAudio(track.source, executable=ffmpeg_executable(), before_options=before, options="-vn")
-        return discord.PCMVolumeTransformer(audio, volume=volume)
+        if opus_available():
+            audio = discord.FFmpegPCMAudio(track.source, executable=ffmpeg_executable(), before_options=before, options="-vn")
+            return discord.PCMVolumeTransformer(audio, volume=volume)
+        # Ohne Opus-Bibliothek im System (z.B. schlanke Linux-Container): FFmpeg kodiert selbst
+        # nach Opus. Lautstaerke dann als Filter - eine Aenderung gilt ab dem naechsten Titel.
+        return discord.FFmpegOpusAudio(
+            track.source, executable=ffmpeg_executable(), before_options=before, options=f"-vn -af volume={volume:.2f}"
+        )
 
     async def _play_next(self, guild_id: int) -> None:
         guild = self.bot.get_guild(guild_id)
@@ -154,7 +196,12 @@ class MusicCog(BaseCog):
             except Exception as error:  # z.B. Datei inzwischen geloescht
                 log.warning("Kann %s nicht abspielen: %s", track.title, error)
                 continue
-            voice.play(source, after=lambda error, gid=guild_id: self._after(gid, error))
+            try:
+                voice.play(source, after=lambda error, gid=guild_id: self._after(gid, error))
+            except Exception as error:  # z.B. Opus fehlt, Verbindung gerade weg
+                log.warning("Wiedergabe von %s nicht gestartet: %s", track.title, error)
+                continue
+            log.info("Spiele %s", track.title)
             return
 
     def _after(self, guild_id: int, error: Exception | None) -> None:
@@ -191,8 +238,7 @@ class MusicCog(BaseCog):
         try:
             await self._connect(interaction.guild, channel)
         except (discord.ClientException, asyncio.TimeoutError, RuntimeError) as error:
-            log.warning("Voice-Verbindung fehlgeschlagen: %s", error)
-            await interaction.followup.send("Ich komme nicht in den Voice-Kanal (fehlen mir dort Rechte?).", ephemeral=True)
+            await interaction.followup.send(voice_error_text(error), ephemeral=True)
             return
         player = self._player(interaction.guild_id)
         was_idle = player.current is None
