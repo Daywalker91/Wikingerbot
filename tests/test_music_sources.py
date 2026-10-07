@@ -48,3 +48,12 @@ def test_station_duplicates_are_refused():
     added, known = import_stations(stations, [("Radio Bob", "https://stream.example/bob.mp3"), ("Radio Bob", "https://other.example/bob"), ("Jazz", "https://jazz.example")])
     assert (added, known) == (2, 1)
     assert stations["Radio Bob (2)"] == "https://other.example/bob" and "Jazz" in stations
+
+
+def test_github_links_and_clean_titles():
+    from bot.cogs.music.sources import github_raw_url, parse_playlist_entries
+
+    page = "https://github.com/user/repo/blob/main/Radio%20Stations.m3u"
+    assert github_raw_url(page) == "https://raw.githubusercontent.com/user/repo/main/Radio%20Stations.m3u"
+    assert github_raw_url("https://example.com/list.m3u") == "https://example.com/list.m3u"
+    assert parse_playlist_entries("#EXTINF:0, - RP MELLOW\nhttp://s.example/m") == [("RP MELLOW", "http://s.example/m")]

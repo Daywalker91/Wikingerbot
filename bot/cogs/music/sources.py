@@ -138,14 +138,26 @@ def parse_playlist_entries(text: str) -> list[tuple[str, str]]:
             continue
         if line.startswith(("http://", "https://")) and line not in seen:
             seen.add(line)
-            entries.append((pending_title or _title_from_url(line), line))
+            entries.append((_clean_title(pending_title) or _title_from_url(line), line))
         pending_title = None
     for key in sorted(pls_files, key=lambda k: int(k)):
         url = pls_files[key]
         if url.startswith(("http://", "https://")) and url not in seen:
             seen.add(url)
-            entries.append((pls_titles.get(key) or _title_from_url(url), url))
+            entries.append((_clean_title(pls_titles.get(key)) or _title_from_url(url), url))
     return entries[:MAX_LIST_ENTRIES]
+
+
+def _clean_title(title: str | None) -> str:
+    """"- RP MELLOW" -> "RP MELLOW" (Striche, Leerzeichen und Trenner am Rand weg)."""
+    return (title or "").strip(" -–—|:·	")[:100]
+
+
+def github_raw_url(url: str) -> str:
+    """GitHub-Dateiseite -> Rohdatei: github.com/<user>/<repo>/blob/<zweig>/<pfad>
+    -> raw.githubusercontent.com/<user>/<repo>/<zweig>/<pfad>. Andere Adressen bleiben."""
+    match = re.match(r"^https?://(?:www\.)?github\.com/([^/]+)/([^/]+)/(?:blob|raw)/(.+)$", url.strip())
+    return f"https://raw.githubusercontent.com/{match[1]}/{match[2]}/{match[3]}" if match else url
 
 
 def _title_from_url(url: str) -> str:
@@ -156,12 +168,13 @@ def _title_from_url(url: str) -> str:
 async def fetch_playlist_entries(url: str) -> list[tuple[str, str]]:
     """Playlist abrufen (nie ins interne Netz) und alle Eintraege liefern.
     Die Adressen der Eintraege prueft, wer sie abspielt (check_public_url)."""
+    url = github_raw_url(url)  # normale GitHub-Seite geht auch
     status, body = await fetch_limited(url, MAX_LIST_BYTES, too_big="Die Playlist ist zu groß (höchstens 1 MB).")
     if status != 200:
         raise SourceError(f"Playlist nicht abrufbar (HTTP {status}).")
     entries = parse_playlist_entries(body.decode("utf-8", errors="replace"))
     if not entries:
-        raise SourceError("In der Datei stehen keine http(s)-Adressen – ist es wirklich eine .m3u/.pls? Bei GitHub die „Raw“-Adresse nehmen.")
+        raise SourceError("In der Datei stehen keine http(s)-Adressen – ist es wirklich eine .m3u/.pls?")
     return entries
 
 
