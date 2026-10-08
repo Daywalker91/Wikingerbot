@@ -206,3 +206,26 @@ def test_view_has_three_buttons_and_can_be_disabled():
     ids = [item.item.custom_id for item in view.children]
     assert ids == ["wb:event:7:yes", "wb:event:7:maybe", "wb:event:7:no"]
     assert all(item.item.disabled for item in view.children)
+
+
+async def test_info_event_without_rsvp(site, db_session):  # noqa: F811
+    """Info-Termin (z.B. Server-Wartung): keine Knoepfe, keine Teilnehmer, keine Zusagen."""
+    db_session.add(Guild(id=1, name="Wikinger"))
+    await db_session.commit()
+    await set_config(1, "events_channel_id", "500")
+    await set_config(1, "events_native", "false")
+    channel = FakeChannel()
+    bot = SimpleNamespace(guilds=[FakeGuild(channel)])
+    await seed(rsvp_enabled=0)
+
+    assert await set_participation(1, 1, "yes") == "norsvp"
+    assert await sync_event(bot, 1, event_view) == ["Wikinger: gepostet"]
+    [message] = channel.messages.values()
+    assert message.view is None
+    assert "Teilnehmer" not in {f.name for f in message.embed.fields}
+    assert message.embed.footer.text.endswith("Info-Termin")
+
+    # Zusagen wieder an -> Knoepfe kommen beim Aktualisieren dazu
+    await set_event(rsvp_enabled=1)
+    await sync_event(bot, 1, event_view)
+    assert message.view is not None and "Teilnehmer" in {f.name for f in message.embed.fields}

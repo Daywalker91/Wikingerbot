@@ -164,6 +164,7 @@ events = Table(
     Column("starts_at", DateTime),
     Column("ends_at", DateTime),
     Column("max_participants", SmallInteger),
+    Column("rsvp_enabled", SmallInteger, default=1),  # 0 = Info-Termin ohne Zusagen (Migration 016)
     Column("is_cancelled", SmallInteger, default=0),
     Column("announce_discord", SmallInteger, default=1),
 )

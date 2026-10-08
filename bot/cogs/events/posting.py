@@ -5,7 +5,8 @@ damit testbar.
 Zusagen gelten pro Konto auf der Seite (event_participants) - aus Discord nur
 fuer verknuepfte Mitglieder mit dem Recht events.join, mit denselben Regeln wie
 auf der Seite (Limit zaehlt nur feste Zusagen, keine Zusagen fuer abgesagte oder
-vergangene Events).
+vergangene Events). Info-Termine (rsvp_enabled = 0, z.B. Server-Wartung) haben
+weder Knoepfe noch Teilnehmerliste.
 
 Zeiten: Die Seite speichert Event-Zeiten ohne Zeitzone in ihrer Ortszeit (TIMEZONE).
 """
@@ -16,7 +17,8 @@ from datetime import datetime, timedelta, timezone
 from bot.core.timezone import community_timezone
 
 import discord
-from sqlalchemy import delete, func, insert, select, update
+from sqlalchemy import delete, func, insert, literal, select, update
+from sqlalchemy.exc import OperationalError, ProgrammingError
 
 from bot.community import db as community_db
 from bot.community.announce import publish_if_announcement
@@ -50,6 +52,7 @@ class EventItem:
     cancelled: bool
     announce: bool
     author: str
+    rsvp: bool = True  # False = Info-Termin ohne Zusagen
 
     @property
     def end(self) -> datetime:
@@ -73,11 +76,28 @@ def _aware(value: datetime | None) -> datetime | None:
     return value if value.tzinfo else value.replace(tzinfo=SITE_TZ)
 
 
-def _event_query():
+_rsvp_column = False  # gemerkt, sobald die Seite die Spalte hat (Migration 016)
+
+
+async def _has_rsvp_column() -> bool:
+    """Aeltere Seiten ohne rsvp_enabled: alle Events haben Zusagen."""
+    global _rsvp_column
+    if not _rsvp_column:
+        try:
+            async with community_db.session() as db:
+                await db.execute(select(community_db.events.c.rsvp_enabled).limit(1))
+            _rsvp_column = True
+        except (OperationalError, ProgrammingError):
+            pass
+    return _rsvp_column
+
+
+async def _event_query():
     e, u = community_db.events, community_db.users
+    rsvp = e.c.rsvp_enabled if await _has_rsvp_column() else literal(1)
     return select(
         e.c.id, e.c.title, e.c.description, e.c.location, e.c.starts_at, e.c.ends_at,
-        e.c.max_participants, e.c.is_cancelled, e.c.announce_discord, u.c.username,
+        e.c.max_participants, e.c.is_cancelled, e.c.announce_discord, u.c.username, rsvp,
     ).select_from(e.join(u, u.c.id == e.c.user_id))
 
 
@@ -85,13 +105,14 @@ def _to_event(row) -> EventItem:
     return EventItem(
         id=row[0], title=row[1], description=row[2] or "", location=row[3] or "",
         starts_at=_aware(row[4]), ends_at=_aware(row[5]), max_participants=row[6],
-        cancelled=bool(row[7]), announce=bool(row[8]), author=row[9],
+        cancelled=bool(row[7]), announce=bool(row[8]), author=row[9], rsvp=bool(row[10]),
     )
 
 
 async def fetch_event(event_id: int) -> EventItem | None:
+    query = await _event_query()
     async with community_db.session() as db:
-        row = (await db.execute(_event_query().where(community_db.events.c.id == event_id))).first()
+        row = (await db.execute(query.where(community_db.events.c.id == event_id))).first()
     return _to_event(row) if row else None
 
 
@@ -99,8 +120,9 @@ async def upcoming_events(limit: int = 10) -> list[EventItem]:
     """Kommende und laufende Events (Ende frühestens jetzt), naechste zuerst."""
     e = community_db.events
     cutoff = datetime.now(SITE_TZ).replace(tzinfo=None) - DEFAULT_DURATION
+    query = await _event_query()
     async with community_db.session() as db:
-        rows = (await db.execute(_event_query().where(e.c.starts_at >= cutoff).order_by(e.c.starts_at).limit(limit * 2))).all()
+        rows = (await db.execute(query.where(e.c.starts_at >= cutoff).order_by(e.c.starts_at).limit(limit * 2))).all()
     items = [_to_event(r) for r in rows]
     return [i for i in items if not i.is_past()][:limit]
 
@@ -128,13 +150,14 @@ async def can_join(site_user_id: int) -> bool:
 
 
 async def set_participation(event_id: int, site_user_id: int, answer: str) -> str:
-    """Zusage aus Discord. Ergebnis: ok | removed | full | closed | missing | forbidden.
+    """Zusage aus Discord. Ergebnis: ok | removed | full | closed | norsvp | missing | forbidden.
     Dieselbe Antwort nochmal klicken nimmt sie zurueck."""
     if answer not in ANSWERS:
         raise ValueError(answer)
     if not await can_join(site_user_id):
         return "forbidden"
     e, p = community_db.events, community_db.event_participants
+    rsvp_column = await _has_rsvp_column()
     async with community_db.session() as db:
         async with db.begin():
             # sperrt die Event-Zeile wie die Seite, damit zwei nicht gleichzeitig den letzten Platz bekommen
@@ -147,6 +170,10 @@ async def set_participation(event_id: int, site_user_id: int, answer: str) -> st
             ).first()
             if event is None:
                 return "missing"
+            if rsvp_column and not (
+                await db.execute(select(e.c.rsvp_enabled).where(e.c.id == event_id))
+            ).scalar_one():
+                return "norsvp"
             end = _aware(event.ends_at) or _aware(event.starts_at) + DEFAULT_DURATION
             if event.is_cancelled or end < datetime.now(timezone.utc):
                 return "closed"
@@ -188,12 +215,13 @@ def build_embed(item: EventItem, parts: Participants) -> discord.Embed:
     yes = parts.count("yes")
     limit = f"/{item.max_participants}" if item.max_participants else ""
     full = " · **voll**" if item.max_participants and yes >= item.max_participants else ""
-    embed.add_field(
-        name="Teilnehmer",
-        value=f"✅ {yes}{limit} · ❔ {parts.count('maybe')} · ❌ {parts.count('no')}{full}",
-        inline=False,
-    )
-    if parts.by_status["yes"]:
+    if item.rsvp:
+        embed.add_field(
+            name="Teilnehmer",
+            value=f"✅ {yes}{limit} · ❔ {parts.count('maybe')} · ❌ {parts.count('no')}{full}",
+            inline=False,
+        )
+    if item.rsvp and parts.by_status["yes"]:
         names = parts.by_status["yes"][:MAX_NAMES]
         more = len(parts.by_status["yes"]) - len(names)
         embed.add_field(name="Dabei", value=", ".join(names) + (f" und {more} weitere" if more else ""), inline=False)
@@ -202,6 +230,8 @@ def build_embed(item: EventItem, parts: Participants) -> discord.Embed:
         footer += " · abgesagt"
     elif item.is_past():
         footer += " · vorbei"
+    elif not item.rsvp:
+        footer += " · Info-Termin"
     else:
         footer += " · Zusagen nur mit verknüpftem Konto (/verknuepfen)"
     embed.set_footer(text=footer)
@@ -267,7 +297,7 @@ async def sync_event(bot: discord.Client, event_id: int, view_factory=None) -> l
 
         embed = build_embed(item, parts)
         closed = item.cancelled or item.is_past()
-        view = view_factory(event_id, closed) if view_factory else None
+        view = view_factory(event_id, closed) if view_factory and item.rsvp else None
         message = await _message(guild, mapping) if mapping else None
         if message is not None:
             await message.edit(embed=embed, view=view)

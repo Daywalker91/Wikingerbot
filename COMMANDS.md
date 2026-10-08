@@ -409,6 +409,9 @@ Zusagen, keine Zusagen für abgesagte oder vergangene Events. Dieselbe Antwort
 nochmal klicken nimmt sie zurück. Änderungen, Zusagen auf der Seite und Absagen
 werden nachgezogen.
 
+Ist beim Event auf der Seite **„Zusagen möglich“** aus (Info-Termin, z.B. Server-Wartung),
+zeigt der Bot weder Knöpfe noch Teilnehmer.
+
 Optional legt der Bot zusätzlich ein **natives Discord-Event** an (Event-Bereich
 des Servers) und zieht Änderungen/Absagen nach – dafür braucht die Bot-Rolle das
 Recht **Events verwalten**. Kanal, Ping-Rolle (oder Rollen je Kategorie, wie bei

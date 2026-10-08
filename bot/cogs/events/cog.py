@@ -27,6 +27,7 @@ RESULT_TEXT = {
     "removed": "Deine Antwort ist zurückgenommen.",
     "full": "Das Event ist leider voll. „Vielleicht“ geht noch, falls ein Platz frei wird.",
     "closed": "Für dieses Event kann man nicht mehr zusagen (abgesagt oder vorbei).",
+    "norsvp": "Das ist ein Info-Termin – dafür gibt es keine Zusagen.",
     "missing": "Dieses Event gibt es nicht mehr.",
     "forbidden": "Dein Rang auf der Seite darf bei Events nicht zusagen.",
 }
@@ -68,7 +69,7 @@ class EventAnswerButton(discord.ui.DynamicItem[discord.ui.Button], template=r"wb
             await interaction.followup.send("Die Seite ist gerade nicht erreichbar. Versuch es später noch mal.", ephemeral=True)
             return
         await interaction.followup.send(RESULT_TEXT[result], ephemeral=True)
-        if result in ("ok", "removed", "closed", "missing"):
+        if result in ("ok", "removed", "closed", "norsvp", "missing"):
             # Die Seite meldet Aenderungen aus Discord nicht zurueck - Embed selbst auffrischen
             try:
                 await sync_event(interaction.client, self.event_id, event_view)
