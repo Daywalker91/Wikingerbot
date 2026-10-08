@@ -5,8 +5,10 @@ selbst nie ins Netz (statische FFmpeg-Builds stuerzen daran in manchen Container
 ab). Bei HLS heisst das: Playlist lesen, ggf. eine Variante waehlen, dann die
 Teilstuecke der Reihe nach laden und die Playlist regelmaessig neu abrufen.
 
-Laeuft blockierend im Schreib-Thread von discord.py (FFmpegAudio mit pipe=True,
-read() wird dort aufgerufen). close() beendet es.
+read() wird im Schreib-Thread von discord.py aufgerufen (FFmpegAudio mit pipe=True).
+Geladen wird in einem eigenen Hintergrund-Thread mit Vorrat (PREFETCH_BYTES) - sonst
+reichen die Pipe-Puffer nur fuer 1-2 Sekunden, und jeder langsame Abruf eines
+Teilstuecks ist als Stocken zu hoeren. close() beendet beides.
 
 Nicht unterstuetzt: verschluesselte Streams (#EXT-X-KEY) und Byte-Bereiche.
 """
@@ -14,6 +16,7 @@ Nicht unterstuetzt: verschluesselte Streams (#EXT-X-KEY) und Byte-Bereiche.
 import logging
 import re
 import threading
+from collections import deque
 from dataclasses import dataclass, field
 from urllib.parse import urljoin, urlparse
 
@@ -24,6 +27,7 @@ MAX_SEGMENT_BYTES = 30 * 1024 * 1024
 PREFERRED_MAX_BANDWIDTH = 400_000  # Varianten bis hierhin bevorzugen (FLAC & Co. sind viel groesser)
 LIVE_START_SEGMENTS = 3  # bei Live-Streams so viele Teilstuecke vor dem Ende anfangen
 CHUNK = 64 * 1024
+PREFETCH_BYTES = 4 * 1024 * 1024  # Vorrat: bei 320 kbit/s rund 100 s, bei FLAC rund 30 s
 MAX_FAILURES = 3
 
 
@@ -120,6 +124,11 @@ class HlsReader:
         self._stop = threading.Event()
         self._wait = wait or self._stop.wait  # Tests: ohne echtes Warten
         self._buffer = bytearray()
+        self._queue: deque[bytes] = deque()
+        self._queued = 0
+        self._done = False  # Hintergrund-Thread fertig (Ende oder Fehler)
+        self._cond = threading.Condition()
+        self._thread: threading.Thread | None = None
         final_url, text = get_text(url)
         if "#EXTM3U" not in text[:1024].upper():
             raise HlsError("Das ist keine HLS-Playlist.")
@@ -140,18 +149,43 @@ class HlsReader:
 
     def close(self) -> None:
         self._stop.set()
+        with self._cond:
+            self._cond.notify_all()
+
+    def _prefetch(self) -> None:
+        """Hintergrund-Thread: Teilstuecke laden, solange der Vorrat nicht voll ist."""
+        try:
+            for chunk in self._chunks:
+                with self._cond:
+                    while self._queued >= PREFETCH_BYTES and not self._stop.is_set():
+                        self._cond.wait(1)
+                    if self._stop.is_set():
+                        return
+                    self._queue.append(chunk)
+                    self._queued += len(chunk)
+                    self._cond.notify_all()
+        except Exception as error:  # Netzwerkfehler o.ae.: Ende des Streams
+            log.warning("HLS beendet: %s", error)
+        finally:
+            with self._cond:
+                self._done = True
+                self._cond.notify_all()
 
     def read(self, size: int = -1) -> bytes:
         size = CHUNK if size is None or size < 0 else size
-        while len(self._buffer) < size and not self._stop.is_set():
-            try:
-                self._buffer += next(self._chunks)
-            except StopIteration:
-                break
-            except Exception as error:  # Netzwerkfehler o.ae.: Ende des Streams
-                log.warning("HLS beendet: %s", error)
-                self._stop.set()
-                break
+        if self._thread is None:
+            self._thread = threading.Thread(target=self._prefetch, daemon=True, name="hls-prefetch")
+            self._thread.start()
+        with self._cond:
+            while not self._buffer and not self._queue and not self._done and not self._stop.is_set():
+                self._cond.wait(1)
+            while self._queue and len(self._buffer) < size:
+                chunk = self._queue.popleft()
+                self._queued -= len(chunk)
+                self._buffer += chunk
+            self._cond.notify_all()
+        if self._stop.is_set():
+            return b""
         data = bytes(self._buffer[:size])
         del self._buffer[:size]
         return data
