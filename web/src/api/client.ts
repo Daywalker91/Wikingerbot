@@ -46,6 +46,6 @@ export async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> 
   return (await response.json()) as T;
 }
 
-export function loginUrl(guildId: string): string {
-  return `${API_BASE_URL}/auth/login?guild_id=${encodeURIComponent(guildId)}`;
+export function loginUrl(guildId: string, remember = false): string {
+  return `${API_BASE_URL}/auth/login?guild_id=${encodeURIComponent(guildId)}${remember ? "&remember=true" : ""}`;
 }

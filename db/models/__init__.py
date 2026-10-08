@@ -10,7 +10,7 @@ from db.models.modlog import ModLogEntry, Warning
 from db.models.whitelist import WhitelistRequest
 from db.models.config import GuildConfig
 from db.models.bot_setting import BotSetting
-from db.models.web_session import WebSession
+from db.models.web_session import RememberToken, WebSession
 from db.models.stats import StatsDaily, StatsMemberDaily
 from db.models.community_post import CommunityPost
 from db.models.amp_account import AmpAccount
@@ -36,6 +36,7 @@ __all__ = [
     "GuildConfig",
     "BotSetting",
     "WebSession",
+    "RememberToken",
     "StatsDaily",
     "StatsMemberDaily",
     "CommunityPost",

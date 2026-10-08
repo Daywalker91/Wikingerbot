@@ -406,6 +406,12 @@ aktuell auf eine Guild pro Session festgelegt). Discord-Developer-Portal
 braucht `http://localhost:8000/auth/callback` als eingetragene Redirect-URI
 (siehe [SETUP.md](SETUP.md)).
 
+Anmeldung: Die Sitzung gilt `JWT_EXPIRE_MINUTES` (Standard 60) und endet mit dem
+Browser. Mit dem Haken **„Angemeldet bleiben“** auf der Login-Seite stellt ein
+30-Tage-Cookie danach automatisch eine neue Sitzung aus (in der Datenbank nur als
+Hash, Tabelle `web_remember_tokens`; jede Nutzung verlängert die 30 Tage, Abmelden
+löscht es). Die Stufe kommt weiterhin bei jedem Aufruf frisch aus Discord.
+
 Python- (`requirements.txt`/`.venv`) und Node-Tooling (`package.json`/
 `node_modules`, bewusst im Repo-Root statt in `web/` — siehe
 [CREATING_A_COG.md](CREATING_A_COG.md)) laufen unabhängig nebeneinander,

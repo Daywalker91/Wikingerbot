@@ -8,12 +8,19 @@ from fastapi.responses import PlainTextResponse, RedirectResponse
 
 from api.middleware.auth import (
     OAUTH_NONCE_COOKIE,
+    OAUTH_REMEMBER_COOKIE,
+    REMEMBER_COOKIE,
     SESSION_COOKIE,
     CurrentUser,
+    cookie_secure,
     create_access_token,
+    create_remember_token,
     create_state_token,
+    forget_remember_token,
     get_current_user,
     hash_refresh_token,
+    set_remember_cookie,
+    set_session_cookie,
     verify_state_token,
 )
 from bot.core import runtime
@@ -74,7 +81,7 @@ async def guilds() -> list[dict]:
 
 
 @router.get("/login")
-async def login(request: Request, guild_id: int = Query(...)):
+async def login(request: Request, guild_id: int = Query(...), remember: bool = Query(False)):
     """Leitet zum Discord-Authorize-Screen fuer die angegebene Guild weiter."""
     missing = missing_oauth_settings()
     if missing:
@@ -99,6 +106,10 @@ async def login(request: Request, guild_id: int = Query(...)):
         OAUTH_NONCE_COOKIE, nonce, max_age=600, httponly=True, samesite="lax",
         secure=(settings.frontend_url or str(request.url)).startswith("https://"),
     )
+    if remember:
+        response.set_cookie(OAUTH_REMEMBER_COOKIE, "1", max_age=600, httponly=True, samesite="lax", secure=cookie_secure(request))
+    else:
+        response.delete_cookie(OAUTH_REMEMBER_COOKIE)
     return response
 
 
@@ -167,19 +178,21 @@ async def callback(request: Request, state: str = "", code: str = "", error: str
     access = create_access_token(user_id, guild_id, level)
     # Leere frontend_url: Seite und API kommen vom selben Host (Web-Oberflaeche im Bot)
     redirect = RedirectResponse(f"{settings.frontend_url}/dashboard")
-    redirect.set_cookie(
-        SESSION_COOKIE,
-        access,
-        httponly=True,
-        samesite="lax",
-        secure=(settings.frontend_url or str(request.url)).startswith("https://"),
-    )
+    set_session_cookie(redirect, request, access)
+    redirect.delete_cookie(OAUTH_REMEMBER_COOKIE)
+    await forget_remember_token(request.cookies.get(REMEMBER_COOKIE))  # altes Token nicht liegen lassen
+    if request.cookies.get(OAUTH_REMEMBER_COOKIE) == "1":
+        set_remember_cookie(redirect, request, await create_remember_token(user_id, guild_id, level))
+    else:
+        redirect.delete_cookie(REMEMBER_COOKIE)
     return redirect
 
 
 @router.post("/logout")
-async def logout(response: Response) -> dict:
+async def logout(request: Request, response: Response) -> dict:
+    await forget_remember_token(request.cookies.get(REMEMBER_COOKIE))
     response.delete_cookie(SESSION_COOKIE)
+    response.delete_cookie(REMEMBER_COOKIE)
     return {"ok": True}
 
 

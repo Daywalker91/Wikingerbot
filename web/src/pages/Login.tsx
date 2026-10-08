@@ -14,8 +14,19 @@ const LOGIN_ERRORS: Record<string, string> = {
   failed: "Die Anmeldung bei Discord hat nicht geklappt – bitte nochmal versuchen.",
 };
 
+const REMEMBER_KEY = "wb-remember-login";
+
+function storedRemember(): boolean {
+  try {
+    return window.localStorage.getItem(REMEMBER_KEY) === "1";
+  } catch {
+    return false;
+  }
+}
+
 export default function Login() {
   const [guilds, setGuilds] = useState<Guild[] | null>(null);
+  const [remember, setRemember] = useState(storedRemember);
   const errorCode = new URLSearchParams(window.location.search).get("error");
   const error = errorCode ? (LOGIN_ERRORS[errorCode] ?? LOGIN_ERRORS.failed) : null;
 
@@ -31,7 +42,12 @@ export default function Login() {
   function handleLogin(guildId: string) {
     // Volle Seiten-Navigation (kein fetch!) - der Login-Endpunkt leitet zu
     // Discords eigener Domain weiter, das muss die SPA verlassen.
-    window.location.href = loginUrl(guildId);
+    try {
+      window.localStorage.setItem(REMEMBER_KEY, remember ? "1" : "0");
+    } catch {
+      // ohne Speicher: Haken gilt nur fuer diese Anmeldung
+    }
+    window.location.href = loginUrl(guildId, remember);
   }
 
   return (
@@ -48,6 +64,13 @@ export default function Login() {
               <button onClick={() => handleLogin(guild.id)}>Bei „{guild.name}“ anmelden</button>
             </p>
           ))}
+        {guilds && guilds.length > 0 && (
+          <p>
+            <label>
+              <input type="checkbox" checked={remember} onChange={(e) => setRemember(e.target.checked)} /> Angemeldet bleiben (30 Tage)
+            </label>
+          </p>
+        )}
       </div>
     </main>
   );

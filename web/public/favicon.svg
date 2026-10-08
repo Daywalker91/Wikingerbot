@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <!-- Rune Wunjo (ᚹ, "W") in Gold auf dunklem Grund - eigene Zeichnung -->
+  <rect width="64" height="64" rx="14" fill="#1f2328"/>
+  <g fill="none" stroke="#c9a35c" stroke-width="7" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M25 11 V53"/>
+    <path d="M25 11 L41 22 L25 33"/>
+  </g>
+</svg>

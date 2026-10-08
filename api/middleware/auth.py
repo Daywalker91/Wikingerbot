@@ -3,7 +3,7 @@ import secrets
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 
-from fastapi import Cookie, Depends, HTTPException, status
+from fastapi import Cookie, Depends, HTTPException, Request, Response, status
 from jose import JWTError, jwt
 
 from bot.core.config import settings
@@ -11,6 +11,9 @@ from db.models.role import Level, level_at_least
 
 SESSION_COOKIE = "session"
 OAUTH_NONCE_COOKIE = "oauth_nonce"
+OAUTH_REMEMBER_COOKIE = "oauth_remember"  # Haken "Angemeldet bleiben" ueber den Discord-Umweg
+REMEMBER_COOKIE = "remember"
+REMEMBER_DAYS = 30
 
 
 @dataclass
@@ -62,22 +65,101 @@ def hash_refresh_token(token: str) -> str:
     return hashlib.sha256(token.encode()).hexdigest()
 
 
-async def get_current_user(
-    session: str | None = Cookie(default=None, alias=SESSION_COOKIE),
-) -> CurrentUser:
-    if session is None:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Nicht eingeloggt")
+def cookie_secure(request: Request) -> bool:
+    return (settings.frontend_url or str(request.url)).startswith("https://")
+
+
+def set_session_cookie(response: Response, request: Request, access: str) -> None:
+    response.set_cookie(SESSION_COOKIE, access, httponly=True, samesite="lax", secure=cookie_secure(request))
+
+
+def set_remember_cookie(response: Response, request: Request, token: str) -> None:
+    response.set_cookie(
+        REMEMBER_COOKIE, token, max_age=REMEMBER_DAYS * 86400, httponly=True, samesite="lax", secure=cookie_secure(request)
+    )
+
+
+async def create_remember_token(user_id: int, guild_id: int, level: Level) -> str:
+    """Neues "Angemeldet bleiben"-Token; in der Datenbank nur der Hash. Raeumt Abgelaufene weg."""
+    from sqlalchemy import delete
+
+    from db.models.web_session import RememberToken
+    from db.session import get_db_session
+
+    token = secrets.token_urlsafe(32)
+    now = datetime.now(timezone.utc).replace(tzinfo=None)
+    async with get_db_session() as db:
+        await db.execute(delete(RememberToken).where(RememberToken.expires_at < now))
+        db.add(
+            RememberToken(
+                user_id=user_id, guild_id=guild_id, level=level.value, token_hash=hash_refresh_token(token),
+                expires_at=now + timedelta(days=REMEMBER_DAYS),
+            )
+        )
+        await db.commit()
+    return token
+
+
+async def forget_remember_token(token: str | None) -> None:
+    if not token:
+        return
+    from sqlalchemy import delete
+
+    from db.models.web_session import RememberToken
+    from db.session import get_db_session
+
+    async with get_db_session() as db:
+        await db.execute(delete(RememberToken).where(RememberToken.token_hash == hash_refresh_token(token)))
+        await db.commit()
+
+
+async def _user_from_remember_token(token: str) -> CurrentUser | None:
+    """Gueltiges Token -> Nutzer; verlaengert die Laufzeit (wer die Seite nutzt, bleibt angemeldet)."""
+    from sqlalchemy import select
+
+    from db.models.web_session import RememberToken
+    from db.session import get_db_session
+
+    now = datetime.now(timezone.utc).replace(tzinfo=None)
+    async with get_db_session() as db:
+        row = (
+            await db.execute(select(RememberToken).where(RememberToken.token_hash == hash_refresh_token(token)))
+        ).scalar_one_or_none()
+        if row is None or row.expires_at < now:
+            return None
+        row.expires_at = now + timedelta(days=REMEMBER_DAYS)
+        await db.commit()
+        return CurrentUser(user_id=row.user_id, guild_id=row.guild_id, level=Level(row.level))
+
+
+def _user_from_session(session: str | None) -> CurrentUser | None:
+    if not session:
+        return None
     try:
         payload = jwt.decode(session, settings.jwt_secret, algorithms=[settings.jwt_algorithm])
-    except JWTError as exc:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Session ungueltig") from exc
+    except JWTError:
+        return None
     if payload.get("type") != "access":
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Session ungueltig")
-    user = CurrentUser(
-        user_id=int(payload["sub"]),
-        guild_id=int(payload["guild_id"]),
-        level=Level(payload["level"]),
-    )
+        return None
+    return CurrentUser(user_id=int(payload["sub"]), guild_id=int(payload["guild_id"]), level=Level(payload["level"]))
+
+
+async def get_current_user(
+    request: Request,
+    response: Response,
+    session: str | None = Cookie(default=None, alias=SESSION_COOKIE),
+    remember: str | None = Cookie(default=None, alias=REMEMBER_COOKIE),
+) -> CurrentUser:
+    user = _user_from_session(session)
+    if user is None and remember:
+        # Sitzung abgelaufen, aber "Angemeldet bleiben": neue Sitzung ausstellen
+        user = await _user_from_remember_token(remember)
+        if user is not None:
+            set_session_cookie(response, request, create_access_token(user.user_id, user.guild_id, user.level))
+            set_remember_cookie(response, request, remember)
+    if user is None:
+        detail = "Session ungueltig" if session else "Nicht eingeloggt"
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=detail)
     return await _with_live_level(user)
 
 
