@@ -13,6 +13,8 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 
 from api.middleware.auth import CurrentUser, get_current_user, require_level
+from bot.cogs.music import stations as station_store
+from bot.cogs.music.stations import CATEGORIES_KEY, STATIONS_KEY
 from bot.cogs.music.sources import (
     MUSIC_DIR,
     SourceError,
@@ -49,6 +51,25 @@ async def _save_json(guild_id: int, key: str, value: dict) -> None:
     await set_config(guild_id, key, json.dumps(value), guild.name if guild else str(guild_id))
 
 
+async def _stations(guild_id: int) -> tuple[dict, dict]:
+    return await _json(guild_id, STATIONS_KEY), await _json(guild_id, CATEGORIES_KEY)
+
+
+async def _save_stations(guild_id: int, stations: dict, categories: dict) -> None:
+    await _save_json(guild_id, STATIONS_KEY, stations)
+    await _save_json(guild_id, CATEGORIES_KEY, station_store.prune_categories(stations, categories))
+
+
+def _station_rows(stations: dict, categories: dict, with_url: bool) -> list[dict]:
+    rows = []
+    for name in sorted(stations, key=str.casefold):
+        row = {"name": name, "category": station_store.category_of(categories, name)}
+        if with_url:
+            row["url"] = stations[name]
+        rows.append(row)
+    return rows
+
+
 # --- Wiedergabe ---------------------------------------------------------------------
 
 
@@ -72,10 +93,10 @@ def _can_control(user: CurrentUser, guild) -> bool:
 
 @router.get("/library")
 async def library(user: CurrentUser = Depends(get_current_user)) -> dict:
-    stations = await _json(user.guild_id, "music_stations")
+    stations, categories = await _stations(user.guild_id)
     podcasts = await _json(user.guild_id, "podcast_feeds")
     return {
-        "stations": sorted(stations),
+        "stations": _station_rows(stations, categories, with_url=False),
         "files": list_audio_files(),
         "folders": list_folders(),
         "podcasts": sorted(podcasts),
@@ -147,13 +168,13 @@ async def control(body: ControlIn, user: CurrentUser = Depends(get_current_user)
 
 @router.get("/config")
 async def config(user: CurrentUser = Depends(require_level(Level.ADMIN))) -> dict:
-    stations = await _json(user.guild_id, "music_stations")
+    stations, categories = await _stations(user.guild_id)
     podcasts = await _json(user.guild_id, "podcast_feeds")
     channels = []
     if runtime.bot is not None and (guild := runtime.bot.get_guild(user.guild_id)):
         channels = [{"id": str(c.id), "name": c.name} for c in guild.text_channels]
     return {
-        "stations": [{"name": n, "url": u} for n, u in sorted(stations.items())],
+        "stations": _station_rows(stations, categories, with_url=True),
         "podcasts": [
             {"name": n, "url": d["url"], "channel_id": str(d["channel_id"]) if d.get("channel_id") else None}
             for n, d in sorted(podcasts.items())
@@ -167,29 +188,30 @@ async def config(user: CurrentUser = Depends(require_level(Level.ADMIN))) -> dic
 class StationIn(BaseModel):
     name: str = Field(min_length=1, max_length=100)
     url: str = Field(pattern="^https?://")
+    category: str = Field(default="", max_length=100)
 
 
 @router.post("/stations")
 async def add_station(body: StationIn, user: CurrentUser = Depends(require_level(Level.ADMIN))) -> dict:
-    from bot.cogs.music.cog import station_conflict
-
-    stations = await _json(user.guild_id, "music_stations")
-    conflict = station_conflict(stations, body.name, body.url)
+    stations, categories = await _stations(user.guild_id)
+    conflict = station_store.station_conflict(stations, body.name, body.url)
     if conflict:
         raise HTTPException(409, conflict.replace("**", ""))
-    stations[body.name.strip()] = body.url.strip()
-    await _save_json(user.guild_id, "music_stations", stations)
+    name = body.name.strip()
+    stations[name] = body.url.strip()
+    station_store.set_category(stations, categories, [name], body.category)
+    await _save_stations(user.guild_id, stations, categories)
     return {"ok": True}
 
 
 class StationImport(BaseModel):
     url: str = Field(pattern="^https?://", max_length=500)
+    category: str = Field(default="", max_length=100)  # leer = Genre aus der Liste
 
 
 @router.post("/stations/import")
 async def import_station_list(body: StationImport, user: CurrentUser = Depends(require_level(Level.ADMIN))) -> dict:
     """Alle Sender einer .m3u/.pls-Liste eintragen (gleiche Adressen werden uebersprungen)."""
-    from bot.cogs.music.cog import import_stations
     from bot.cogs.music.sources import SourceError, fetch_playlist_entries
 
     try:
@@ -198,18 +220,39 @@ async def import_station_list(body: StationImport, user: CurrentUser = Depends(r
         raise HTTPException(400, str(error)) from None
     except Exception as error:
         raise HTTPException(502, f"Liste nicht abrufbar: {str(error).splitlines()[0][:200]}") from None
-    stations = await _json(user.guild_id, "music_stations")
-    added, known = import_stations(stations, entries)
-    await _save_json(user.guild_id, "music_stations", stations)
+    stations, categories = await _stations(user.guild_id)
+    added, known = station_store.import_stations(stations, entries, categories, body.category)
+    await _save_stations(user.guild_id, stations, categories)
     return {"ok": True, "message": f"{added} Sender eingetragen" + (f", {known} waren schon da" if known else "") + "."}
 
 
 @router.delete("/stations/{name}")
 async def remove_station(name: str, user: CurrentUser = Depends(require_level(Level.ADMIN))) -> dict:
-    stations = await _json(user.guild_id, "music_stations")
-    stations.pop(name, None)
-    await _save_json(user.guild_id, "music_stations", stations)
+    stations, categories = await _stations(user.guild_id)
+    station_store.remove_stations(stations, categories, [name])
+    await _save_stations(user.guild_id, stations, categories)
     return {"ok": True}
+
+
+class StationBulk(BaseModel):
+    names: list[str] = Field(min_length=1, max_length=5000)
+    action: str = Field(pattern="^(category|delete)$")
+    category: str = Field(default="", max_length=100)  # "" = Kategorie entfernen
+
+
+@router.post("/stations/bulk")
+async def bulk_stations(body: StationBulk, user: CurrentUser = Depends(require_level(Level.ADMIN))) -> dict:
+    """Mehrere Sender auf einmal: Kategorie setzen/entfernen oder loeschen."""
+    stations, categories = await _stations(user.guild_id)
+    if body.action == "delete":
+        count = station_store.remove_stations(stations, categories, body.names)
+        message = f"{count} Sender entfernt."
+    else:
+        count = station_store.set_category(stations, categories, body.names, body.category)
+        chosen = station_store.find_category(categories, body.category)
+        message = f"{count} Sender " + (f"in „{chosen}“ verschoben." if chosen else "ohne Kategorie.")
+    await _save_stations(user.guild_id, stations, categories)
+    return {"ok": True, "message": message}
 
 
 class PodcastIn(BaseModel):

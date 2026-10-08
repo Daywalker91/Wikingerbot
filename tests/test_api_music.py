@@ -111,9 +111,9 @@ async def test_admin_config_and_ids_as_text(db_session, monkeypatch):
         config = (await client.get("/music/config")).json()
         library = (await client.get("/music/library")).json()
 
-    assert config["stations"] == [{"name": "FIP", "url": "https://icecast.radiofrance.fr/fip-midfi.mp3"}]
+    assert config["stations"] == [{"name": "FIP", "category": "", "url": "https://icecast.radiofrance.fr/fip-midfi.mp3"}]
     assert config["text_channels"] == [{"id": "1523404561895784448", "name": "allgemein"}]  # als Text, nicht gerundet
-    assert library["stations"] == ["FIP"]
+    assert library["stations"] == [{"name": "FIP", "category": ""}]
 
 
 async def test_announce_stores_exact_channel_id(db_session, monkeypatch):
@@ -129,3 +129,26 @@ async def test_announce_stores_exact_channel_id(db_session, monkeypatch):
 
     assert response.status_code == 200
     assert config["podcasts"][0]["channel_id"] == "1523404561895784448"
+
+
+async def test_station_categories_and_bulk(db_session, monkeypatch):
+    db_session.add(Guild(id=1, name="Wikinger"))
+    await db_session.commit()
+    bot, _ = fake_bot(FakeCog(), in_voice=True)
+    monkeypatch.setattr(runtime, "bot", bot)
+
+    async with await _client(Level.ADMIN) as client:
+        await client.post("/music/stations", json={"name": "Rock Antenne", "url": "https://rock.example/a", "category": "Rock"})
+        await client.post("/music/stations", json={"name": "Bob", "url": "https://bob.example/b", "category": "rock"})  # Schreibweise uebernommen
+        await client.post("/music/stations", json={"name": "Jazz FM", "url": "https://jazz.example/j"})
+        config = (await client.get("/music/config")).json()
+        assert {s["name"]: s["category"] for s in config["stations"]} == {"Bob": "Rock", "Jazz FM": "", "Rock Antenne": "Rock"}
+
+        moved = (await client.post("/music/stations/bulk", json={"names": ["Jazz FM", "Bob"], "action": "category", "category": "Mix"})).json()
+        assert moved["message"] == "2 Sender in „Mix“ verschoben."
+        deleted = (await client.post("/music/stations/bulk", json={"names": ["Bob"], "action": "delete"})).json()
+        assert deleted["message"] == "1 Sender entfernt."
+        library = (await client.get("/music/library")).json()
+
+    assert library["stations"] == [{"name": "Jazz FM", "category": "Mix"}, {"name": "Rock Antenne", "category": "Rock"}]
+    assert await music_api._json(1, "music_station_categories") == {"Rock Antenne": "Rock", "Jazz FM": "Mix"}  # Bob weg

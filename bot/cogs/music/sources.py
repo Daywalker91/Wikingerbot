@@ -15,6 +15,7 @@ import time
 from dataclasses import dataclass
 from email.utils import parsedate_to_datetime
 from pathlib import Path
+from typing import NamedTuple
 from urllib.parse import urlparse
 
 import httpx
@@ -155,21 +156,47 @@ async def resolve_stream_url(url: str) -> str:
 # --- Ganze Playlisten (Sender-Sammlung importieren / als Warteschlange) -----------
 
 MAX_LIST_BYTES = 1024 * 1024
-MAX_LIST_ENTRIES = 200
+MAX_LIST_ENTRIES = 1000
 
 
-def parse_playlist_entries(text: str) -> list[tuple[str, str]]:
-    """Alle (Titel, Adresse) einer .m3u/.m3u8- oder .pls-Liste - Titel aus #EXTINF bzw.
-    TitleN=, sonst der Dateiname. Nur http(s)-Adressen, ohne Doppelte, hoechstens MAX_LIST_ENTRIES."""
+class ListEntry(NamedTuple):
+    title: str
+    url: str
+    group: str = ""  # Genre/Gruppe aus der Liste (group-title bzw. #EXTGRP), sonst ""
+
+
+def _extinf(line: str) -> tuple[str | None, str]:
+    """#EXTINF:-1 tvg-logo="x" group-title="Rock",Radio Bob -> ("Radio Bob", "Rock").
+    Der Titel steht hinter dem ersten Komma ausserhalb von Anfuehrungszeichen."""
+    body = line.split(":", 1)[1] if ":" in line else ""
+    in_quotes, split_at = False, -1
+    for index, char in enumerate(body):
+        if char == '"':
+            in_quotes = not in_quotes
+        elif char == "," and not in_quotes:
+            split_at = index
+            break
+    attributes, title = (body[:split_at], body[split_at + 1 :].strip()) if split_at >= 0 else (body, None)
+    group = re.search(r'(?i)group-title="([^"]*)"', attributes)
+    return title, group[1].strip() if group else ""
+
+
+def parse_playlist_entries(text: str) -> list[ListEntry]:
+    """Alle (Titel, Adresse, Gruppe) einer .m3u/.m3u8- oder .pls-Liste - Titel aus #EXTINF
+    bzw. TitleN=, sonst der Dateiname. Nur http(s)-Adressen, ohne Doppelte, hoechstens MAX_LIST_ENTRIES."""
     entries, seen = [], set()
-    pending_title = None
+    pending_title, pending_group = None, ""
     pls_titles, pls_files = {}, {}
     for raw in text.splitlines():
         line = raw.strip()
         if not line:
             continue
         if line.upper().startswith("#EXTINF"):
-            pending_title = line.split(",", 1)[1].strip() if "," in line else None
+            pending_title, group = _extinf(line)
+            pending_group = group or pending_group
+            continue
+        if line.upper().startswith("#EXTGRP:"):
+            pending_group = line.split(":", 1)[1].strip()
             continue
         match = re.match(r"(?i)^(file|title)(\d+)=(.*)$", line)
         if match:
@@ -179,13 +206,13 @@ def parse_playlist_entries(text: str) -> list[tuple[str, str]]:
             continue
         if line.startswith(("http://", "https://")) and line not in seen:
             seen.add(line)
-            entries.append((_clean_title(pending_title) or _title_from_url(line), line))
-        pending_title = None
+            entries.append(ListEntry(_clean_title(pending_title) or _title_from_url(line), line, pending_group))
+        pending_title, pending_group = None, ""
     for key in sorted(pls_files, key=lambda k: int(k)):
         url = pls_files[key]
         if url.startswith(("http://", "https://")) and url not in seen:
             seen.add(url)
-            entries.append((_clean_title(pls_titles.get(key)) or _title_from_url(url), url))
+            entries.append(ListEntry(_clean_title(pls_titles.get(key)) or _title_from_url(url), url))
     return entries[:MAX_LIST_ENTRIES]
 
 
@@ -206,7 +233,7 @@ def _title_from_url(url: str) -> str:
     return (name.rsplit(".", 1)[0].replace("_", " ").replace("%20", " ") or urlparse(url).hostname or url)[:100]
 
 
-async def fetch_playlist_entries(url: str) -> list[tuple[str, str]]:
+async def fetch_playlist_entries(url: str) -> list[ListEntry]:
     """Playlist abrufen (nie ins interne Netz) und alle Eintraege liefern.
     Die Adressen der Eintraege prueft, wer sie abspielt (check_public_url)."""
     url = github_raw_url(url)  # normale GitHub-Seite geht auch

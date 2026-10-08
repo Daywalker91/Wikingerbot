@@ -16,8 +16,13 @@ export interface MusicState {
   can_control: boolean;
 }
 
+export interface StationItem {
+  name: string;
+  category: string; // "" = ohne Kategorie
+}
+
 export interface Library {
-  stations: string[];
+  stations: StationItem[];
   files: string[];
   folders: string[];
   podcasts: string[];
@@ -30,7 +35,7 @@ export interface EpisodeItem {
 }
 
 export interface MusicConfig {
-  stations: { name: string; url: string }[];
+  stations: (StationItem & { url: string })[];
   podcasts: { name: string; url: string; channel_id: string | null }[];
   text_channels: { id: string; name: string }[];
   music_dir: string;

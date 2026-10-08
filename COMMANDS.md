@@ -287,19 +287,20 @@ erlaubt sind mp3, ogg, opus, flac, wav, m4a, aac.
 
 | Command | Beschreibung | Level |
 |---|---|---|
-| `/musik radio sender:` | Spielt einen eingetragenen Radiosender | Member |
+| `/musik radio sender: kategorie:` | Spielt einen Radiosender. Tippen bei *sender* sucht in Name und Kategorie; mit *kategorie* zeigt die Auswahl nur deren Sender – ohne *sender* spielt ein zufälliger daraus | Member |
 | `/musik datei datei:` | Spielt eine eigene Datei | Member |
 | `/musik ordner ordner: zufall:` | Reiht alle Dateien eines Ordners ein | Member |
 | `/musik podcast feed: folge:` | Spielt eine Podcast-Folge, ohne Auswahl die neueste | Member |
 | `/musik url url:` | Stream, .m3u/.pls oder Audiodatei von einer Adresse (keine internen Adressen) | Mod |
-| `/musik playlist url: zufall:` | Alle Titel einer .m3u/.pls-Playlist einreihen (bis 200, z.B. von GitHub – Raw-Adresse) | Mod |
+| `/musik playlist url: zufall:` | Alle Titel einer .m3u/.pls-Playlist einreihen (bis 1000, z.B. von GitHub – Raw-Adresse) | Mod |
 | `/musik pause` · `weiter` · `skip` · `stopp` | Wiedergabe steuern; `stopp` leert die Warteschlange und verlässt den Kanal | im Kanal / Mod |
 | `/musik lautstaerke wert:` | 0–100, Standard 50 | im Kanal / Mod |
 | `/musik mischen` | Mischt die Warteschlange | im Kanal / Mod |
 | `/musik warteschlange` | Was läuft und was kommt | Member |
-| `/musikconfig sender_hinzufuegen name: url:` | Radiosender eintragen (Stream oder .m3u/.pls); gleiche Adresse oder gleicher Name wird abgelehnt | Admin |
-| `/musikconfig sender_import url:` | Alle Sender einer .m3u/.pls-Liste eintragen (Namen aus der Liste, bis 200; vorhandene Adressen werden übersprungen). Auch im Tab *Musik* | Admin |
-| `/musikconfig sender_entfernen name:` · `sender_liste` | Sender entfernen / anzeigen | Admin / Member |
+| `/musikconfig sender_hinzufuegen name: url: kategorie:` | Radiosender eintragen (Stream oder .m3u/.pls), optional mit Kategorie; gleiche Adresse oder gleicher Name wird abgelehnt | Admin |
+| `/musikconfig sender_import url: kategorie:` | Alle Sender einer .m3u/.pls-Liste eintragen (Namen aus der Liste, bis 1000; vorhandene Adressen werden übersprungen). Kategorie: die angegebene, sonst das Genre aus der Liste (`group-title`). Auch im Tab *Musik* | Admin |
+| `/musikconfig sender_kategorie sender: kategorie:` | Kategorie eines Senders setzen (leer = entfernen). Viele auf einmal: Tab *Musik* (auswählen → Kategorie setzen / entfernen) | Admin |
+| `/musikconfig sender_entfernen name:` · `sender_liste kategorie: suche:` | Sender entfernen / nach Kategorien anzeigen, mit Blättern | Admin / Member |
 | `/musikconfig podcast_abonnieren name: url:` | Podcast per RSS-Feed eintragen | Admin |
 | `/musikconfig podcast_entfernen name:` | Podcast entfernen | Admin |
 | `/musikconfig podcast_ankuendigen name: kanal:` | Neue Folgen im Kanal ankündigen (Prüfung alle 30 min); ohne Kanal aus | Admin |

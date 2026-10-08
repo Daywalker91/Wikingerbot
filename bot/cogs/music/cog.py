@@ -8,12 +8,14 @@ mitgelieferte - so laeuft es in AMP ohne Systempakete.
 import asyncio
 import json
 import logging
+import random
 import shutil
 
 import discord
 from discord import app_commands
 from discord.ext import commands, tasks
 
+from bot.cogs.music import stations as station_store
 from bot.cogs.music.player import GuildPlayer, Track
 from bot.cogs.music.sources import (
     MUSIC_DIR,
@@ -30,6 +32,14 @@ from bot.cogs.music.sources import (
     resolve_stream_url,
     safe_music_path,
     title_from_path,
+)
+from bot.cogs.music.stations import (  # noqa: F401  (import_stations/station_conflict: auch fuer api.py und Tests)
+    CATEGORIES_KEY,
+    NO_CATEGORY,
+    STATIONS_KEY,
+    import_stations,
+    normalize_url,
+    station_conflict,
 )
 from bot.core.base_cog import BaseCog
 from bot.core.guild_config import get_config, set_config
@@ -98,41 +108,49 @@ async def _set_json(guild: discord.Guild, key: str, value: dict) -> None:
     await set_config(guild.id, key, json.dumps(value), guild.name)
 
 
-def normalize_url(url: str) -> str:
-    """Zum Vergleich: ohne Leerzeichen, Schema/Host klein, ohne abschliessenden Schraegstrich."""
-    from urllib.parse import urlsplit, urlunsplit
-
-    parts = urlsplit(url.strip())
-    return urlunsplit((parts.scheme.lower(), parts.netloc.lower(), parts.path.rstrip("/"), parts.query, ""))
+async def _load_stations(guild_id: int) -> tuple[dict, dict]:
+    """(Name -> Adresse, Name -> Kategorie)."""
+    return await _get_json(guild_id, STATIONS_KEY), await _get_json(guild_id, CATEGORIES_KEY)
 
 
-def station_conflict(stations: dict, name: str, url: str) -> str | None:
-    """Warum dieser Sender nicht neu eingetragen wird - oder None. Schutz vor Doppelten."""
-    wanted = normalize_url(url)
-    for existing, existing_url in stations.items():
-        if normalize_url(existing_url) == wanted:
-            return f"Diese Adresse ist schon als **{existing}** eingetragen."
-    if name.strip().casefold() in {n.casefold() for n in stations}:
-        return f"Einen Sender **{name.strip()}** gibt es schon – anderen Namen wählen oder den alten erst entfernen."
-    return None
+async def _save_stations(guild: discord.Guild, stations: dict, categories: dict) -> None:
+    await _set_json(guild, STATIONS_KEY, stations)
+    await _set_json(guild, CATEGORIES_KEY, station_store.prune_categories(stations, categories))
 
 
-def import_stations(stations: dict, entries: list[tuple[str, str]]) -> tuple[int, int]:
-    """Eintraege einer Sender-Liste in `stations` (Name -> Adresse) uebernehmen.
-    Gleiche Adresse = schon da; gleicher Name mit anderer Adresse bekommt " (2)" usw."""
-    urls = {normalize_url(u) for u in stations.values()}
-    added = known = 0
-    for title, url in entries:
-        if normalize_url(url) in urls:
-            known += 1
-            continue
-        name, n = title[:100] or "Sender", 2
-        while name in stations:
-            name, n = f"{title[:94]} ({n})", n + 1
-        stations[name] = url
-        urls.add(normalize_url(url))
-        added += 1
-    return added, known
+class StationListView(discord.ui.View):
+    """Blaettern in /musikconfig sender_liste (nur fuer den, der es aufgerufen hat)."""
+
+    def __init__(self, user_id: int, title: str, pages: list[str]) -> None:
+        super().__init__(timeout=600)
+        self.user_id, self.title, self.pages, self.page = user_id, title, pages, 0
+        self._update()
+
+    def embed(self) -> discord.Embed:
+        embed = discord.Embed(title=self.title, description=self.pages[self.page], color=0xC9A35C)
+        if len(self.pages) > 1:
+            embed.set_footer(text=f"Seite {self.page + 1}/{len(self.pages)}")
+        return embed
+
+    def _update(self) -> None:
+        self.previous.disabled = self.page == 0
+        self.next.disabled = self.page >= len(self.pages) - 1
+
+    async def interaction_check(self, interaction: discord.Interaction) -> bool:
+        return interaction.user.id == self.user_id
+
+    async def _turn(self, interaction: discord.Interaction, step: int) -> None:
+        self.page = max(0, min(len(self.pages) - 1, self.page + step))
+        self._update()
+        await interaction.response.edit_message(embed=self.embed(), view=self)
+
+    @discord.ui.button(label="◀ Zurück", style=discord.ButtonStyle.secondary)
+    async def previous(self, interaction: discord.Interaction, button: discord.ui.Button) -> None:
+        await self._turn(interaction, -1)
+
+    @discord.ui.button(label="Weiter ▶", style=discord.ButtonStyle.secondary)
+    async def next(self, interaction: discord.Interaction, button: discord.ui.Button) -> None:
+        await self._turn(interaction, 1)
 
 
 def _choices(values: list[str], current: str) -> list[app_commands.Choice[str]]:
@@ -284,7 +302,7 @@ class MusicCog(BaseCog):
     ) -> list[Track]:
         """Quelle -> Titel, wie bei den Slash-Commands. SourceError mit Meldung fuer den Nutzer."""
         if kind == "radio":
-            stations = await _get_json(guild_id, "music_stations")
+            stations = await _get_json(guild_id, STATIONS_KEY)
             if name not in stations:
                 raise SourceError("Diesen Sender gibt es nicht.")
             return [Track(f"Radio: {name}", await resolve_stream_url(stations[name]), "stream", user_id, "Radio")]
@@ -445,7 +463,41 @@ class MusicCog(BaseCog):
     # --- Autocomplete ---------------------------------------------------------------
 
     async def _ac_station(self, interaction: discord.Interaction, current: str):
-        return _choices(sorted(await _get_json(interaction.guild_id, "music_stations")), current)
+        """Sender fuer /musik radio: Tippen sucht in Name und Kategorie; eine gewaehlte
+        Kategorie (Feld kategorie) grenzt ein."""
+        stations, categories = await _load_stations(interaction.guild_id)
+        wanted = getattr(interaction.namespace, "kategorie", None) or None
+        return self._station_choices(stations, categories, current, wanted)
+
+    async def _ac_station_any(self, interaction: discord.Interaction, current: str):
+        """Sender fuer /musikconfig (das Feld kategorie meint dort die neue Kategorie)."""
+        stations, categories = await _load_stations(interaction.guild_id)
+        return self._station_choices(stations, categories, current, None)
+
+    @staticmethod
+    def _station_choices(stations: dict, categories: dict, current: str, category: str | None):
+        names = station_store.search_stations(stations, categories, current, category)
+        return [
+            app_commands.Choice(name=station_store.label(n, station_store.category_of(categories, n)), value=n[:100])
+            for n in names[:25]
+        ]
+
+    async def _ac_category(self, interaction: discord.Interaction, current: str):
+        """Vorhandene Kategorien (+ "Ohne Kategorie", falls es solche Sender gibt)."""
+        stations, categories = await _load_stations(interaction.guild_id)
+        values = station_store.used_categories(stations, categories)
+        if any(not station_store.category_of(categories, n) for n in stations):
+            values.append(NO_CATEGORY)
+        return _choices(values, current)
+
+    async def _ac_category_new(self, interaction: discord.Interaction, current: str):
+        """Vorhandene Kategorien als Vorschlag - eine neue darf man frei eintippen."""
+        stations, categories = await _load_stations(interaction.guild_id)
+        values = station_store.used_categories(stations, categories)
+        typed = station_store.clean_category(current)
+        if typed and typed.casefold() not in {v.casefold() for v in values}:
+            values.insert(0, typed)
+        return _choices(values, current)
 
     async def _ac_file(self, interaction: discord.Interaction, current: str):
         return _choices(list_audio_files(), current)
@@ -475,10 +527,25 @@ class MusicCog(BaseCog):
 
     # --- /musik ---------------------------------------------------------------------
 
-    @music_group.command(name="radio", description="Spielt einen eingetragenen Radiosender")
-    @app_commands.autocomplete(sender=_ac_station)
-    async def play_radio(self, interaction: discord.Interaction, sender: str) -> None:
-        stations = await _get_json(interaction.guild_id, "music_stations")
+    @music_group.command(name="radio", description="Spielt einen Radiosender – Auswahl per Suche oder Kategorie")
+    @app_commands.describe(
+        sender="Sender (Tippen sucht in Name und Kategorie)",
+        kategorie="Nur Sender dieser Kategorie – ohne Sender: ein zufälliger daraus",
+    )
+    @app_commands.autocomplete(sender=_ac_station, kategorie=_ac_category)
+    async def play_radio(self, interaction: discord.Interaction, sender: str | None = None, kategorie: str | None = None) -> None:
+        stations, categories = await _load_stations(interaction.guild_id)
+        if not sender:
+            if not kategorie:
+                await interaction.response.send_message(
+                    "Wähle einen Sender oder eine Kategorie (dann spiele ich einen zufälligen daraus).", ephemeral=True, delete_after=20
+                )
+                return
+            names = station_store.search_stations(stations, categories, "", kategorie)
+            if not names:
+                await interaction.response.send_message("In dieser Kategorie gibt es keine Sender.", ephemeral=True, delete_after=20)
+                return
+            sender = random.choice(names)
         if sender not in stations:
             await interaction.response.send_message(
                 "Diesen Sender gibt es nicht – Liste mit `/musikconfig sender_liste`.", ephemeral=True, delete_after=20
@@ -561,7 +628,7 @@ class MusicCog(BaseCog):
         await interaction.response.defer(thinking=True)
         try:
             entries = await fetch_playlist_entries(url)
-            await check_public_urls([u for _, u in entries])
+            await check_public_urls([entry.url for entry in entries])
         except SourceError as error:
             await interaction.followup.send(str(error), ephemeral=True)
             return
@@ -572,7 +639,7 @@ class MusicCog(BaseCog):
             import random
 
             random.shuffle(entries)
-        tracks = [Track(title, address, "stream", interaction.user.id, "Playlist") for title, address in entries]
+        tracks = [Track(entry.title, entry.url, "stream", interaction.user.id, "Playlist") for entry in entries]
         await self._enqueue(interaction, channel, tracks)
 
     @music_group.command(name="podcast", description="Spielt eine Podcast-Folge (ohne Auswahl: die neueste)")
@@ -669,25 +736,33 @@ class MusicCog(BaseCog):
     # --- /musikconfig ---------------------------------------------------------------
 
     @config_group.command(name="sender_hinzufuegen", description="Traegt einen Radiosender ein")
-    @app_commands.describe(name="Anzeigename", url="Stream-Adresse oder .m3u/.pls-Liste des Senders")
+    @app_commands.describe(name="Anzeigename", url="Stream-Adresse oder .m3u/.pls-Liste des Senders", kategorie="Optional, z.B. Rock")
+    @app_commands.autocomplete(kategorie=_ac_category_new)
     @require_role(Level.ADMIN)
-    async def station_add(self, interaction: discord.Interaction, name: str, url: str) -> None:
+    async def station_add(self, interaction: discord.Interaction, name: str, url: str, kategorie: str | None = None) -> None:
         if not url.startswith(("http://", "https://")):
             await interaction.response.send_message("Die Adresse muss mit http:// oder https:// beginnen.", ephemeral=True)
             return
-        stations = await _get_json(interaction.guild_id, "music_stations")
+        stations, categories = await _load_stations(interaction.guild_id)
         conflict = station_conflict(stations, name, url)
         if conflict:
             await interaction.response.send_message(conflict, ephemeral=True, delete_after=30)
             return
-        stations[name.strip()[:100]] = url.strip()
-        await _set_json(interaction.guild, "music_stations", stations)
-        await interaction.response.send_message(f"Sender **{name}** eingetragen.", ephemeral=True, delete_after=20)
+        name = name.strip()[:100]
+        stations[name] = url.strip()
+        station_store.set_category(stations, categories, [name], kategorie or "")
+        await _save_stations(interaction.guild, stations, categories)
+        where = f" in **{categories[name]}**" if categories.get(name) else ""
+        await interaction.response.send_message(f"Sender **{name}**{where} eingetragen.", ephemeral=True, delete_after=20)
 
     @config_group.command(name="sender_import", description="Traegt alle Sender einer .m3u/.pls-Liste ein (z.B. von GitHub, Raw-Adresse)")
-    @app_commands.describe(url="http(s)-Adresse der Sender-Liste")
+    @app_commands.describe(
+        url="http(s)-Adresse der Sender-Liste",
+        kategorie="Kategorie fuer alle neuen Sender – leer: Genre aus der Liste (group-title), falls vorhanden",
+    )
+    @app_commands.autocomplete(kategorie=_ac_category_new)
     @require_role(Level.ADMIN)
-    async def station_import(self, interaction: discord.Interaction, url: str) -> None:
+    async def station_import(self, interaction: discord.Interaction, url: str, kategorie: str | None = None) -> None:
         await interaction.response.defer(ephemeral=True, thinking=True)
         try:
             entries = await fetch_playlist_entries(url)
@@ -697,29 +772,50 @@ class MusicCog(BaseCog):
         except Exception as error:
             await interaction.followup.send(f"Liste nicht abrufbar: {error}", ephemeral=True)
             return
-        stations = await _get_json(interaction.guild_id, "music_stations")
-        added, known = import_stations(stations, entries)
-        await _set_json(interaction.guild, "music_stations", stations)
+        stations, categories = await _load_stations(interaction.guild_id)
+        added, known = import_stations(stations, entries, categories, kategorie or "")
+        await _save_stations(interaction.guild, stations, categories)
         await interaction.followup.send(
             f"{added} Sender eingetragen" + (f", {known} waren schon da" if known else "") + ". Abspielen mit `/musik radio sender:`.",
             ephemeral=True,
         )
 
     @config_group.command(name="sender_entfernen", description="Entfernt einen Radiosender")
-    @app_commands.autocomplete(name=_ac_station)
+    @app_commands.autocomplete(name=_ac_station_any)
     @require_role(Level.ADMIN)
     async def station_remove(self, interaction: discord.Interaction, name: str) -> None:
-        stations = await _get_json(interaction.guild_id, "music_stations")
-        removed = stations.pop(name, None)
-        await _set_json(interaction.guild, "music_stations", stations)
+        stations, categories = await _load_stations(interaction.guild_id)
+        removed = station_store.remove_stations(stations, categories, [name])
+        await _save_stations(interaction.guild, stations, categories)
         text = f"Sender **{name}** entfernt." if removed else "Diesen Sender gibt es nicht."
         await interaction.response.send_message(text, ephemeral=True, delete_after=20)
 
-    @config_group.command(name="sender_liste", description="Zeigt die eingetragenen Radiosender")
-    async def station_list(self, interaction: discord.Interaction) -> None:
-        stations = await _get_json(interaction.guild_id, "music_stations")
-        text = "\n".join(f"- **{n}**" for n in sorted(stations)) or "Noch keine Sender eingetragen."
-        await interaction.response.send_message(text[:2000], ephemeral=True)
+    @config_group.command(name="sender_kategorie", description="Setzt oder entfernt die Kategorie eines Senders")
+    @app_commands.describe(sender="Der Sender", kategorie="Neue Kategorie (vorhandene oder neue) – leer lassen zum Entfernen")
+    @app_commands.autocomplete(sender=_ac_station_any, kategorie=_ac_category_new)
+    @require_role(Level.ADMIN)
+    async def station_category(self, interaction: discord.Interaction, sender: str, kategorie: str | None = None) -> None:
+        stations, categories = await _load_stations(interaction.guild_id)
+        if not station_store.set_category(stations, categories, [sender], kategorie or ""):
+            await interaction.response.send_message("Diesen Sender gibt es nicht.", ephemeral=True, delete_after=20)
+            return
+        await _save_stations(interaction.guild, stations, categories)
+        text = f"**{sender}** ist jetzt in **{categories[sender]}**." if categories.get(sender) else f"**{sender}** hat keine Kategorie mehr."
+        await interaction.response.send_message(text, ephemeral=True, delete_after=20)
+
+    @config_group.command(name="sender_liste", description="Zeigt die Radiosender nach Kategorien, zum Blaettern")
+    @app_commands.describe(kategorie="Nur diese Kategorie", suche="Nur Sender, deren Name oder Kategorie das enthaelt")
+    @app_commands.autocomplete(kategorie=_ac_category)
+    async def station_list(self, interaction: discord.Interaction, kategorie: str | None = None, suche: str | None = None) -> None:
+        stations, categories = await _load_stations(interaction.guild_id)
+        names = station_store.search_stations(stations, categories, suche or "", kategorie)
+        if not names:
+            text = "Keine passenden Sender." if stations else "Noch keine Sender eingetragen."
+            await interaction.response.send_message(text, ephemeral=True)
+            return
+        pages = station_store.list_pages(names, categories)
+        view = StationListView(interaction.user.id, f"Radiosender ({len(names)})", pages)
+        await interaction.response.send_message(embed=view.embed(), view=view if len(pages) > 1 else discord.utils.MISSING, ephemeral=True)
 
     @config_group.command(name="podcast_abonnieren", description="Traegt einen Podcast (RSS-Feed) ein")
     @app_commands.describe(name="Kurzname fuer die Auswahl", url="Adresse des RSS-Feeds")

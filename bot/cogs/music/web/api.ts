@@ -19,10 +19,12 @@ export const control = (action: ControlAction, value?: number) =>
   apiFetch<{ ok: boolean }>("/music/control", { method: "POST", ...json({ action, value }) });
 
 export const getConfig = () => apiFetch<MusicConfig>("/music/config");
-export const addStation = (name: string, url: string) =>
-  apiFetch("/music/stations", { method: "POST", ...json({ name, url }) });
-export const importStations = (url: string) =>
-  apiFetch<{ message: string }>("/music/stations/import", { method: "POST", ...json({ url }) });
+export const addStation = (name: string, url: string, category = "") =>
+  apiFetch("/music/stations", { method: "POST", ...json({ name, url, category }) });
+export const importStations = (url: string, category = "") =>
+  apiFetch<{ message: string }>("/music/stations/import", { method: "POST", ...json({ url, category }) });
+export const bulkStations = (names: string[], action: "category" | "delete", category = "") =>
+  apiFetch<{ message: string }>("/music/stations/bulk", { method: "POST", ...json({ names, action, category }) });
 export const removeStation = (name: string) =>
   apiFetch(`/music/stations/${encodeURIComponent(name)}`, { method: "DELETE" });
 export const addPodcast = (name: string, url: string) =>

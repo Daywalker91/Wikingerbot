@@ -4,8 +4,6 @@ import { useAuth } from "@/auth/useAuth";
 
 import {
   addPodcast,
-  addStation,
-  importStations,
   control,
   getConfig,
   getEpisodes,
@@ -13,9 +11,9 @@ import {
   getState,
   play,
   removePodcast,
-  removeStation,
   setAnnounce,
 } from "./api";
+import { RadioList, StationAdmin } from "./Stations";
 import type { ControlAction, EpisodeItem, Library, MusicConfig, MusicState, PlayKind } from "./types";
 
 export const route = { path: "/music", navLabel: "Musik" };
@@ -101,15 +99,7 @@ export default function MusicPage() {
       )}
 
       <Card title="Radio">
-        {library?.stations.length === 0 && <p style={muted}>Noch keine Sender eingetragen.</p>}
-        {library?.stations.map((name) => (
-          <div key={name} style={row}>
-            <button disabled={busy} onClick={() => void doPlay("radio", name)}>
-              ▶
-            </button>
-            {name}
-          </div>
-        ))}
+        {library && <RadioList stations={library.stations} busy={busy} onPlay={(name) => void doPlay("radio", name)} />}
       </Card>
 
       <Podcasts names={library?.podcasts ?? []} busy={busy} onPlay={(name, episode) => void doPlay("podcast", name, episode)} />
@@ -306,8 +296,6 @@ function Files({
 
 function AdminSettings({ onChange }: { onChange: () => void }) {
   const [config, setConfig] = useState<MusicConfig | null>(null);
-  const [station, setStation] = useState({ name: "", url: "" });
-  const [importUrl, setImportUrl] = useState("");
   const [podcast, setPodcast] = useState({ name: "", url: "" });
   const [note, setNote] = useState<string | null>(null);
 
@@ -336,49 +324,7 @@ function AdminSettings({ onChange }: { onChange: () => void }) {
       {note && <p style={muted}>{note}</p>}
 
       <h3>Radiosender</h3>
-      {config.stations.map((s) => (
-        <div key={s.name} style={row}>
-          <strong>{s.name}</strong>
-          <span style={{ ...muted, overflow: "hidden", textOverflow: "ellipsis" }}>{s.url}</span>
-          <button onClick={() => void act(() => removeStation(s.name), `${s.name} entfernt.`)}>Entfernen</button>
-        </div>
-      ))}
-      <div style={{ ...row, flexWrap: "wrap" }}>
-        <input placeholder="Name" value={station.name} onChange={(e) => setStation({ ...station, name: e.target.value })} />
-        <input
-          placeholder="Stream-Adresse oder .m3u/.pls"
-          style={{ flex: 1, minWidth: 240 }}
-          value={station.url}
-          onChange={(e) => setStation({ ...station, url: e.target.value })}
-        />
-        <button
-          disabled={!station.name || !station.url}
-          onClick={() =>
-            void act(() => addStation(station.name, station.url), `${station.name} eingetragen.`).then(
-              (ok) => ok && setStation({ name: "", url: "" }),
-            )
-          }
-        >
-          Hinzufügen
-        </button>
-      </div>
-      <div style={{ ...row, flexWrap: "wrap" }}>
-        <input
-          placeholder="Sender-Liste importieren: Adresse einer .m3u/.pls (GitHub: Raw-Adresse)"
-          style={{ flex: 1, minWidth: 320 }}
-          value={importUrl}
-          onChange={(e) => setImportUrl(e.target.value)}
-        />
-        <button
-          disabled={!importUrl.startsWith("http")}
-          onClick={() =>
-            void act(() => importStations(importUrl), (r) => (r as { message: string }).message).then((ok) => ok && setImportUrl(""))
-          }
-        >
-          Importieren
-        </button>
-      </div>
-      <p style={muted}>Doppelte Sender (gleiche Adresse oder gleicher Name) werden nicht angelegt.</p>
+      <StationAdmin stations={config.stations} act={act} />
 
       <h3>Podcasts</h3>
       {config.podcasts.map((p) => (
