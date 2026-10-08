@@ -57,6 +57,7 @@ async def check_public_url(url: str) -> None:
 
 
 MAX_REDIRECTS = 5
+HLS_MAX_SEGMENT_BYTES = 30 * 1024 * 1024
 STREAM_TIMEOUT = (10, 60)  # Verbinden, dann hoechstens 60 s ohne Daten
 
 
@@ -73,22 +74,17 @@ def check_public_url_sync(url: str) -> None:
         raise SourceError("Adressen im internen Netz sind nicht erlaubt.")
 
 
-def needs_ffmpeg_network(url: str) -> bool:
-    """HLS (.m3u8) holt FFmpeg selbst (viele Teilstuecke) - alles andere laedt Python."""
-    return urlparse(url).path.lower().endswith(".m3u8")
-
-
-def open_stream(url: str):
-    """Stream in Python oeffnen (blockierend, im Thread aufrufen) und den Response liefern;
-    FFmpeg bekommt dann nur noch die Daten ueber eine Pipe. So muss FFmpeg weder Namen
-    aufloesen noch TLS sprechen - statische FFmpeg-Builds stuerzen daran in manchen
-    Containern ab - und jede Weiterleitung wird gegen interne Adressen geprueft."""
-    import requests
-
-    session = requests.Session()
+def _get_checked(session, url: str, *, stream: bool, checked: set | None = None):
+    """GET ohne automatische Weiterleitungen: jedes Ziel wird gegen interne Adressen
+    geprueft (checked: schon gepruefte Hosts, spart DNS-Abfragen). -> (Response, Adresse)"""
     for _ in range(MAX_REDIRECTS + 1):
-        check_public_url_sync(url)
-        response = session.get(url, stream=True, allow_redirects=False, timeout=STREAM_TIMEOUT, headers={"User-Agent": USER_AGENT})
+        parsed = urlparse(url)
+        key = (parsed.scheme, parsed.hostname, parsed.port)
+        if checked is None or key not in checked:
+            check_public_url_sync(url)
+            if checked is not None:
+                checked.add(key)
+        response = session.get(url, stream=stream, allow_redirects=False, timeout=STREAM_TIMEOUT, headers={"User-Agent": USER_AGENT})
         if response.is_redirect and response.headers.get("location"):
             url = str(httpx.URL(url).join(response.headers["location"]))
             response.close()
@@ -96,8 +92,49 @@ def open_stream(url: str):
         if response.status_code != 200:
             response.close()
             raise SourceError(f"Stream nicht abrufbar (HTTP {response.status_code}).")
-        return response
+        return response, url
     raise SourceError("Zu viele Weiterleitungen.")
+
+
+def open_stream(url: str):
+    """Stream in Python oeffnen (blockierend, im Thread aufrufen). Liefert ein Objekt mit
+    .raw (Daten fuer FFmpeg) und .close(): den Response, bei HLS einen HlsReader.
+    FFmpeg bekommt dann nur noch die Daten ueber eine Pipe. So muss FFmpeg weder Namen
+    aufloesen noch TLS sprechen - statische FFmpeg-Builds stuerzen daran in manchen
+    Containern ab - und jede Weiterleitung wird gegen interne Adressen geprueft."""
+    import requests
+
+    from bot.cogs.music.hls import HlsError, HlsReader, looks_like_hls
+
+    session = requests.Session()
+    response, final_url = _get_checked(session, url, stream=True)
+    if not looks_like_hls(final_url, response.headers.get("content-type", "")):
+        return response
+    response.close()
+    checked: set = set()
+
+    def get_text(address: str) -> tuple[str, str]:
+        reply, address = _get_checked(session, address, stream=True, checked=checked)
+        with reply:
+            body = reply.raw.read(MAX_LIST_BYTES + 1, decode_content=True)
+        if len(body) > MAX_LIST_BYTES:
+            raise HlsError("Die HLS-Playlist ist zu groß.")
+        return address, body.decode("utf-8", errors="replace")
+
+    def iter_bytes(address: str):
+        reply, _ = _get_checked(session, address, stream=True, checked=checked)
+        total = 0
+        with reply:
+            for chunk in reply.iter_content(64 * 1024):
+                total += len(chunk)
+                if total > HLS_MAX_SEGMENT_BYTES:
+                    raise HlsError("Ein HLS-Teilstück ist zu groß.")
+                yield chunk
+
+    try:
+        return HlsReader(final_url, get_text, iter_bytes)
+    except HlsError as error:
+        raise SourceError(str(error)) from None
 
 
 async def fetch_limited(url: str, max_bytes: int, *, too_big: str | None = None) -> tuple[int, bytes]:
@@ -138,7 +175,7 @@ def parse_playlist(text: str) -> str | None:
 
 async def resolve_stream_url(url: str) -> str:
     """Radiosender verweisen oft auf eine .m3u/.pls-Liste statt direkt auf den
-    Stream - die wird hier aufgeloest. HLS (.m3u8) kann FFmpeg selbst."""
+    Stream - die wird hier aufgeloest. HLS (.m3u8) laedt open_stream selbst (hls.py)."""
     await check_public_url(url)  # auch eingetragene Sender - nie ins interne Netz
     path = urlparse(url).path.lower()
     if not path.endswith((".m3u", ".pls")):

@@ -23,7 +23,6 @@ from bot.cogs.music.sources import (
     check_public_url,
     check_public_urls,
     fetch_playlist_entries,
-    needs_ffmpeg_network,
     open_stream,
     fetch_feed,
     files_in_folder,
@@ -220,7 +219,7 @@ class MusicCog(BaseCog):
         while (track := player.next()) is not None:
             stream = None
             try:
-                if track.kind == "stream" and not needs_ffmpeg_network(track.source):
+                if track.kind == "stream":  # auch HLS - FFmpeg geht nie selbst ins Netz
                     stream = await asyncio.to_thread(open_stream, track.source)
                     self._close_stream(guild_id)
                     self._streams[guild_id] = stream
