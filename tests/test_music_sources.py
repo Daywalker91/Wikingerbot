@@ -100,3 +100,31 @@ def test_station_search_and_pages():
     assert pages[0].startswith("**Pop** (50)") and pages[1].startswith("**Pop** (weiter)")
     assert sum(p.count("\n- ") + p.startswith("- ") for p in pages) == 95
     assert all(not p.rstrip().endswith(")") or "\n- " in p for p in pages)  # keine Ueberschrift allein am Ende
+
+
+def test_better_names_rename_and_tidy():
+    from bot.cogs.music.sources import title_from_url
+    from bot.cogs.music.stations import rename_station, tidy_names
+
+    assert title_from_url("https://hls.somafm.com/hls/groovesalad/320k/program.m3u8") == "somafm groovesalad 320k"
+    assert title_from_url(
+        "http://as-hls-ww-live.akamaized.net/pool_1/live/ww/bbc_6music/bbc_6music.isml/bbc_6music-audio%3d320000.norewind.m3u8"
+    ) == "bbc 6music"
+    assert title_from_url("https://files.example/Mein_Lied.mp3") == "Mein Lied"
+
+    stations = {
+        "program": "https://hls.somafm.com/hls/groovesalad/320k/program.m3u8",
+        "program (2)": "https://hls.somafm.com/hls/groovesalad/FLAC/program.m3u8",
+        "bbc 6music-audio%3d320000.norewind": "http://a.akamaized.net/x/bbc_6music/bbc_6music.isml/bbc_6music-audio%3d320000.norewind.m3u8",
+        "Mein Lieblingssender": "https://hls.somafm.com/hls/dronezone/320k/program.m3u8",  # selbst benannt
+    }
+    categories = {"program (2)": "Chill"}
+    renamed = tidy_names(stations, categories)
+    assert sorted(new for _, new in renamed) == ["bbc 6music", "somafm groovesalad 320k", "somafm groovesalad FLAC"]
+    assert "Mein Lieblingssender" in stations and categories == {"somafm groovesalad FLAC": "Chill"}
+    assert tidy_names(stations, categories) == []  # zweites Mal: nichts mehr zu tun
+
+    assert rename_station(stations, categories, "somafm groovesalad FLAC", "Groove Salad FLAC") is None
+    assert categories == {"Groove Salad FLAC": "Chill"}
+    assert "gibt es schon" in rename_station(stations, categories, "bbc 6music", "groove salad flac")
+    assert rename_station(stations, categories, "gibtsnicht", "x") == "Diesen Sender gibt es nicht."

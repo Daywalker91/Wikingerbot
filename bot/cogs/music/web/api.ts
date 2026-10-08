@@ -23,6 +23,9 @@ export const addStation = (name: string, url: string, category = "") =>
   apiFetch("/music/stations", { method: "POST", ...json({ name, url, category }) });
 export const importStations = (url: string, category = "") =>
   apiFetch<{ message: string }>("/music/stations/import", { method: "POST", ...json({ url, category }) });
+export const renameStation = (old: string, name: string) =>
+  apiFetch(`/music/stations/${encodeURIComponent(old)}`, { method: "PUT", ...json({ name }) });
+export const tidyStationNames = () => apiFetch<{ message: string }>("/music/stations/tidy-names", { method: "POST" });
 export const bulkStations = (names: string[], action: "category" | "delete", category = "") =>
   apiFetch<{ message: string }>("/music/stations/bulk", { method: "POST", ...json({ names, action, category }) });
 export const removeStation = (name: string) =>

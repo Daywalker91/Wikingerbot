@@ -285,6 +285,15 @@ Voice-Kanal ist – Mods immer. Eigene Dateien gehören nach `data/music` (in AM
 Dateimanager → `Wikingerbot-main/data/music`), Unterordner sind Playlisten;
 erlaubt sind mp3, ogg, opus, flac, wav, m4a, aac.
 
+**Radiosender:** normale Streams (mp3/aac/ogg), Sender-Playlisten (.m3u/.pls) und
+HLS (.m3u8). Den Ton lädt der Bot selbst und reicht ihn an FFmpeg weiter – FFmpeg
+geht nie selbst ins Netz, jede Adresse (auch Weiterleitungen und HLS-Teilstücke)
+wird gegen interne Netze geprüft. HLS lädt im Hintergrund voraus, damit kurze
+Hänger nicht zu hören sind; verschlüsselte HLS-Streams gehen nicht. Sender lassen
+sich in **Kategorien** ordnen (frei benannt, beim Import aus dem Genre der Liste)
+und durchsuchen. Bringt eine importierte Liste keine Sendernamen mit, entsteht der
+Name aus der Adresse (z.B. „somafm groovesalad 320k“ statt „program“).
+
 | Command | Beschreibung | Level |
 |---|---|---|
 | `/musik radio sender: kategorie:` | Spielt einen Radiosender. Tippen bei *sender* sucht in Name und Kategorie; mit *kategorie* zeigt die Auswahl nur deren Sender – ohne *sender* spielt ein zufälliger daraus | Member |
@@ -299,6 +308,8 @@ erlaubt sind mp3, ogg, opus, flac, wav, m4a, aac.
 | `/musik warteschlange` | Was läuft und was kommt | Member |
 | `/musikconfig sender_hinzufuegen name: url: kategorie:` | Radiosender eintragen (Stream oder .m3u/.pls), optional mit Kategorie; gleiche Adresse oder gleicher Name wird abgelehnt | Admin |
 | `/musikconfig sender_import url: kategorie:` | Alle Sender einer .m3u/.pls-Liste eintragen (Namen aus der Liste, bis 1000; vorhandene Adressen werden übersprungen). Kategorie: die angegebene, sonst das Genre aus der Liste (`group-title`). Auch im Tab *Musik* | Admin |
+| `/musikconfig sender_umbenennen sender: name:` | Sender umbenennen (Kategorie bleibt). Auch im Tab *Musik* (✏️) | Admin |
+| `/musikconfig sender_namen_aufraeumen` | Sender, die noch einen automatischen Namen aus der Adresse tragen (z.B. „program (2)“), bekommen einen besseren; selbst vergebene Namen bleiben. Auch im Tab *Musik* | Admin |
 | `/musikconfig sender_kategorie sender: kategorie:` | Kategorie eines Senders setzen (leer = entfernen). Viele auf einmal: Tab *Musik* (auswählen → Kategorie setzen / entfernen) | Admin |
 | `/musikconfig sender_entfernen name:` · `sender_liste kategorie: suche:` | Sender entfernen / nach Kategorien anzeigen, mit Blättern | Admin / Member |
 | `/musikconfig podcast_abonnieren name: url:` | Podcast per RSS-Feed eintragen | Admin |

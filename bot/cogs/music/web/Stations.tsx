@@ -1,6 +1,6 @@
 import { useMemo, useState, type CSSProperties } from "react";
 
-import { addStation, bulkStations, importStations, removeStation } from "./api";
+import { addStation, bulkStations, importStations, removeStation, renameStation, tidyStationNames } from "./api";
 import type { StationItem } from "./types";
 
 /** Radiosender mit Suche und Kategorien - Abspielliste (alle) und Verwaltung (Admin). */
@@ -106,6 +106,7 @@ export function StationAdmin({
   const [station, setStation] = useState({ name: "", url: "", category: "" });
   const [importUrl, setImportUrl] = useState("");
   const [importCategory, setImportCategory] = useState("");
+  const [editing, setEditing] = useState<{ old: string; name: string } | null>(null);
 
   const hits = useMemo(() => filterStations(stations, query, category), [stations, query, category]);
   const shown = hits.slice(0, SHOW_ADMIN);
@@ -166,7 +167,32 @@ export function StationAdmin({
       {shown.map((s) => (
         <div key={s.name} style={row}>
           <input type="checkbox" checked={selected.has(s.name)} onChange={() => toggle(s.name)} aria-label={`${s.name} auswählen`} />
-          <strong>{s.name}</strong>
+          {editing?.old === s.name ? (
+            <form
+              style={{ display: "flex", gap: 6 }}
+              onSubmit={(e) => {
+                e.preventDefault();
+                void act(() => renameStation(s.name, editing.name), `${s.name} heißt jetzt ${editing.name.trim()}.`).then(
+                  (ok) => ok && setEditing(null),
+                );
+              }}
+            >
+              <input autoFocus maxLength={100} value={editing.name} onChange={(e) => setEditing({ ...editing, name: e.target.value })} />
+              <button type="submit" disabled={!editing.name.trim()}>
+                Speichern
+              </button>
+              <button type="button" onClick={() => setEditing(null)}>
+                Abbrechen
+              </button>
+            </form>
+          ) : (
+            <>
+              <strong>{s.name}</strong>
+              <button title="Umbenennen" aria-label={`${s.name} umbenennen`} onClick={() => setEditing({ old: s.name, name: s.name })}>
+                ✏️
+              </button>
+            </>
+          )}
           {s.category && <span style={tag}>{s.category}</span>}
           <span style={{ ...muted, flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{s.url}</span>
           <button onClick={() => void act(() => removeStation(s.name), `${s.name} entfernt.`)}>Entfernen</button>
@@ -226,8 +252,14 @@ export function StationAdmin({
       </div>
       <p style={muted}>
         Doppelte Sender (gleiche Adresse oder gleicher Name) werden nicht angelegt. Bringt die Liste Genres mit (group-title), werden
-        sie als Kategorie übernommen. Höchstens 1000 Sender pro Import.
+        sie als Kategorie übernommen; ohne Sendernamen in der Liste entsteht der Name aus der Adresse. Höchstens 1000 Sender pro Import.
       </p>
+      <div style={{ ...row, flexWrap: "wrap" }}>
+        <button onClick={() => void act(() => tidyStationNames(), (r) => (r as { message: string }).message)}>
+          Automatische Namen verbessern
+        </button>
+        <span style={muted}>macht z.B. aus „program (2)“ den Namen „somafm groovesalad 320k“ – selbst vergebene Namen bleiben</span>
+      </div>
     </>
   );
 }

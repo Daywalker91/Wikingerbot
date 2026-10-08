@@ -162,3 +162,51 @@ def list_pages(names: list[str], categories: dict, per_page: int = 40, max_chars
             count += 1
     flush()
     return pages
+
+
+def rename_station(stations: dict, categories: dict, old: str, new: str) -> str | None:
+    """Sender umbenennen (Kategorie wandert mit). Fehlermeldung oder None."""
+    new = " ".join(new.split())[:MAX_NAME]
+    if old not in stations:
+        return "Diesen Sender gibt es nicht."
+    if not new:
+        return "Der neue Name ist leer."
+    if new != old and new.casefold() in {n.casefold() for n in stations if n != old}:
+        return f"Einen Sender **{new}** gibt es schon."
+    url = stations.pop(old)
+    stations[new] = url
+    if old in categories:
+        categories[new] = categories.pop(old)
+    return None
+
+
+def _unique(name: str, taken: set[str]) -> str:
+    candidate, n = name[:MAX_NAME], 2
+    while candidate.casefold() in taken:
+        suffix = f" ({n})"
+        candidate, n = name[: MAX_NAME - len(suffix)] + suffix, n + 1
+    return candidate
+
+
+def tidy_names(stations: dict, categories: dict) -> list[tuple[str, str]]:
+    """Sender, die noch den frueheren automatischen Namen tragen (Dateiname aus der Adresse,
+    ggf. mit " (2)"), bekommen den besseren aus title_from_url. Selbst vergebene Namen bleiben.
+    Liefert [(alt, neu)]."""
+    import re
+
+    from bot.cogs.music.sources import legacy_title_from_url, title_from_url
+
+    renamed = []
+    for old in sorted(stations, key=str.casefold):
+        url = stations[old]
+        base = re.sub(r" \(\d+\)$", "", old)
+        if base != legacy_title_from_url(url)[:MAX_NAME] and base != legacy_title_from_url(url)[:94]:
+            continue
+        wanted = title_from_url(url)
+        if wanted == base:
+            continue
+        taken = {n.casefold() for n in stations if n != old}
+        new = _unique(wanted, taken)
+        rename_station(stations, categories, old, new)
+        renamed.append((old, new))
+    return renamed

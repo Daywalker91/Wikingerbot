@@ -789,6 +789,33 @@ class MusicCog(BaseCog):
         text = f"Sender **{name}** entfernt." if removed else "Diesen Sender gibt es nicht."
         await interaction.response.send_message(text, ephemeral=True, delete_after=20)
 
+    @config_group.command(name="sender_umbenennen", description="Gibt einem Radiosender einen neuen Namen")
+    @app_commands.describe(sender="Der Sender", name="Neuer Name")
+    @app_commands.autocomplete(sender=_ac_station_any)
+    @require_role(Level.ADMIN)
+    async def station_rename(self, interaction: discord.Interaction, sender: str, name: app_commands.Range[str, 1, 100]) -> None:
+        stations, categories = await _load_stations(interaction.guild_id)
+        error = station_store.rename_station(stations, categories, sender, name)
+        if error:
+            await interaction.response.send_message(error, ephemeral=True, delete_after=20)
+            return
+        await _save_stations(interaction.guild, stations, categories)
+        await interaction.response.send_message(f"**{sender}** heißt jetzt **{' '.join(name.split())}**.", ephemeral=True, delete_after=20)
+
+    @config_group.command(name="sender_namen_aufraeumen", description="Gibt Sendern mit automatischem Namen (z.B. program (2)) bessere Namen")
+    @require_role(Level.ADMIN)
+    async def station_tidy(self, interaction: discord.Interaction) -> None:
+        stations, categories = await _load_stations(interaction.guild_id)
+        renamed = station_store.tidy_names(stations, categories)
+        if not renamed:
+            await interaction.response.send_message("Keine automatisch benannten Sender gefunden – nichts zu tun.", ephemeral=True)
+            return
+        await _save_stations(interaction.guild, stations, categories)
+        lines = [f"- {old} → **{new}**" for old, new in renamed[:30]]
+        if len(renamed) > 30:
+            lines.append(f"… und {len(renamed) - 30} weitere")
+        await interaction.response.send_message(f"{len(renamed)} Sender umbenannt:\n" + "\n".join(lines), ephemeral=True)
+
     @config_group.command(name="sender_kategorie", description="Setzt oder entfernt die Kategorie eines Senders")
     @app_commands.describe(sender="Der Sender", kategorie="Neue Kategorie (vorhandene oder neue) – leer lassen zum Entfernen")
     @app_commands.autocomplete(sender=_ac_station_any, kategorie=_ac_category_new)

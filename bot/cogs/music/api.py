@@ -234,6 +234,30 @@ async def remove_station(name: str, user: CurrentUser = Depends(require_level(Le
     return {"ok": True}
 
 
+class StationRename(BaseModel):
+    name: str = Field(min_length=1, max_length=100)
+
+
+@router.put("/stations/{old}")
+async def rename_station(old: str, body: StationRename, user: CurrentUser = Depends(require_level(Level.ADMIN))) -> dict:
+    stations, categories = await _stations(user.guild_id)
+    error = station_store.rename_station(stations, categories, old, body.name)
+    if error:
+        raise HTTPException(404 if "gibt es nicht" in error else 409, error.replace("**", ""))
+    await _save_stations(user.guild_id, stations, categories)
+    return {"ok": True}
+
+
+@router.post("/stations/tidy-names")
+async def tidy_station_names(user: CurrentUser = Depends(require_level(Level.ADMIN))) -> dict:
+    """Automatisch benannte Sender ("program (2)" usw.) bekommen bessere Namen aus der Adresse."""
+    stations, categories = await _stations(user.guild_id)
+    renamed = station_store.tidy_names(stations, categories)
+    if renamed:
+        await _save_stations(user.guild_id, stations, categories)
+    return {"ok": True, "message": f"{len(renamed)} Sender umbenannt." if renamed else "Keine automatisch benannten Sender gefunden."}
+
+
 class StationBulk(BaseModel):
     names: list[str] = Field(min_length=1, max_length=5000)
     action: str = Field(pattern="^(category|delete)$")

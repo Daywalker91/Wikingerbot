@@ -336,7 +336,7 @@ verlässt, verliert die Rechte sofort.
 
 | Cog | Features | Status |
 |---|---|---|
-| `music` | Radio-Streams (inkl. .m3u/.pls), eigene Dateien, Podcasts (RSS) – bewusst ohne YouTube, Spotify und Aufnahme; nie Abrufe ins interne Netz | ✅ fertig |
+| `music` | Radio-Streams (inkl. .m3u/.pls und HLS), Sender-Kategorien und Suche, Import von Sender-Listen, eigene Dateien, Podcasts (RSS) – bewusst ohne YouTube, Spotify und Aufnahme; nie Abrufe ins interne Netz | ✅ fertig |
 | `stats` | Beitritte/Austritte, Nachrichten, Voice-Zeit, Top-Mitglieder, Mitgliederzähler-Kanal – nur Anzahlen, nie Inhalte | ✅ fertig |
 | `automod` | Warn-Punkte aus Discords AutoMod (früher in `moderation`) und eigene Regeln, die Discord nicht kann: Flut, Wiederholung, Großbuchstaben, Emojis, Link-Allowlist, junge Konten; eigener Tab | ✅ fertig |
 | `trivia` | Quiz-System | vorerst nicht geplant |
@@ -361,7 +361,7 @@ verlässt, verliert die Rechte sofort.
 | Seite | Inhalt |
 |---|---|
 | Dashboard | Server-Übersicht, Online-Status, Spielerzahlen |
-| Musik | Jetzt läuft, Steuerung, Radio/Podcasts/Dateien abspielen; Admin: Sender und Podcasts |
+| Musik | Jetzt läuft, Steuerung, Radio (Suche, Kategorien)/Podcasts/Dateien abspielen; Admin: Sender importieren, umbenennen, in Kategorien ordnen (auch viele auf einmal), Podcasts |
 | Rollen | Autoroles, Selbstwahl-Panels anlegen und bearbeiten, Knöpfe mit Bestätigung (Admin) |
 | Banner | Banner pro Server und Banner-Gruppen mit Live-Vorschau (Owner) |
 | Begrüßung | Begrüßung, DM und Abschied mit Vorschau (Admin) |

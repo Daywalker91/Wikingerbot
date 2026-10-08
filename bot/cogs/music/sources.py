@@ -265,9 +265,57 @@ def github_raw_url(url: str) -> str:
     return f"https://raw.githubusercontent.com/{match[1]}/{match[2]}/{match[3]}" if match else url
 
 
-def _title_from_url(url: str) -> str:
+def legacy_title_from_url(url: str) -> str:
+    """Frueherer Name fuer Eintraege ohne Titel (nur noch zum Wiedererkennen beim Aufraeumen)."""
     name = urlparse(url).path.rsplit("/", 1)[-1]
     return (name.rsplit(".", 1)[0].replace("_", " ").replace("%20", " ") or urlparse(url).hostname or url)[:100]
+
+
+# Teile einer Adresse, die nichts ueber den Sender sagen
+_GENERIC = {
+    "program", "playlist", "index", "master", "live", "stream", "streams", "listen", "chunklist", "radio",
+    "audio", "hls", "icecast", "shoutcast", "play", "playlists", "media", "mount", "station", "channel", "ww", "uk",
+}
+_QUALITY = re.compile(r"(?i)^(\d+k|\d+kbps|\d{2,3}|flac|aac|aacp|mp3|ogg|opus|hq|lq|hi|lo)$")
+_CDN = ("akamaized", "akamaihd", "cloudfront", "amazonaws", "fastly", "streamtheworld", "radio", "ice", "cdn", "stream", "edge")
+_NOISE = re.compile(r"(?i)([-_.]audio=\d+.*|\.norewind|\.isml|[-_.]?\d+(\.\d+)?kbps)$")
+
+
+def title_from_url(url: str) -> str:
+    """Brauchbarer Name fuer Listen ohne Titel, z.B.
+    .../groovesalad/320k/program.m3u8 bei somafm.com -> "somafm groovesalad 320k",
+    .../bbc_6music/bbc_6music.isml/bbc_6music-audio%3d320000.norewind.m3u8 -> "bbc 6music"."""
+    from urllib.parse import unquote
+
+    parsed = urlparse(url)
+    segments = [unquote(part) for part in parsed.path.split("/") if part]
+    if segments:
+        segments[-1] = segments[-1].rsplit(".", 1)[0] if "." in segments[-1] else segments[-1]
+    words, quality, skipped = [], [], False
+    for segment in reversed(segments):
+        segment = _NOISE.sub("", segment)
+        parts = [p for p in re.split(r"[-_\s.]+", segment) if p]
+        if not parts:
+            continue
+        if all(_QUALITY.match(p) for p in parts):
+            quality, skipped = quality or parts, True
+            continue
+        if all(p.lower() in _GENERIC for p in parts):
+            skipped = True
+            continue
+        words = [p for p in parts if not _QUALITY.match(p)] or parts
+        quality = quality or [p for p in parts if _QUALITY.match(p)]
+        break
+    host = (parsed.hostname or "").split(".")
+    brand = host[-2] if len(host) >= 2 else ""
+    # Den Anbieter nur nennen, wenn der Dateiname nichtssagend war ("program", "320k", ...)
+    if not (skipped or not words) or brand.lower().startswith(_CDN) or any(brand.lower() == w.lower() for w in words):
+        brand = ""
+    name = " ".join([brand] * bool(brand) + words + quality).strip()
+    return (name or parsed.hostname or url)[:100]
+
+
+_title_from_url = title_from_url
 
 
 async def fetch_playlist_entries(url: str) -> list[ListEntry]:

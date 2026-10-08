@@ -152,3 +152,26 @@ async def test_station_categories_and_bulk(db_session, monkeypatch):
 
     assert library["stations"] == [{"name": "Jazz FM", "category": "Mix"}, {"name": "Rock Antenne", "category": "Rock"}]
     assert await music_api._json(1, "music_station_categories") == {"Rock Antenne": "Rock", "Jazz FM": "Mix"}  # Bob weg
+
+
+async def test_rename_and_tidy_via_api(db_session, monkeypatch):
+    db_session.add(Guild(id=1, name="Wikinger"))
+    await db_session.commit()
+    bot, _ = fake_bot(FakeCog(), in_voice=True)
+    monkeypatch.setattr(runtime, "bot", bot)
+    await music_api._save_json(1, "music_stations", {
+        "program": "https://hls.somafm.com/hls/groovesalad/320k/program.m3u8",
+        "Jazz": "https://jazz.example/live",
+    })
+    await music_api._save_json(1, "music_station_categories", {"Jazz": "Jazz"})
+
+    async with await _client(Level.ADMIN) as client:
+        tidy = (await client.post("/music/stations/tidy-names")).json()
+        assert tidy["message"] == "1 Sender umbenannt."
+        assert (await client.put("/music/stations/Jazz", json={"name": "Jazz Radio"})).status_code == 200
+        conflict = await client.put("/music/stations/Jazz Radio", json={"name": "somafm groovesalad 320k"})
+        assert conflict.status_code == 409
+        assert (await client.put("/music/stations/Weg", json={"name": "x"})).status_code == 404
+        library = (await client.get("/music/library")).json()
+
+    assert library["stations"] == [{"name": "Jazz Radio", "category": "Jazz"}, {"name": "somafm groovesalad 320k", "category": ""}]
