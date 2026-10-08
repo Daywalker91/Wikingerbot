@@ -1,4 +1,5 @@
 import { apiFetch } from "@/api/client";
+import type { SiteCategory } from "@/components/CategoryRoles";
 
 export interface EventsSettings {
   channel_id: string | null;
@@ -24,6 +25,8 @@ export interface EventsData {
   community_enabled: boolean;
   upcoming: EventRow[];
   error: string | null;
+  categories: SiteCategory[];
+  categories_error: string | null;
 }
 
 export const getEvents = () => apiFetch<EventsData>("/events/config");

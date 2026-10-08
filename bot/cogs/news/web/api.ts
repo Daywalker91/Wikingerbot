@@ -1,4 +1,5 @@
 import { apiFetch } from "@/api/client";
+import type { SiteCategory } from "@/components/CategoryRoles";
 
 export interface NewsSettings {
   channel_id: string | null;
@@ -22,6 +23,8 @@ export interface NewsData {
   news_loaded: boolean;
   recent: NewsRow[];
   error: string | null;
+  categories: SiteCategory[];
+  categories_error: string | null;
 }
 
 export const getNews = () => apiFetch<NewsData>("/news/config");

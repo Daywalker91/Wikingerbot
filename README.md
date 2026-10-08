@@ -366,8 +366,8 @@ verlässt, verliert die Rechte sofort.
 | Banner | Banner pro Server und Banner-Gruppen mit Live-Vorschau (Owner) |
 | Begrüßung | Begrüßung, DM und Abschied mit Vorschau (Admin) |
 | AutoMod | Discords AutoMod → Warn-Punkte, eigene Regeln, Folgen, Ausnahmen, Alarmkanal (Admin) |
-| News | News-Kanal, Ping-Rolle, neueste News mit Discord-Stand (Admin) |
-| Events | Event-Kanal, Ping-Rolle, natives Discord-Event, nächste Events mit Discord-Stand (Admin) |
+| News | News-Kanal, Ping-Rolle, Rollen je Kategorie der Seite, neueste News mit Discord-Stand (Admin) |
+| Events | Event-Kanal, Ping-Rolle, Rollen je Kategorie der Seite, natives Discord-Event, nächste Events mit Discord-Stand (Admin) |
 | Tickets | Staff-Kanal, Ping-Rolle, eigenes Forum/Ping je Kategorie, DMs, offene Tickets mit Thread-Stand (Admin) |
 | Forum | Kanal und Ping-Rolle für Ankündigungen neuer Forum-Themen, neueste Themen (Admin) |
 | Rang-Sync | Rang ↔ Discord-Rolle und Richtung, Ersteller für System-Tickets, alles abgleichen (Owner) |

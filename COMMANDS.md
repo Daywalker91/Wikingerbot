@@ -384,6 +384,14 @@ Löschen, Entwurf oder Haken weg entfernt sie. Kanal und Rolle stellst du im Tab
 auch bei folgenden Servern ankommt (Discord erlaubt etwa 10 pro Stunde und Kanal).
 Braucht die angebundene Community-Seite.
 
+**Kategorien:** Auf der Seite lassen sich unter *Verwaltung → Kategorien* frei
+Kategorien anlegen (z.B. „Server“, „Valheim“, „Turnier“) und beim Schreiben einer
+News oder eines Events auswählen. Im Tab *News* bzw. *Events* ordnest du jeder
+Kategorie Rollen zu (eine gemeinsame Zuordnung für beide). Beim ersten Posten pingt
+der Bot alle Rollen der gewählten Kategorien; hat keine davon Rollen, gilt die
+allgemeine Ping-Rolle. Braucht Leserechte auf die Kategorie-Tabellen
+(`docs/community-grants.sql`).
+
 | Command | Beschreibung | Level |
 |---|---|---|
 | `/news` | Die fünf neuesten News mit Links | Member |
@@ -403,8 +411,8 @@ werden nachgezogen.
 
 Optional legt der Bot zusätzlich ein **natives Discord-Event** an (Event-Bereich
 des Servers) und zieht Änderungen/Absagen nach – dafür braucht die Bot-Rolle das
-Recht **Events verwalten**. Kanal, Ping-Rolle und natives Event stellst du im Tab
-*Events* ein; bestehende Events lassen sich dort von Hand posten. In einem
+Recht **Events verwalten**. Kanal, Ping-Rolle (oder Rollen je Kategorie, wie bei
+den News) und natives Event stellst du im Tab *Events* ein; bestehende Events lassen sich dort von Hand posten. In einem
 Ankündigungskanal wird die Nachricht wie bei den News veröffentlicht.
 
 | Command | Beschreibung | Level |

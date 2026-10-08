@@ -9,6 +9,7 @@ from api.middleware.auth import CurrentUser, require_level
 from api.types import Snowflake
 from bot.cogs.news.posting import posted_ids, recent_news, sync_news
 from bot.community import db as community_db
+from bot.community.categories import categories_for_ui, save_role_map
 from bot.core import runtime
 from bot.core.guild_config import get_config, set_config
 from db.models.role import Level
@@ -35,6 +36,7 @@ async def get_news(user: CurrentUser = Depends(require_level(Level.ADMIN))) -> d
         "news_loaded": bool(runtime.bot and runtime.bot.get_cog("NewsCog")),
         "recent": [],
         "error": None,
+        **await categories_for_ui(gid),
     }
     if community_db.enabled():
         try:
@@ -61,6 +63,18 @@ async def put_news(body: NewsSettings, user: CurrentUser = Depends(require_level
     name = guild.name if guild else str(user.guild_id)
     await set_config(user.guild_id, "news_channel_id", str(body.channel_id) if body.channel_id else "", name)
     await set_config(user.guild_id, "news_ping_role_id", str(body.ping_role_id) if body.ping_role_id else "", name)
+    return {"ok": True}
+
+
+class CategoryRoles(BaseModel):
+    roles: dict[int, list[Snowflake]] = {}
+
+
+@router.put("/categories")
+async def put_categories(body: CategoryRoles, user: CurrentUser = Depends(require_level(Level.ADMIN))) -> dict:
+    """Rollen je Kategorie der Seite - gemeinsam fuer News und Events."""
+    guild = runtime.bot.get_guild(user.guild_id) if runtime.bot else None
+    await save_role_map(user.guild_id, guild.name if guild else str(user.guild_id), {cid: [int(r) for r in roles] for cid, roles in body.roles.items()})
     return {"ok": True}
 
 

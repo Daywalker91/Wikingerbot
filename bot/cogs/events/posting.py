@@ -20,6 +20,7 @@ from sqlalchemy import delete, func, insert, select, update
 
 from bot.community import db as community_db
 from bot.community.announce import publish_if_announcement
+from bot.community.categories import ping_message_kwargs, ping_roles
 from bot.community.text import plain_excerpt
 from bot.core.entities import ensure_guild
 from bot.core.guild_config import get_config
@@ -274,14 +275,8 @@ async def sync_event(bot: discord.Client, event_id: int, view_factory=None) -> l
         elif channel is not None:
             if mapping is not None:
                 await _forget(KIND, guild.id, event_id)  # in Discord geloescht -> neu posten
-            role_id = await get_config(guild.id, "events_ping_role_id")
-            role = guild.get_role(int(role_id)) if role_id else None
-            sent = await channel.send(
-                content=role.mention if role else None,
-                embed=embed,
-                view=view,
-                allowed_mentions=discord.AllowedMentions(roles=[role] if role else False, everyone=False, users=False),
-            )
+            roles = await ping_roles(guild, "event", event_id, "events_ping_role_id")
+            sent = await channel.send(embed=embed, view=view, **ping_message_kwargs(roles))
             await publish_if_announcement(sent)
             await _remember(KIND, guild, event_id, sent.channel.id, sent.id)
             done.append(f"{guild.name}: gepostet")

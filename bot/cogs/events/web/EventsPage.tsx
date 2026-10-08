@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState, type CSSProperties } from "react";
 
 import { useAuth } from "@/auth/useAuth";
+import CategoryRoles from "@/components/CategoryRoles";
 
 import { getEvents, saveEvents, syncEvent, type EventsData, type EventsSettings } from "./api";
 
@@ -102,6 +103,19 @@ export default function EventsPage() {
         )}
         <button onClick={() => void act(() => saveEvents(settings))}>Speichern</button>
       </section>
+
+      {data.community_enabled && (
+        <CategoryRoles
+          apiBase="/events"
+          categories={data.categories}
+          error={data.categories_error}
+          roles={data.roles}
+          onSaved={(message) => {
+            setNote(message);
+            void load();
+          }}
+        />
+      )}
 
       {data.community_enabled && (
         <section style={card}>

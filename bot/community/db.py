@@ -168,6 +168,28 @@ events = Table(
     Column("announce_discord", SmallInteger, default=1),
 )
 
+# Kategorien fuer News und Events (Migration 015 der Seite) - Ping-Rollen je Kategorie
+announce_categories = Table(
+    "announce_categories",
+    metadata,
+    Column("id", Integer, primary_key=True),
+    Column("name", String(40)),
+)
+
+news_categories = Table(
+    "news_categories",
+    metadata,
+    Column("news_id", Integer, primary_key=True),
+    Column("category_id", Integer, primary_key=True),
+)
+
+event_categories = Table(
+    "event_categories",
+    metadata,
+    Column("event_id", Integer, primary_key=True),
+    Column("category_id", Integer, primary_key=True),
+)
+
 event_participants = Table(
     "event_participants",
     metadata,

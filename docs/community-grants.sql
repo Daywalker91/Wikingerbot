@@ -40,6 +40,10 @@ GRANT UPDATE (processed_at, attempts, last_error) ON <SITE_DB>.bot_outbox TO '<B
 GRANT SELECT ON <SITE_DB>.news   TO '<BOT_USER>'@'<BOT_HOST>';
 GRANT SELECT ON <SITE_DB>.events TO '<BOT_USER>'@'<BOT_HOST>';
 GRANT SELECT, INSERT, UPDATE, DELETE ON <SITE_DB>.event_participants TO '<BOT_USER>'@'<BOT_HOST>';
+-- Kategorien von News/Events (Migration 015) - fuer Ping-Rollen je Kategorie
+GRANT SELECT ON <SITE_DB>.announce_categories TO '<BOT_USER>'@'<BOT_HOST>';
+GRANT SELECT ON <SITE_DB>.news_categories     TO '<BOT_USER>'@'<BOT_HOST>';
+GRANT SELECT ON <SITE_DB>.event_categories    TO '<BOT_USER>'@'<BOT_HOST>';
 
 -- Tickets: aus Discord eroeffnen und beantworten, Status nachziehen
 GRANT SELECT, INSERT ON <SITE_DB>.tickets TO '<BOT_USER>'@'<BOT_HOST>';

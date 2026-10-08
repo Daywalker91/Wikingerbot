@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState, type CSSProperties } from "react";
 
 import { useAuth } from "@/auth/useAuth";
+import CategoryRoles from "@/components/CategoryRoles";
 
 import { getNews, saveNews, syncNews, type NewsData, type NewsSettings } from "./api";
 
@@ -87,6 +88,19 @@ export default function NewsPage() {
         </div>
         <button onClick={() => void act(() => saveNews(settings))}>Speichern</button>
       </section>
+
+      {data.community_enabled && (
+        <CategoryRoles
+          apiBase="/news"
+          categories={data.categories}
+          error={data.categories_error}
+          roles={data.roles}
+          onSaved={(message) => {
+            setNote(message);
+            void load();
+          }}
+        />
+      )}
 
       {data.community_enabled && (
         <section style={card}>

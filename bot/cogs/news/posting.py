@@ -10,6 +10,7 @@ from sqlalchemy import select
 
 from bot.community import db as community_db
 from bot.community.announce import publish_if_announcement
+from bot.community.categories import ping_message_kwargs, ping_roles
 from bot.community.text import plain_excerpt
 from bot.core.entities import ensure_guild
 from bot.core.guild_config import get_config
@@ -134,13 +135,8 @@ async def sync_news(bot: discord.Client, news_id: int) -> list[str]:
                 continue
             await _forget(guild.id, news_id)  # Nachricht wurde in Discord geloescht -> neu posten
 
-        role_id = await get_config(guild.id, "news_ping_role_id")
-        role = guild.get_role(int(role_id)) if role_id else None
-        message = await channel.send(
-            content=role.mention if role else None,
-            embed=embed,
-            allowed_mentions=discord.AllowedMentions(roles=[role] if role else False, everyone=False, users=False),
-        )
+        roles = await ping_roles(guild, "news", news_id, "news_ping_role_id")
+        message = await channel.send(embed=embed, **ping_message_kwargs(roles))
         await publish_if_announcement(message)
         await ensure_guild(guild.id, guild.name)
         async with get_db_session() as db:

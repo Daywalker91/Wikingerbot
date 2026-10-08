@@ -9,6 +9,7 @@ from api.middleware.auth import CurrentUser, require_level
 from api.types import Snowflake
 from bot.cogs.events.posting import posted_ids, sync_event, upcoming_events
 from bot.community import db as community_db
+from bot.community.categories import categories_for_ui, save_role_map
 from bot.core import runtime
 from bot.core.guild_config import get_config, set_config
 from db.models.role import Level
@@ -40,6 +41,7 @@ async def get_events(user: CurrentUser = Depends(require_level(Level.ADMIN))) ->
         "community_enabled": community_db.enabled(),
         "upcoming": [],
         "error": None,
+        **await categories_for_ui(gid),
     }
     if community_db.enabled():
         try:
@@ -68,6 +70,18 @@ async def put_events(body: EventsSettings, user: CurrentUser = Depends(require_l
     await set_config(user.guild_id, "events_channel_id", str(body.channel_id) if body.channel_id else "", name)
     await set_config(user.guild_id, "events_ping_role_id", str(body.ping_role_id) if body.ping_role_id else "", name)
     await set_config(user.guild_id, "events_native", "true" if body.native else "false", name)
+    return {"ok": True}
+
+
+class CategoryRoles(BaseModel):
+    roles: dict[int, list[Snowflake]] = {}
+
+
+@router.put("/categories")
+async def put_categories(body: CategoryRoles, user: CurrentUser = Depends(require_level(Level.ADMIN))) -> dict:
+    """Rollen je Kategorie der Seite - gemeinsam fuer News und Events."""
+    guild = runtime.bot.get_guild(user.guild_id) if runtime.bot else None
+    await save_role_map(user.guild_id, guild.name if guild else str(user.guild_id), {cid: [int(r) for r in roles] for cid, roles in body.roles.items()})
     return {"ok": True}
 
 
