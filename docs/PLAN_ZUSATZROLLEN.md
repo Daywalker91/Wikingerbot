@@ -6,6 +6,8 @@ Bot: `community_db.permissions_subquery()`) – so braucht weder die Seite das R
 CREATE VIEW noch der Bot Rechte auf eine View. Ohne Leserecht auf `user_extra_roles`
 rechnet der Bot nur mit dem Rang. Die Strafrolle (Thrall-Punkte unten) heißt im Bot
 allgemein `/strafrolle`; welche Rolle es ist, steht im Tab Moderation.
+Später entfallen: das Seiten-Recht `gameserver.control` (nie geprüft) – Gameserver steuern
+regeln die Bot-Fähigkeit `server.control` und die AMP-Voraussetzung im Tab *AMP-Konten*.
 
 ## Ziel
 
