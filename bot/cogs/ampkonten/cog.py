@@ -60,6 +60,8 @@ class AmpKontenCog(BaseCog):
         outbox.register("amp.disable", self._on_disable)
         outbox.register("user.role", self._on_rank)
         outbox.register("user.extra_roles", self._on_rank)  # z.B. Gameserver-Zusatzrolle weg -> sperren
+        outbox.register("user.banned", self._on_rank)  # auf der Seite gesperrt -> AMP-Zugang sperren
+        outbox.register("user.unbanned", self._on_rank)  # entsperrt -> wieder frei (wenn Rang/Rolle passt)
 
     async def cog_unload(self) -> None:
         outbox.unregister("amp.request", self._on_request)
@@ -67,6 +69,8 @@ class AmpKontenCog(BaseCog):
         outbox.unregister("amp.disable", self._on_disable)
         outbox.unregister("user.role", self._on_rank)
         outbox.unregister("user.extra_roles", self._on_rank)
+        outbox.unregister("user.banned", self._on_rank)
+        outbox.unregister("user.unbanned", self._on_rank)
 
     # --- /amp -------------------------------------------------------------------
 

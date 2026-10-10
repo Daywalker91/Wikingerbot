@@ -1,7 +1,8 @@
 -- Rechte des WikingerBot auf die Datenbank einer Community-Seite.
 --
 -- Als Administrator (z.B. root) in MariaDB/MySQL ausfuehren, NACHDEM die Seite ihre
--- Migrationen 008_discord, 009_amp_zugang, 010_zusatzrollen und 011_rollenanfragen ausgefuehrt hat.
+-- Migrationen ausgefuehrt hat (008_discord bis 016; laufen beim naechsten Seitenaufruf von selbst).
+-- Erklaerung, wer was wo einrichtet: docs/WEBSITE.md
 --
 -- Vorher ersetzen:
 --   <SITE_DB>   Datenbank der Community-Seite, z.B. community

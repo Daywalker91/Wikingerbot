@@ -133,7 +133,11 @@ Der Bot läuft ohne die Seite. Für die Anbindung (Verknüpfen, News, Events, Ti
    sofort, ob die Verbindung steht und die Rechte passen.
 4. Erst danach auf der Seite `'discord_enabled' => true` setzen (in ihrer `config.local.php`) –
    vorher würde die Seite Aufträge schreiben, die niemand abholt.
-5. Die weiteren Tabs einstellen: *News*, *Events*, *Tickets*, *Rang-Sync*, *AMP-Konten*.
+5. Die weiteren Tabs einstellen: *News*, *Events*, *Tickets*, *Forum*, *Rang-Sync*,
+   *AMP-Konten*, *Rollenanfragen*.
+
+Ausführlich – wer was wo einrichtet, welche Aufträge die Seite schickt, Fehlersuche:
+[docs/WEBSITE.md](docs/WEBSITE.md).
 
 ## Neue Version einspielen
 
@@ -150,6 +154,8 @@ Start automatisch. Tipp: In AMP unter *Schedule* einen nächtlichen Update+Resta
 | `Access denied for user` | DB-Benutzer/Passwort falsch oder Benutzer darf sich von dieser IP nicht anmelden |
 | `AMP-Rolle: keine Verwaltungsrechte` + `Grund: …` | Normal nach der Einrichtung. Fehlt dem Bot etwas: Benutzer kurz *Super Admins* geben, neu starten. Steht dort „nicht Super Admin laut AMP“, wurde der Haken nicht gespeichert – und die Rolle *WikingerBot* nicht abhaken |
 | Instanz bleibt auf *Starting* | Bot nicht bei Discord angemeldet – Konsole auf Fehler prüfen |
+| Musik: `Sprachverbindung: Zeitüberschreitung` | Anmeldung klappt, aber die Tonverbindung (UDP) kommt nicht durch: ausgehendes UDP zu Discord (Ports 50000–65535) in Firewall/NAT erlauben; bei mehreren Netzwerkkarten prüfen, über welche die Standardroute geht |
+| Musik: `ffmpeg … return code of -11` | FFmpeg stürzt im Container ab, wenn es selbst ins Netz geht. Der Bot lädt Streams (auch HLS) deshalb selbst und gibt FFmpeg nur die Daten – tritt es trotzdem auf, mit dem Log melden |
 
 Die Log-Zeile `WikingerBot bereit: …` (in `bot/core/bot.py`) nur zusammen mit
 `Console.AppReadyRegex` in der Vorlage ändern, sonst erkennt AMP den Start nicht mehr.

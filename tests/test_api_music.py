@@ -175,3 +175,18 @@ async def test_rename_and_tidy_via_api(db_session, monkeypatch):
         library = (await client.get("/music/library")).json()
 
     assert library["stations"] == [{"name": "Jazz Radio", "category": "Jazz"}, {"name": "somafm groovesalad 320k", "category": ""}]
+
+
+async def test_station_names_with_slash(db_session, monkeypatch):
+    """Namen aus Importen enthalten oft "/" (z.B. "Rock/Pop") - Umbenennen und Entfernen muessen trotzdem gehen."""
+    db_session.add(Guild(id=1, name="Wikinger"))
+    await db_session.commit()
+    bot, _ = fake_bot(FakeCog(), in_voice=True)
+    monkeypatch.setattr(runtime, "bot", bot)
+    await music_api._save_json(1, "music_stations", {"Rock/Pop": "https://r.example/a", "AC/DC Radio": "https://r.example/b"})
+
+    async with await _client(Level.ADMIN) as client:
+        assert (await client.put("/music/stations/Rock%2FPop", json={"name": "Rock und Pop"})).status_code == 200
+        assert (await client.delete("/music/stations/AC%2FDC Radio")).status_code == 200
+        library = (await client.get("/music/library")).json()
+    assert library["stations"] == [{"name": "Rock und Pop", "category": ""}]

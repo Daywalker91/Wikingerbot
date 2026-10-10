@@ -103,7 +103,7 @@ async def library(user: CurrentUser = Depends(get_current_user)) -> dict:
     }
 
 
-@router.get("/podcasts/{name}/episodes")
+@router.get("/podcasts/{name:path}/episodes")
 async def episodes(name: str, user: CurrentUser = Depends(get_current_user)) -> list[dict]:
     feeds = await _json(user.guild_id, "podcast_feeds")
     if name not in feeds:
@@ -226,7 +226,7 @@ async def import_station_list(body: StationImport, user: CurrentUser = Depends(r
     return {"ok": True, "message": f"{added} Sender eingetragen" + (f", {known} waren schon da" if known else "") + "."}
 
 
-@router.delete("/stations/{name}")
+@router.delete("/stations/{name:path}")
 async def remove_station(name: str, user: CurrentUser = Depends(require_level(Level.ADMIN))) -> dict:
     stations, categories = await _stations(user.guild_id)
     station_store.remove_stations(stations, categories, [name])
@@ -238,7 +238,7 @@ class StationRename(BaseModel):
     name: str = Field(min_length=1, max_length=100)
 
 
-@router.put("/stations/{old}")
+@router.put("/stations/{old:path}")
 async def rename_station(old: str, body: StationRename, user: CurrentUser = Depends(require_level(Level.ADMIN))) -> dict:
     stations, categories = await _stations(user.guild_id)
     error = station_store.rename_station(stations, categories, old, body.name)
@@ -298,7 +298,7 @@ async def add_podcast(body: PodcastIn, user: CurrentUser = Depends(require_level
     return {"title": feed.title, "episodes": len(feed.episodes)}
 
 
-@router.delete("/podcasts/{name}")
+@router.delete("/podcasts/{name:path}")
 async def remove_podcast(name: str, user: CurrentUser = Depends(require_level(Level.ADMIN))) -> dict:
     feeds = await _json(user.guild_id, "podcast_feeds")
     feeds.pop(name, None)
@@ -310,7 +310,7 @@ class AnnounceIn(BaseModel):
     channel_id: str | None = Field(default=None, pattern=r"^\d+$")
 
 
-@router.put("/podcasts/{name}/announce")
+@router.put("/podcasts/{name:path}/announce")
 async def announce(name: str, body: AnnounceIn, user: CurrentUser = Depends(require_level(Level.ADMIN))) -> dict:
     feeds = await _json(user.guild_id, "podcast_feeds")
     if name not in feeds:

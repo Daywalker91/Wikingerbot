@@ -35,8 +35,9 @@ schreibt Aufträge in eine Tabelle `bot_outbox`, der Bot holt sie ab und schreib
 spaltengenau freigegebene Tabellen zurück. Erwartet wird das Datenbankschema der zugehörigen
 PHP-Community-Seite (eigenes Projekt; Tabellen wie `users`, `roles`, `news`, `events`, `tickets`,
 `wiki_pages` und ihre Migrationen ab `008_discord`, u.a. Zusatzrollen und Rollenanfragen). Die nötigen Datenbank-Rechte
-stehen in [docs/community-grants.sql](docs/community-grants.sql), die Einrichtung in
-[AMP.md](AMP.md#community-seite-anbinden-optional). Ohne Seite bleiben diese Cogs untätig.
+stehen in [docs/community-grants.sql](docs/community-grants.sql). **Wer was wo einrichtet**, welche
+Aufträge die Seite schickt und wie man eine andere Website anbindet: [docs/WEBSITE.md](docs/WEBSITE.md).
+Ohne Seite bleiben diese Cogs untätig.
 
 ---
 
@@ -192,11 +193,12 @@ Wikingerbot/
 │   ├── models/                   # siehe Datenbankschema oben
 │   └── migrations/               # Alembic
 │
-├── docs/                        # Plaene, community-grants.sql
+├── docs/                        # WEBSITE.md (Anbindung einer Website), community-grants.sql, Plaene
 ├── tests/
 ├── package.json                 # Node-Root (siehe Hinweis oben zu node_modules)
 ├── .env.example
 ├── SETUP.md
+├── AMP.md
 ├── COMMANDS.md
 ├── BANNER.md
 ├── CONSOLE_FILTERS.md
@@ -272,6 +274,7 @@ der Tabellen:
 | `GuildConfig` | `config.py` | Key-Value-Konfiguration pro Guild |
 | `BotSetting` | `bot_setting.py` | Key-Value-Konfiguration global (nicht guild-gebunden), z.B. `sync_globally_on_startup` |
 | `WebSession` | `web_session.py` | Anmeldungen an der Web-Oberfläche (gehashte Refresh-Tokens) |
+| `RememberToken` | `web_session.py` | „Angemeldet bleiben“ in der Web-Oberfläche (30 Tage, nur als Hash) |
 | `StatsDaily` / `StatsMemberDaily` | `stats.py` | Tageszähler der Statistik (nur Anzahlen) |
 | `CommunityPost` | `community_post.py` | Welche Discord-Nachricht/welcher Thread zu welchem Beitrag der Community-Seite gehört |
 | `AmpAccount` | `amp_account.py` | Vom Bot angelegte AMP-Konten (nur diese fasst er an) |

@@ -248,3 +248,28 @@ async def test_amp_command_summary_and_next_step(site, db_session):  # noqa: F81
     disabled = await access_summary(1)
     assert disabled.state == "disabled"
     assert "wieder aktiv" in " ".join(f.value for f in access_embed(disabled, "").fields)
+
+
+async def test_ban_on_site_disables_and_unban_reenables(site, db_session):  # noqa: F811
+    await seed({"huskarl": "r-mod", "karl": "r-default"})
+    amp = FakeAMP()
+    await handle_request(amp, 1)
+    async with community_db.session() as db:
+        await db.execute(update(community_db.users).where(community_db.users.c.id == 1).values(is_banned=1))
+        await db.commit()
+    outcome = await apply_rank(amp, 1)
+    assert outcome.status == "disabled" and "gesperrt" in outcome.note and amp.users["Ragnar"]["Disabled"]
+    async with community_db.session() as db:
+        await db.execute(update(community_db.users).where(community_db.users.c.id == 1).values(is_banned=0))
+        await db.commit()
+    assert (await apply_rank(amp, 1)).status == "active" and not amp.users["Ragnar"]["Disabled"]
+
+
+async def test_ban_events_are_handled(site):  # noqa: F811
+    cog = AmpKontenCog(SimpleNamespace())
+    await cog.cog_load()
+    try:
+        assert {"user.banned", "user.unbanned"} <= set(outbox.registered())
+    finally:
+        await cog.cog_unload()
+    assert "user.banned" not in outbox.registered()

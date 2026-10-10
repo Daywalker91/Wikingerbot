@@ -345,7 +345,12 @@ async def apply_rank(core_call: CoreCall, site_user_id: int) -> Outcome | None:
         return None
     role_id, missing = await role_for(member)
     if not role_id or member.banned or member.deleted:
-        note = f"Ohne die Zusatzrolle „{missing}“ gibt es keinen AMP-Zugang mehr." if missing else "Dein Rang hat keinen AMP-Zugang mehr."
+        if member.banned or member.deleted:
+            note = "Dein Konto auf der Seite ist gesperrt."
+        elif missing:
+            note = f"Ohne die Zusatzrolle „{missing}“ gibt es keinen AMP-Zugang mehr."
+        else:
+            note = "Dein Rang hat keinen AMP-Zugang mehr."
         return await handle_disable(core_call, site_user_id, note)
     if account.disabled:
         await _set_disabled(core_call, account.amp_username, False)
