@@ -115,21 +115,38 @@ async def forget_remember_token(token: str | None) -> None:
 
 async def _user_from_remember_token(token: str) -> CurrentUser | None:
     """Gueltiges Token -> Nutzer; verlaengert die Laufzeit (wer die Seite nutzt, bleibt angemeldet)."""
-    from sqlalchemy import select
+    from sqlalchemy import select, update
+    from sqlalchemy.exc import OperationalError
 
     from db.models.web_session import RememberToken
     from db.session import get_db_session
 
     now = datetime.now(timezone.utc).replace(tzinfo=None)
+    new_expiry = now + timedelta(days=REMEMBER_DAYS)
     async with get_db_session() as db:
         row = (
             await db.execute(select(RememberToken).where(RememberToken.token_hash == hash_refresh_token(token)))
         ).scalar_one_or_none()
         if row is None or row.expires_at < now:
             return None
-        row.expires_at = now + timedelta(days=REMEMBER_DAYS)
-        await db.commit()
-        return CurrentUser(user_id=row.user_id, guild_id=row.guild_id, level=Level(row.level))
+        user = CurrentUser(user_id=row.user_id, guild_id=row.guild_id, level=Level(row.level))
+        row_id, expires_at = row.id, row.expires_at
+        # Lese-Transaktion beenden: Die Seite schickt nach Sitzungsablauf mehrere Anfragen
+        # gleichzeitig; ein Schreiben auf die vorher gelesene Zeile scheitert dann bei
+        # MariaDB mit 1020 ("Record has changed since last read").
+        await db.rollback()
+        if new_expiry - expires_at < timedelta(hours=1):
+            return user  # gerade erst verlaengert
+        try:
+            await db.execute(
+                update(RememberToken)
+                .where(RememberToken.id == row_id, RememberToken.expires_at < new_expiry)
+                .values(expires_at=new_expiry)
+            )
+            await db.commit()
+        except OperationalError:
+            await db.rollback()  # Verlaengern ist nur Komfort; parallele Anfrage hat es schon erledigt
+        return user
 
 
 def _user_from_session(session: str | None) -> CurrentUser | None:
