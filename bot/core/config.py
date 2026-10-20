@@ -1,6 +1,8 @@
 from pydantic import field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
-from sqlalchemy.engine import URL
+from pathlib import Path
+
+from sqlalchemy.engine import URL, make_url
 
 
 class Settings(BaseSettings):
@@ -84,6 +86,15 @@ class Settings(BaseSettings):
                 database=self.db_name,
             ).render_as_string(hide_password=False)
         return self
+
+    def describe_database(self) -> str:
+        """Welche Datenbank genutzt wird, fuers Log beim Start - ohne Passwort."""
+        url = make_url(self.database_url)
+        if url.get_backend_name() == "sqlite":
+            path = Path(url.database or "").resolve() if url.database and url.database != ":memory:" else "im Speicher"
+            return f"SQLite ({path}) - eingebaute Datenbank (kein Datenbank-Host eingetragen)"
+        port = f":{url.port}" if url.port else ""
+        return f"{url.get_backend_name()} {url.username}@{url.host}{port}/{url.database}"
 
     @field_validator("web_port", mode="before")
     @classmethod

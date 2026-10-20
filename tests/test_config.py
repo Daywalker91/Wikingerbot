@@ -28,3 +28,13 @@ def test_default_without_db_settings(monkeypatch):
     monkeypatch.delenv("DATABASE_URL", raising=False)
     monkeypatch.delenv("DB_HOST", raising=False)
     assert Settings(_env_file=None).database_url == "sqlite+aiosqlite:///./dev.db"
+
+
+def test_describe_database_without_password(monkeypatch):
+    monkeypatch.delenv("DATABASE_URL", raising=False)
+    monkeypatch.delenv("DB_HOST", raising=False)
+    assert Settings(_env_file=None).describe_database().startswith("SQLite (")
+    monkeypatch.setenv("DB_HOST", "192.0.2.10")
+    monkeypatch.setenv("DB_PASSWORD", "geheim")
+    text = Settings(_env_file=None).describe_database()
+    assert text == "mysql wikingerbot@192.0.2.10:3306/wikingerbot" and "geheim" not in text

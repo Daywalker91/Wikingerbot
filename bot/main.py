@@ -81,6 +81,7 @@ async def main() -> None:
 
 if __name__ == "__main__":
     setup_logging()
+    log.info("Datenbank: %s", settings.describe_database())
     if settings.auto_migrate:
         log.info("Datenbank-Migrationen werden ausgefuehrt ...")
         run_migrations()
