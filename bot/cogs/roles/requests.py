@@ -210,7 +210,12 @@ async def finish(guild: discord.Guild, request: PanelRoleRequest, role_name: str
     if not dm or member is None or request.status not in (APPROVED, DENIED):
         return
     if request.status == APPROVED:
-        text = f"✅ Deine Anfrage für die Rolle **{role_name}** auf **{guild.name}** wurde angenommen – du hast sie jetzt."
+        # Discord-Apps zeigen neu freigeschaltete Kanaele manchmal erst nach dem Neuladen an
+        text = (
+            f"✅ Deine Anfrage für die Rolle **{role_name}** auf **{guild.name}** wurde angenommen – du hast sie jetzt."
+            "\nSiehst du die Kanäle der Gruppe noch nicht? Drück **Strg+R** oder starte Discord neu "
+            "(am Handy: App ganz schließen und wieder öffnen)."
+        )
     else:
         text = f"❌ Deine Anfrage für die Rolle **{role_name}** auf **{guild.name}** wurde abgelehnt." + (
             f"\nGrund: {request.note}" if request.note else ""
