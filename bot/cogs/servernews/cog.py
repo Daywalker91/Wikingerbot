@@ -7,6 +7,10 @@
 - Vorlaufzeiten frei einstellbar (z.B. 30, 10, 1 Minuten); nur die erste Meldung pingt.
   Optional zusaetzlich ein Hinweis im Spiel (Konsolenbefehl je Server, z.B. "say {text}").
 - Danach "laeuft wieder"; nicht angekuendigte Ausfaelle werden ohne Ping gemeldet.
+- "Alle Server (AMP)": nur ankuendigen, z.B. fuer einen Neustart des AMP-Hosts - der Bot
+  fuehrt nichts aus. "Laeuft wieder", sobald AMP nach dem Ausfall wieder antwortet und die
+  Server ein paar Minuten zum Hochfahren hatten. Der Bot laeuft meist selbst in AMP und geht
+  mit unter; startet er nach dem angekuendigten Zeitpunkt, gilt der Ausfall als gesehen.
 
 Kanal, Ping-Rolle und alles Weitere im Tab "Server-News". Ankuendigen darf, wer
 Gameserver starten/stoppen darf (Faehigkeit server.control).
@@ -21,6 +25,7 @@ from discord.ext import commands, tasks
 from sqlalchemy import select
 
 from bot.cogs.servernews.notices import (
+    ALL_SERVERS,
     announce_text,
     create_notice,
     due_lead,
@@ -28,6 +33,7 @@ from bot.cogs.servernews.notices import (
     load_settings,
     local_now,
     local_to_utc,
+    notice_name,
     open_notices,
     parse_start,
     set_status,
@@ -47,17 +53,22 @@ from db.session import get_db_session
 log = logging.getLogger("wikingerbot.servernews")
 
 AMP_SYNC_EVERY = 20  # Takte (je 30 s) = alle 10 Minuten den AMP-Zeitplan lesen
+ALL = "alle"  # Wert in /wartung fuer "Alle Server (AMP)"
+ALL_LABEL = "Alle Server (AMP) – nur ankündigen"
+ALL_SETTLE = timedelta(minutes=5)  # nach dem Ausfall: so lange hochfahren lassen, dann "laeuft wieder"
+ALL_NO_OUTAGE = timedelta(minutes=15)  # Neustart ohne erkennbaren Ausfall: dann trotzdem abschliessen
 
 
 async def _server_choices(interaction: discord.Interaction, current: str) -> list[app_commands.Choice[str]]:
     async with get_db_session() as db:
         rows = (await db.execute(select(Server.instance_name, Server.display_name).where(Server.guild_id == interaction.guild_id))).all()
     current = current.lower()
-    return [
+    choices = [app_commands.Choice(name=ALL_LABEL, value=ALL)] if current in ALL_LABEL.lower() else []
+    return (choices + [
         app_commands.Choice(name=f"{display} ({name})"[:100], value=name)
         for name, display in rows
         if current in name.lower() or current in (display or "").lower()
-    ][:25]
+    ])[:25]
 
 
 async def _server(guild_id: int, name: str) -> Server | None:
@@ -72,6 +83,15 @@ async def _is_up(server: Server) -> bool | None:
     except Exception as error:
         return False if "Instance Unavailable" in str(error) else None
     return status.State.name == "Ready"
+
+
+async def _amp_up() -> bool:
+    """Antwortet AMP (der Controller) gerade?"""
+    try:
+        await amp_client.controller_instance_ids()
+    except Exception:
+        return False
+    return True
 
 
 class ServerNewsCog(BaseCog):
@@ -89,6 +109,10 @@ class ServerNewsCog(BaseCog):
         self._up: dict[int, bool] = {}  # Server-ID -> lief beim letzten Blick
         self._outage: set[int] = set()  # unangekuendigt ausgefallen
         self._ticks = 0
+        # "Alle Server": Ausfall gesehen bzw. seit wann AMP wieder antwortet (je Ankuendigung)
+        self._started_at = utcnow()
+        self._all_down: set[int] = set()
+        self._all_back: dict[int, object] = {}
 
     async def cog_load(self) -> None:
         self.tick.start()
@@ -124,12 +148,13 @@ class ServerNewsCog(BaseCog):
         now = utcnow()
         notices = await open_notices(guild.id)
         for notice, server in notices:
-            await self.handle_notice(guild, channel, settings, notice, server, now)
+            if server is None:
+                await self.handle_all(channel, settings, notice, servers, now)
+            else:
+                await self.handle_notice(guild, channel, settings, notice, server, now)
         # angekuendigt = gerade unten wegen Neustart/Wartung oder kurz davor/danach -> kein "Ausfall"
-        planned = {
-            s.id for n, s in await open_notices(guild.id)
-            if n.status == "running" or abs((n.at - now).total_seconds()) <= 600
-        }
+        active = [s for n, s in await open_notices(guild.id) if n.status == "running" or abs((n.at - now).total_seconds()) <= 600]
+        planned = {s.id for s in servers} if any(s is None for s in active) else {s.id for s in active}
         for server in servers:
             await self.watch_state(guild, channel, settings, server, planned)
 
@@ -181,6 +206,51 @@ class ServerNewsCog(BaseCog):
             self._up[server.id] = True
         elif notice.kind in ("restart", "update") and now - notice.at > timedelta(hours=2):
             await set_status(notice.id, "done")  # haengt - nicht ewig offen lassen
+
+    async def handle_all(self, channel, settings, notice: ServerNotice, servers, now) -> None:
+        """Ankuendigung fuer alle Server: nur melden, nichts ausfuehren."""
+        if notice.status == "pending":
+            lead, sent = due_lead(notice, settings.leads, now)
+            if lead is not None:
+                first = notice.sent_leads in ("", "[]")
+                await self.send(channel, announce_text(notice, ALL_SERVERS, reminder=not first), settings, ping=first)
+                minutes = max(0, round((notice.at - now).total_seconds() / 60))
+                for server in servers:
+                    await self.ingame(settings, server, ingame_text(notice, minutes))
+                await set_status(notice.id, "pending", sent)
+            if now >= notice.at:
+                for server in servers:
+                    await self.ingame(settings, server, ingame_text(notice, 0))
+                text = "🔧 Wartung an **allen Gameservern** hat begonnen" if notice.kind == "maintenance" else "🔄 **Alle Gameserver** starten jetzt neu"
+                await self.send(channel, text, settings, ping=False)
+                await set_status(notice.id, "running")
+            return
+        if now - notice.at < timedelta(minutes=1):
+            return
+        if now - notice.at > timedelta(hours=6):
+            await set_status(notice.id, "done")  # haengt - nicht ewig offen lassen
+            return
+        if not await _amp_up():
+            self._all_down.add(notice.id)
+            self._all_back.pop(notice.id, None)
+            return
+        if notice.id in self._all_down or self._started_at > notice.at:
+            back = self._all_back.setdefault(notice.id, now)
+            if now - back < ALL_SETTLE:
+                return
+            offline = [s.display_name for s in servers if await _is_up(s) is False]
+            text = "✅ **Alle Gameserver** sind wieder da"
+            if offline:
+                text += "\nNoch offline: " + ", ".join(offline)
+        else:
+            # kein Ausfall zu sehen (z.B. nur einzelne Dienste neu gestartet): nach der Wartungszeit abschliessen
+            if now - notice.at < timedelta(minutes=notice.duration_min or 0) + ALL_NO_OUTAGE:
+                return
+            text = "✅ Wartung beendet – alle Gameserver sind wieder erreichbar" if notice.kind == "maintenance" else "✅ Neustart erledigt – alle Gameserver sind wieder erreichbar"
+        await self.send(channel, text, settings, ping=False)
+        await set_status(notice.id, "done")
+        self._all_down.discard(notice.id)
+        self._all_back.pop(notice.id, None)
 
     async def execute(self, notice: ServerNotice, server: Server) -> None:
         try:
@@ -246,20 +316,25 @@ class ServerNewsCog(BaseCog):
 
     async def _plan(self, interaction, name, kind, start, duration, reason) -> None:
         await interaction.response.defer(ephemeral=True)
-        server = await _server(interaction.guild_id, name)
+        all_servers = name.strip().lower() == ALL
+        server = None if all_servers else await _server(interaction.guild_id, name)
         at = parse_start(start)
-        if server is None:
+        if server is None and not all_servers:
             await interaction.followup.send(f"Server `{name}` nicht gefunden.", ephemeral=True)
             return
         if at is None:
             await interaction.followup.send("Startzeit bitte als Minuten (z.B. `15`) oder Uhrzeit (z.B. `20:00`).", ephemeral=True)
             return
         await ensure_guild(interaction.guild_id, interaction.guild.name)
-        notice = await create_notice(interaction.guild_id, server.id, kind, at, duration_min=duration, reason=grund_or(reason), created_by=interaction.user.id)
+        notice = await create_notice(
+            interaction.guild_id, server.id if server else None, kind, at, duration_min=duration, reason=grund_or(reason), created_by=interaction.user.id
+        )
         settings = await load_settings(interaction.guild_id)
         hint = "" if settings.channel_id else " Achtung: Im Tab Server-News ist noch kein Kanal eingestellt."
+        if all_servers:
+            hint = " Der Bot kündigt nur an – den Neustart bzw. die Wartung machst du selbst." + hint
         await interaction.followup.send(
-            f"Angekündigt (Nr. {notice.id}): {server.display_name} <t:{unix(at)}:t>. Die erste Meldung geht gleich raus.{hint}", ephemeral=True
+            f"Angekündigt (Nr. {notice.id}): {notice_name(server)} <t:{unix(at)}:t>. Die erste Meldung geht gleich raus.{hint}", ephemeral=True
         )
         await self.run_guild(interaction.guild)
 
@@ -271,7 +346,7 @@ class ServerNewsCog(BaseCog):
             await interaction.response.send_message("Nichts angekündigt.", ephemeral=True)
             return
         lines = [
-            f"`{n.id}` <t:{unix(n.at)}:f> · **{s.display_name}** · {n.kind}{' (AMP)' if n.origin == 'amp' else ''}"
+            f"`{n.id}` <t:{unix(n.at)}:f> · **{notice_name(s)}** · {n.kind}{' (AMP)' if n.origin == 'amp' else ''}"
             + (" · läuft" if n.status == "running" else "") + (f" · {n.reason}" if n.reason else "")
             for n, s in rows
         ]
@@ -288,6 +363,9 @@ class ServerNewsCog(BaseCog):
     @require_capability("server.control")
     async def end_cmd(self, interaction: discord.Interaction, name: str) -> None:
         await interaction.response.defer(ephemeral=True)
+        if name.strip().lower() == ALL:
+            await interaction.followup.send(await self.end_all(interaction.guild), ephemeral=True)
+            return
         server = await _server(interaction.guild_id, name)
         if server is None:
             await interaction.followup.send(f"Server `{name}` nicht gefunden.", ephemeral=True)
@@ -299,17 +377,32 @@ class ServerNewsCog(BaseCog):
             return
         await interaction.followup.send(f"{server.display_name} startet – sobald er läuft, kommt „läuft wieder“.", ephemeral=True)
 
+    async def end_all(self, guild: discord.Guild) -> str:
+        """Wartung/Neustart aller Server von Hand abschliessen (startet nichts)."""
+        rows = [n for n, s in await open_notices(guild.id) if s is None and n.status == "running"]
+        if not rows:
+            return "Gerade läuft keine Wartung für alle Server."
+        for notice in rows:
+            await set_status(notice.id, "done")
+            self._all_down.discard(notice.id)
+            self._all_back.pop(notice.id, None)
+        settings = await load_settings(guild.id)
+        channel = guild.get_channel(settings.channel_id) if settings.channel_id else None
+        if channel is not None:
+            await self.send(channel, "✅ Wartung beendet – alle Gameserver sind wieder erreichbar", settings, ping=False)
+        return "Abgeschlossen – „wieder erreichbar“ ist gemeldet."
+
     async def cancel(self, guild: discord.Guild, notice_id: int) -> str:
         async with get_db_session() as db:
             notice = await db.get(ServerNotice, notice_id)
-            server = await db.get(Server, notice.server_id) if notice else None
+            server = await db.get(Server, notice.server_id) if notice and notice.server_id else None
         if notice is None or notice.guild_id != guild.id or notice.status not in ("pending", "running"):
             return "Diese Ankündigung gibt es nicht (mehr)."
         await set_status(notice.id, "cancelled")
         settings = await load_settings(guild.id)
         channel = guild.get_channel(settings.channel_id) if settings.channel_id else None
         if channel is not None and notice.sent_leads not in ("", "[]") and notice.status == "pending":
-            await self.send(channel, f"❎ Abgesagt: {server.display_name if server else '?'} – <t:{unix(notice.at)}:t> findet nicht statt", settings, ping=False)
+            await self.send(channel, f"❎ Abgesagt: {notice_name(server)} – <t:{unix(notice.at)}:t> findet nicht statt", settings, ping=False)
         return "Abgesagt."
 
 

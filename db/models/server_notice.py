@@ -9,6 +9,8 @@ from db.base import Base
 class ServerNotice(Base):
     """Angekuendigter Neustart / angekuendigte Wartung eines Gameservers (servernews-Cog).
 
+    server_id None = alle Server (AMP selbst, z.B. Neustart des Hosts) - dann kuendigt der
+    Bot nur an und fuehrt nichts aus.
     origin: manual (per /wartung, der Bot fuehrt aus) | amp (aus dem AMP-Zeitplan, AMP fuehrt aus)
     kind:   restart | maintenance | stop | update
     status: pending -> running (Server ist gerade unten) -> done | cancelled
@@ -18,7 +20,7 @@ class ServerNotice(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     guild_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("guilds.id"))
-    server_id: Mapped[int] = mapped_column(Integer, ForeignKey("servers.id", ondelete="CASCADE"))
+    server_id: Mapped[int | None] = mapped_column(Integer, ForeignKey("servers.id", ondelete="CASCADE"), nullable=True)
     origin: Mapped[str] = mapped_column(String(10), default="manual")
     kind: Mapped[str] = mapped_column(String(12), default="restart")
     at: Mapped[datetime] = mapped_column(DateTime)

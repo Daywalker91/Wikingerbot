@@ -18,6 +18,7 @@ from db.models.server_notice import ServerNotice
 from db.session import get_db_session
 
 DEFAULT_LEADS = [30, 10, 1]
+ALL_SERVERS = "Alle Gameserver"  # Anzeigename einer Ankuendigung ohne Server (server_id None)
 KIND_TEXT = {
     "restart": ("🔄", "Neustart"),
     "update": ("⬆️", "Update mit Neustart"),
@@ -115,6 +116,10 @@ def parse_start(text: str) -> datetime | None:
 # --- Texte -----------------------------------------------------------------------------
 
 
+def notice_name(server: Server | None) -> str:
+    return server.display_name if server is not None else ALL_SERVERS
+
+
 def announce_text(notice: ServerNotice, server_name: str, *, reminder: bool) -> str:
     icon, label = KIND_TEXT.get(notice.kind, KIND_TEXT["restart"])
     ts = unix(notice.at)
@@ -122,6 +127,10 @@ def announce_text(notice: ServerNotice, server_name: str, *, reminder: bool) -> 
         text = f"{icon} **{server_name}**: Wartung ab <t:{ts}:t> (<t:{ts}:R>)"
         if notice.duration_min:
             text += f", etwa {notice.duration_min} Minuten"
+        if notice.server_id is None:
+            text += " – in der Zeit sind die Server nicht erreichbar"
+    elif notice.server_id is None:
+        text = f"{icon} **{server_name}** werden neu gestartet – <t:{ts}:t> (<t:{ts}:R>), kurz nicht erreichbar"
     else:
         verb = {"restart": "wird neu gestartet", "update": "wird aktualisiert und neu gestartet", "stop": "wird gestoppt"}.get(notice.kind, "wird neu gestartet")
         text = f"{icon} **{server_name}** {verb} – <t:{ts}:t> (<t:{ts}:R>)"
@@ -141,7 +150,7 @@ def ingame_text(notice: ServerNotice, minutes_left: int) -> str:
 # --- Angekuendigte Neustarts/Wartungen ---------------------------------------------------
 
 
-async def create_notice(guild_id: int, server_id: int, kind: str, at_utc: datetime, *, origin: str = "manual",
+async def create_notice(guild_id: int, server_id: int | None, kind: str, at_utc: datetime, *, origin: str = "manual",
                         duration_min: int | None = None, reason: str | None = None, created_by: int | None = None,
                         amp_key: str | None = None) -> ServerNotice | None:
     """Neue Ankuendigung. Fuer den AMP-Zeitplan (amp_key) nur einmal je Lauf - sonst None."""
@@ -158,11 +167,12 @@ async def create_notice(guild_id: int, server_id: int, kind: str, at_utc: dateti
         return notice
 
 
-async def open_notices(guild_id: int | None = None) -> list[tuple[ServerNotice, Server]]:
+async def open_notices(guild_id: int | None = None) -> list[tuple[ServerNotice, Server | None]]:
+    """Offene Ankuendigungen; Server None = alle Server."""
     async with get_db_session() as db:
         query = (
             select(ServerNotice, Server)
-            .join(Server, Server.id == ServerNotice.server_id)
+            .outerjoin(Server, Server.id == ServerNotice.server_id)
             .where(ServerNotice.status.in_(("pending", "running")))
             .order_by(ServerNotice.at)
         )

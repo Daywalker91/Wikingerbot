@@ -606,6 +606,15 @@ Kanal und Ping-Rolle im Tab *Forum*, dort auch ältere Themen von Hand ankündig
 
 \* Fähigkeit „Gameserver starten/stoppen“ (Standard ab Mod, weitere Rollen im Tab *Einstellungen*).
 
+**Alle Server (AMP):** Bei `name` gibt es oben den Eintrag *Alle Server (AMP) – nur ankündigen*
+(Wert `alle`, im Tab ebenso) – z.B. für einen Neustart des AMP-Hosts. Der Bot kündigt an und
+erinnert wie gewohnt, führt aber **nichts** aus. „Wieder da“ meldet er, sobald AMP nach dem
+Ausfall wieder antwortet und die Server fünf Minuten zum Hochfahren hatten (mit den Servern, die
+dann noch offline sind). Läuft der Bot selbst in AMP und geht mit unter, gilt sein Neustart nach
+dem angekündigten Zeitpunkt als Ausfall. Ist gar kein Ausfall zu sehen, schließt er nach der
+Wartungsdauer plus 15 Minuten ab; von Hand mit `/wartung ende name:alle`. Während der Zeit
+gibt es keine „nicht angekündigt“-Meldungen.
+
 Meldungen gehen in den Kanal aus dem Tab *Server-News*. Die **Vorlaufzeiten** sind frei
 einstellbar (z.B. `60, 15, 5` Minuten); nur die erste Meldung pingt die eingestellte Rolle,
 die übrigen erinnern. Zur Zeit: „startet jetzt neu“ bzw. „Wartung hat begonnen“, danach

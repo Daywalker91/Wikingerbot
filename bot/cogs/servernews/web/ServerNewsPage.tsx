@@ -164,6 +164,7 @@ export default function ServerNewsPage() {
         <div style={row}>
           <select value={form.server_id} onChange={(e) => setForm({ ...form, server_id: e.target.value })}>
             <option value="">– Server –</option>
+            <option value="all">Alle Server (AMP) – nur ankündigen</option>
             {data.servers.map((s) => (
               <option key={s.id} value={s.id}>
                 {s.name}
@@ -171,8 +172,8 @@ export default function ServerNewsPage() {
             ))}
           </select>
           <select value={form.kind} onChange={(e) => setForm({ ...form, kind: e.target.value })}>
-            <option value="restart">Neustart (Bot startet neu)</option>
-            <option value="maintenance">Wartung (Bot stoppt)</option>
+            <option value="restart">{form.server_id === "all" ? "Neustart" : "Neustart (Bot startet neu)"}</option>
+            <option value="maintenance">{form.server_id === "all" ? "Wartung" : "Wartung (Bot stoppt)"}</option>
           </select>
           Start:
           <input value={form.start} onChange={(e) => setForm({ ...form, start: e.target.value })} style={{ width: 70 }} title="Minuten ab jetzt oder Uhrzeit" />
@@ -188,7 +189,7 @@ export default function ServerNewsPage() {
             onClick={() =>
               void act(() =>
                 addNotice({
-                  server_id: Number(form.server_id),
+                  server_id: form.server_id === "all" ? null : Number(form.server_id),
                   kind: form.kind,
                   start: form.start,
                   duration_min: form.duration ? Number(form.duration) : null,
@@ -201,6 +202,13 @@ export default function ServerNewsPage() {
           </button>
         </div>
         <p style={muted}>Start: Minuten ab jetzt (z.B. 15) oder Uhrzeit (z.B. 20:00).</p>
+        {form.server_id === "all" && (
+          <p style={muted}>
+            Alle Server (AMP), z.B. für einen Neustart des AMP-Hosts: Der Bot kündigt nur an und erinnert, führt aber nichts aus. „Wieder
+            da“ meldet er, sobald AMP nach dem Ausfall wieder antwortet und die Server ein paar Minuten zum Hochfahren hatten – oder per{" "}
+            <code>/wartung ende name:alle</code>.
+          </p>
+        )}
       </section>
 
       <section style={card}>

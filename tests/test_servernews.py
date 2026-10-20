@@ -157,3 +157,91 @@ async def test_restart_flow_and_outage(db_session, monkeypatch):
     await cog.run_guild(guild)
     assert "läuft wieder" in channel.sent[-1]
     assert settings.leads == [30, 10, 1]
+
+
+async def test_all_servers_only_announce(db_session, monkeypatch):
+    """Alle Server (AMP): ankuendigen, nichts ausfuehren, nach Ausfall + Hochfahren "wieder da"."""
+    db_session.add(Guild(id=2, name="Wikinger"))
+    await db_session.commit()
+    db_session.add(Server(guild_id=2, instance_name="valheim2", amp_instance_id="i2", display_name="Valheim", host=""))
+    db_session.add(Server(guild_id=2, instance_name="ark2", amp_instance_id="i3", display_name="ARK", host=""))
+    await db_session.commit()
+    await set_config(2, "servernews_channel_id", "600", "Wikinger")
+    await set_config(2, "servernews_ping_role_id", "88", "Wikinger")
+
+    state = {"amp": True, "up": {"i2": True, "i3": True}}
+    calls = []
+
+    async def is_up(server):
+        return state["up"][server.amp_instance_id] if state["amp"] else None
+
+    async def amp_up():
+        return state["amp"]
+
+    class FakeAMP:
+        async def instance_core_call(self, iid, endpoint, args):
+            calls.append(endpoint)
+
+        async def send_console_message(self, iid, message):
+            calls.append(message)
+
+        async def stop(self, iid):
+            calls.append("stop")
+
+    monkeypatch.setattr(servernews_cog, "_is_up", is_up)
+    monkeypatch.setattr(servernews_cog, "_amp_up", amp_up)
+    monkeypatch.setattr(servernews_cog, "amp_client", FakeAMP())
+    channel = FakeChannel()
+    guild = SimpleNamespace(id=2, name="Wikinger", get_channel=lambda cid: channel if cid == 600 else None)
+    cog = ServerNewsCog(SimpleNamespace(guilds=[guild]))
+
+    notice = await create_notice(2, None, "restart", utcnow() + timedelta(minutes=20), reason="Host-Update")
+    await cog.run_guild(guild)
+    assert "Alle Gameserver" in channel.sent[0] and "werden neu gestartet" in channel.sent[0] and "<@&88>" in channel.sent[0]
+
+    async def set_at(delta):
+        async with get_db_session() as db:
+            row = await db.get(ServerNotice, notice.id)
+            row.at = utcnow() + delta
+            await db.commit()
+
+    # Zeit erreicht: Meldung, aber der Bot fuehrt nichts aus
+    await set_at(-timedelta(seconds=5))
+    await cog.run_guild(guild)
+    assert "starten jetzt neu" in channel.sent[-1]
+    assert "RestartApplication" not in calls and "stop" not in calls
+
+    # Host ist unten -> keine Ausfall-Meldungen, nichts abgeschlossen
+    await set_at(-timedelta(minutes=2))
+    state["amp"] = False
+    count = len(channel.sent)
+    await cog.run_guild(guild)
+    assert len(channel.sent) == count
+
+    # AMP wieder da, ARK faehrt noch hoch: erst nach der Wartezeit "wieder da", mit ARK als offline
+    state.update(amp=True, up={"i2": True, "i3": False})
+    await cog.run_guild(guild)
+    assert len(channel.sent) == count  # Server fahren noch hoch
+    cog._all_back[notice.id] = utcnow() - timedelta(minutes=6)
+    await cog.run_guild(guild)
+    assert "Alle Gameserver** sind wieder da" in channel.sent[-1] and "Noch offline: ARK" in channel.sent[-1]
+    assert not any("nicht angekündigt" in m for m in channel.sent)
+    async with get_db_session() as db:
+        assert (await db.get(ServerNotice, notice.id)).status == "done"
+
+
+async def test_all_servers_end_by_hand(db_session):
+    db_session.add(Guild(id=3, name="Wikinger"))
+    await db_session.commit()
+    await set_config(3, "servernews_channel_id", "700", "Wikinger")
+    channel = FakeChannel()
+    guild = SimpleNamespace(id=3, name="Wikinger", get_channel=lambda cid: channel if cid == 700 else None)
+    cog = ServerNewsCog(SimpleNamespace(guilds=[guild]))
+    assert "keine Wartung" in await cog.end_all(guild)
+    notice = await create_notice(3, None, "maintenance", utcnow() - timedelta(minutes=5), duration_min=30)
+    async with get_db_session() as db:
+        (await db.get(ServerNotice, notice.id)).status = "running"
+        await db.commit()
+    assert "Abgeschlossen" in await cog.end_all(guild)
+    assert "Wartung beendet" in channel.sent[-1]
+    assert "Abgesagt" not in await cog.cancel(guild, notice.id)  # schon erledigt

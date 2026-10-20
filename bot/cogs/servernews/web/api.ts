@@ -45,6 +45,7 @@ export const testIngame = (serverId: number, command: string) =>
   apiFetch<{ message: string }>(`/servernews/servers/${serverId}/test`, json("POST", { command }));
 export const getAmpPreview = () => apiFetch<AmpPreview>("/servernews/amp-preview");
 export const getNotices = () => apiFetch<Notice[]>("/servernews/notices");
-export const addNotice = (body: { server_id: number; kind: string; start: string; duration_min: number | null; reason: string | null }) =>
+// server_id null = alle Server (AMP): der Bot kuendigt nur an
+export const addNotice = (body: { server_id: number | null; kind: string; start: string; duration_min: number | null; reason: string | null }) =>
   apiFetch<{ message: string }>("/servernews/notices", json("POST", body));
 export const cancelNotice = (id: number) => apiFetch<{ message: string }>(`/servernews/notices/${id}/cancel`, { method: "POST" });

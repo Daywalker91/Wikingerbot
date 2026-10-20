@@ -13,6 +13,7 @@ from bot.cogs.servernews.notices import (
     create_notice,
     load_settings,
     local_now,
+    notice_name,
     open_notices,
     parse_leads,
     parse_start,
@@ -139,7 +140,7 @@ async def amp_preview(user: CurrentUser = Depends(require_level(Level.ADMIN))) -
 async def list_notices(user: CurrentUser = Depends(require_capability("server.control"))) -> list[dict]:
     return [
         {
-            "id": n.id, "server": s.display_name, "kind": n.kind, "origin": n.origin, "status": n.status,
+            "id": n.id, "server": notice_name(s), "kind": n.kind, "origin": n.origin, "status": n.status,
             "at": unix(n.at), "duration_min": n.duration_min, "reason": n.reason,
         }
         for n, s in await open_notices(user.guild_id)
@@ -147,7 +148,7 @@ async def list_notices(user: CurrentUser = Depends(require_capability("server.co
 
 
 class NoticeIn(BaseModel):
-    server_id: int
+    server_id: int | None = None  # None = alle Server (AMP) - der Bot kuendigt nur an
     kind: str = Field(pattern="^(restart|maintenance)$")
     start: str = Field(min_length=1, max_length=10)  # Minuten ab jetzt oder HH:MM
     duration_min: int | None = Field(None, ge=1, le=1440)
@@ -156,18 +157,22 @@ class NoticeIn(BaseModel):
 
 @router.post("/notices")
 async def add_notice(body: NoticeIn, user: CurrentUser = Depends(require_capability("server.control"))) -> dict:
-    async with get_db_session() as db:
-        server = await db.get(Server, body.server_id)
-    if server is None or server.guild_id != user.guild_id:
-        raise HTTPException(404, "Server nicht gefunden.")
+    if body.server_id is not None:
+        async with get_db_session() as db:
+            server = await db.get(Server, body.server_id)
+        if server is None or server.guild_id != user.guild_id:
+            raise HTTPException(404, "Server nicht gefunden.")
     at = parse_start(body.start)
     if at is None:
         raise HTTPException(400, "Startzeit bitte als Minuten (z.B. 15) oder Uhrzeit (z.B. 20:00).")
+    guild = _guild(user.guild_id)
+    await ensure_guild(user.guild_id, guild.name if guild else str(user.guild_id))
     notice = await create_notice(
-        user.guild_id, server.id, body.kind, at, duration_min=body.duration_min,
+        user.guild_id, body.server_id, body.kind, at, duration_min=body.duration_min,
         reason=(body.reason or "").strip() or None, created_by=user.user_id,
     )
-    return {"ok": True, "message": f"Angekündigt (Nr. {notice.id}) – die erste Meldung geht beim nächsten Takt raus (bis 30 Sekunden)."}
+    hint = " Der Bot kündigt nur an – den Neustart bzw. die Wartung machst du selbst." if body.server_id is None else ""
+    return {"ok": True, "message": f"Angekündigt (Nr. {notice.id}) – die erste Meldung geht beim nächsten Takt raus (bis 30 Sekunden).{hint}"}
 
 
 @router.post("/notices/{notice_id}/cancel")
